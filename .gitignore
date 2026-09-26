@@ -1,0 +1,69 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+.venv/
+venv/
+
+# Node.js
+node_modules/
+frontend/dist/
+frontend/logs/
+frontend/vite.config.ts.timestamp-*
+
+# Build & packaging output
+build/
+dist/
+*.pkg
+
+# Model files (downloaded separately, see MODELS.md)
+models/
+*.onnx
+*.pth
+*.safetensors
+
+# Local app data (runtime projects, caches, logs)
+/project/
+/cache/
+/input/
+/output/
+/logs/
+webview_profile/
+seedance-cache/
+seedream-cache/
+
+# Runtime config (may contain local preferences or credentials)
+config.json
+config.dev.json
+.env
+.env.local
+*.local
+
+# Test artifacts
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+.test-runs/
+tests/private_media/
+tests/fixtures/videos/
+tests/fixtures/trim_sources/
+tests/fixtures/legacy_projects/
+
+# IDE & OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Agent / tool work directories
+.claude/
+.codex/
+.agents/
+.codegraph/
+.worktrees/
+.scratch/

@@ -1,0 +1,159 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    @apply antialiased;
+  }
+
+  body {
+    @apply bg-dark-bg text-gray-100;
+  }
+
+  /* Hide default number input spinners globally */
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  input[type="number"] {
+    -moz-appearance: textfield;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    @apply w-2 h-2;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-dark-surface;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-dark-border rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-500;
+  }
+}
+
+@layer components {
+  .seedance-workspace {
+    --seedance-bg: #171817;
+    --seedance-surface: #202120;
+    --seedance-surface-raised: #262826;
+    --seedance-border: #343734;
+    --seedance-muted: #929792;
+    @apply min-h-screen text-gray-100;
+    background: var(--seedance-bg);
+  }
+
+  .seedance-container {
+    @apply mx-auto w-full max-w-[1320px] px-4 py-6 sm:px-6;
+  }
+
+  .seedance-top-nav {
+    @apply sticky top-0 z-30 border-b backdrop-blur-xl;
+    border-color: var(--seedance-border);
+    background: rgba(23, 24, 23, 0.94);
+  }
+
+  .seedance-nav-link {
+    @apply whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium text-gray-400 transition hover:bg-white/[0.04] hover:text-white;
+  }
+
+  .seedance-nav-link-active {
+    @apply bg-primary text-dark-bg;
+  }
+
+  .seedance-panel {
+    @apply rounded-[14px] border p-5 shadow-sm;
+    border-color: var(--seedance-border);
+    background: var(--seedance-surface);
+  }
+
+  .seedance-panel-success {
+    @apply border-emerald-500/30 bg-emerald-500/[0.06];
+  }
+
+  .seedance-panel-warning {
+    @apply border-amber-500/30 bg-amber-500/[0.06];
+  }
+
+  .seedance-modal {
+    @apply fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4;
+  }
+
+  .seedance-modal > div {
+    @apply w-full max-w-md rounded-xl border border-dark-border bg-dark-surface p-6 text-gray-200 shadow-xl;
+  }
+
+  .seedance-control {
+    @apply w-full rounded-lg border px-3 py-2.5 text-sm text-gray-100 outline-none transition;
+    border-color: var(--seedance-border);
+    background: #171817;
+  }
+
+  .seedance-control:not(textarea) {
+    height: 42px;
+  }
+
+  .seedance-control:focus-visible {
+    @apply ring-2 ring-primary/70;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center px-4 py-2 rounded-lg font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-dark-bg disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-primary {
+    @apply btn bg-primary hover:bg-primary-600 text-dark-bg focus:ring-primary;
+  }
+
+  .btn-secondary {
+    @apply btn bg-dark-surface hover:bg-dark-border text-gray-200 focus:ring-gray-500;
+  }
+
+  .btn-danger {
+    @apply btn bg-danger hover:bg-danger-600 text-white focus:ring-danger;
+  }
+
+  .input {
+    @apply w-full px-3 py-2 bg-dark-surface border border-dark-border rounded-lg text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent;
+  }
+
+  .seedream-control {
+    @apply w-full rounded-lg border border-dark-border bg-dark-bg px-3 py-2.5 text-sm text-gray-100 outline-none transition;
+  }
+
+  .seedream-control:not(textarea) {
+    height: 42px;
+  }
+
+  .seedream-control::placeholder {
+    @apply text-gray-500;
+  }
+
+  .seedream-control:focus-visible {
+    @apply ring-2 ring-primary/70;
+  }
+
+  .card {
+    @apply bg-dark-surface border border-dark-border rounded-xl p-6;
+  }
+
+  .slider {
+    @apply w-full h-2 bg-dark-border rounded-lg appearance-none cursor-pointer;
+  }
+
+  .slider::-webkit-slider-thumb {
+    @apply appearance-none w-4 h-4 bg-primary rounded-full cursor-pointer hover:bg-primary-400 transition-colors;
+  }
+
+  .slider::-moz-range-thumb {
+    @apply w-4 h-4 bg-primary rounded-full cursor-pointer border-0 hover:bg-primary-400 transition-colors;
+  }
+}

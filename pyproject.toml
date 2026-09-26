@@ -1,0 +1,87 @@
+[project]
+name = "game-assets-maker"
+version = "0.1.0"
+description = "Game Assets Maker - A desktop application for creating game-ready visual assets"
+readme = "README.md"
+requires-python = ">=3.12, <3.13"
+license = "MIT"
+authors = [
+    { name = "ForFuner" },
+]
+keywords = [
+    "video",
+    "sprite-sheet",
+    "pixel-art",
+    "background-removal",
+    "pywebview",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: X11 Applications",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Graphics",
+    "Topic :: Multimedia :: Video",
+]
+dependencies = [
+    # 记住账号密码 / 静默恢复依赖这两个：Windows 走 win32crypt(DPAPI)，
+    # 其余平台回退 cryptography(Fernet)。缺任一都会让凭证保存静默失败
+    # （backend/core/credential_crypto.py 构造时抛错，JS 侧 catch 成 false）。
+    "pywin32>=306; sys_platform == 'win32'",
+    "cryptography>=41.0.0",
+    "opencv-python>=4.8.0",
+    "Pillow>=10.0.0",
+    "numpy>=1.24.0",
+    "psd-tools>=1.9.0",
+    "rembg[cli]>=2.0.74",
+    "pywebview>=4.4.0",
+    "onnxruntime==1.20.1",
+    "filelock>=3.15",
+    "pillow-heif>=0.18",
+    "imageio-ffmpeg>=0.5.1",
+]
+
+[project.urls]
+Homepage = "https://github.com/hyhy111/game-assets-maker"
+Repository = "https://github.com/hyhy111/game-assets-maker"
+Issues = "https://github.com/hyhy111/game-assets-maker/issues"
+
+[project.scripts]
+gam = "backend.main:installed_main"
+batch-processor = "src.cli.batch_processor:main"
+gam-agent = "src.cli.agent:installed_main"
+gam-seedance-smoke = "src.cli.seedance_paid_smoke:installed_main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+managed = true
+
+[dependency-groups]
+dev = [
+    "pyinstaller>=6.0",
+    "pytest>=8.0",
+    "ruff>=0.8.0",
+]
+
+[tool.uv.pip]
+index-url = "https://pypi.org/simple"
+extra-index-url = ["https://mirrors.aliyun.com/pypi/simple/"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src", "backend"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP", "B", "SIM"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

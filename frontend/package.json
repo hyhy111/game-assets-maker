@@ -1,0 +1,35 @@
+{
+  "name": "game-assets-maker-frontend",
+  "version": "2.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "lint": "eslint src/",
+    "lint:fix": "eslint src/ --fix",
+    "typecheck": "vue-tsc --noEmit",
+    "test": "node --experimental-strip-types --test tests/**/*.test.mjs",
+    "format": "prettier --write src/"
+  },
+  "dependencies": {
+    "@headlessui/vue": "^1.7.16",
+    "@heroicons/vue": "^2.0.18",
+    "lucide-vue-next": "^0.294.0",
+    "pinia": "^2.1.7",
+    "vue": "^3.3.8",
+    "vue-i18n": "^9.14.4",
+    "vue-router": "^4.2.5"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^4.5.0",
+    "@vue/eslint-config-typescript": "^14.9.0",
+    "autoprefixer": "^10.4.16",
+    "eslint-plugin-vue": "^10.9.2",
+    "postcss": "^8.4.31",
+    "tailwindcss": "^3.3.5",
+    "typescript": "^5.9.3",
+    "vite": "^5.0.0",
+    "vue-tsc": "^2.2.12"
+  }
+}
