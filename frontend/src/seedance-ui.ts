@@ -1,4 +1,4 @@
-import type { SeedanceApiError, SeedanceCreateRequest, SeedanceDuration, SeedanceModel, SeedanceResolution, SeedanceTask, SeedanceTaskRequest } from '@/types';
+import type { SeedanceApiError, SeedanceCreateRequest, SeedanceDuration, SeedanceModel, SeedanceModelRef, SeedanceResolution, SeedanceTask, SeedanceTaskRequest } from '@/types';
 
 export const MODEL_RESOLUTIONS: Record<SeedanceModel, SeedanceResolution[]> = {
   standard: ['480p', '720p', '1080p'],
@@ -16,6 +16,8 @@ export interface SeedanceValidationIssue {
   field: string;
   code: string;
   key: string;
+  /** 平台业务异常原文（后端 msg 透传），展示优先级高于本地化 key */
+  message?: string;
 }
 
 export type CreateErrors = Partial<Record<'first_frame' | 'prompt' | 'duration' | 'body', SeedanceValidationIssue>>;
@@ -42,14 +44,26 @@ const VALIDATION_KEYS: Record<string, string> = {
 
 const BODY_FIELDS = new Set(['payload', 'model', 'resolution', 'ratio']);
 
-export function validationIssueForApiError(error: Pick<SeedanceApiError, 'code' | 'field'>): SeedanceValidationIssue {
+export function validationIssueForApiError(error: Pick<SeedanceApiError, 'code' | 'field'> & Partial<Pick<SeedanceApiError, 'message'>>): SeedanceValidationIssue {
   const code = typeof error.code === 'string' ? error.code : 'UNKNOWN';
   const field = error.field === 'payload' || BODY_FIELDS.has(error.field ?? '') ? 'body' : error.field || 'body';
-  return { field, code, key: VALIDATION_KEYS[code] ?? 'seedance.validation.generic' };
+  const message = typeof error.message === 'string' && error.message.trim() ? error.message : undefined;
+  return { field, code, key: VALIDATION_KEYS[code] ?? 'seedance.validation.generic', ...(message ? { message } : {}) };
 }
 
-export function correctResolution(model: SeedanceModel, resolution: SeedanceResolution): SeedanceResolution {
-  return MODEL_RESOLUTIONS[model].includes(resolution) ? resolution : MODEL_RESOLUTIONS[model][0];
+/**
+ * 本地预设表只覆盖直连模式的短键。平台源下 model 是能力清单下发的上游 ID，
+ * 查不到时返回空数组，表示"本地不管它的合法域"（由清单/服务端负责）。
+ */
+export function localModelResolutions(model: string): SeedanceResolution[] {
+  return MODEL_RESOLUTIONS[model as SeedanceModel] ?? [];
+}
+
+export function correctResolution(model: SeedanceModelRef, resolution: SeedanceResolution): SeedanceResolution {
+  const allowed = localModelResolutions(model);
+  // 空数组 = 平台源：本地不做纠正，否则会把清单给的合法档位改掉。
+  if (!allowed.length) return resolution;
+  return allowed.includes(resolution) ? resolution : allowed[0];
 }
 
 export function correctDuration(duration: SeedanceDuration): typeof DURATION_OPTIONS[number] {
@@ -69,7 +83,10 @@ export function validateCreateForm(form: CreateForm): CreateErrors {
   if (!form.first_frame) errors.first_frame = validationIssueForApiError({ field: 'first_frame', code: 'FIRST_FRAME_REQUIRED' });
   if (!form.prompt.trim()) errors.prompt = validationIssueForApiError({ field: 'prompt', code: 'PROMPT_REQUIRED' });
   if (form.duration !== -1 && (!Number.isInteger(form.duration) || form.duration < 4 || form.duration > 15)) errors.duration = validationIssueForApiError({ field: 'duration', code: 'INVALID_DURATION' });
-  if (!MODEL_RESOLUTIONS[form.model].includes(form.resolution)) errors.body = validationIssueForApiError({ field: 'resolution', code: 'UNSUPPORTED_RESOLUTION' });
+  const allowedResolutions = localModelResolutions(form.model);
+  if (allowedResolutions.length && !allowedResolutions.includes(form.resolution)) {
+    errors.body = validationIssueForApiError({ field: 'resolution', code: 'UNSUPPORTED_RESOLUTION' });
+  }
   return errors;
 }
 
@@ -106,6 +123,7 @@ export type SeedanceTaskPhase =
   | 'submitting'
   | 'queued'
   | 'running'
+  | 'unknown'
   | 'cancelling'
   | 'downloading'
   | 'succeeded'
@@ -127,6 +145,8 @@ export function seedanceTaskPhase(task: SeedanceTask): SeedanceTaskPhase {
   if (task.cache_status === 'cleared') return 'cleared';
   if (task.download_status === 'downloading') return 'downloading';
   if (task.remote_status === 'succeeded' && task.download_status === 'downloaded') return 'succeeded';
+  // 平台源：SUBMISSION_UNKNOWN 保持运行但 UI 标明"状态确认中"（remote.platform_status 原样存于 remote）。
+  if (task.source === 'forfuner-ai' && task.remote?.platform_status === 'SUBMISSION_UNKNOWN') return 'unknown';
   if (
     task.remote_status === 'submission_unknown'
     || task.remote_status === 'failed'
@@ -146,12 +166,14 @@ export function downloadUrlMayBeExpired(task: SeedanceTask, now: number = Date.n
 
 export function seedanceTaskActions(task: SeedanceTask): SeedanceTaskAction[] {
   const actions: SeedanceTaskAction[] = [];
-  if (task.remote_status === 'queued') actions.push('cancel');
+  const isPlatform = task.source === 'forfuner-ai';
+  // 平台源：排队中立即取消；运行中发取消请求进"取消中"等平台确认。
+  if (task.remote_status === 'queued' || (isPlatform && task.remote_status === 'running')) actions.push('cancel');
   if (task.remote_status === 'succeeded' && hasMedia(task)) actions.push('view');
   if (
     task.remote_status === 'succeeded'
     && hasMedia(task)
-    && task.output_urls.returned_last_frame
+    && (task.output_urls.returned_last_frame || task.output_urls.continuation_frame)
   ) {
     actions.push('continue');
   }

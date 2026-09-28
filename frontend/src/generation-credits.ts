@@ -24,12 +24,13 @@ const VIDEO_CREDITS: Record<SeedanceModel, Partial<Record<SeedanceResolution, Pa
   },
 };
 
-export function imageGenerationCredits(model: SeedreamModel, resolution: SeedreamResolution, count: number): number | null {
-  const credits = IMAGE_CREDITS[model]?.[resolution];
+export function imageGenerationCredits(model: string, resolution: SeedreamResolution, count: number): number | null {
+  // 本地静态表只覆盖直连短键；平台源的 model 是上游 ID，查不到即返回 null（由服务端报价负责）。
+  const credits = IMAGE_CREDITS[model as SeedreamModel]?.[resolution];
   if (credits === undefined || !Number.isInteger(count) || count < 1 || count > 4) return null;
   return credits * count;
 }
 
-export function videoGenerationCredits(model: SeedanceModel, resolution: SeedanceResolution, duration: number): number | null {
-  return VIDEO_CREDITS[model]?.[resolution]?.[duration] ?? null;
+export function videoGenerationCredits(model: string, resolution: SeedanceResolution, duration: number): number | null {
+  return VIDEO_CREDITS[model as SeedanceModel]?.[resolution]?.[duration] ?? null;
 }

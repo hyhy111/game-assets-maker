@@ -47,6 +47,7 @@ class TaskRepository:
                 error=None,
                 retry_of=None,
                 handoffs=[],
+                source=request.source,
             )
             self._write_unlocked(task)
             return task

@@ -17,9 +17,12 @@
           class="h-full w-full object-cover transition duration-300 group-hover/preview:brightness-105"
         >
         <span v-else class="grid h-full place-items-center text-sm text-gray-500">{{ statusText }}</span>
-        <span class="absolute left-3 top-3 rounded-full px-3 py-1 text-xs font-medium shadow-sm" :class="statusClass">
-          {{ statusText }}
-        </span>
+        <div class="absolute left-3 top-3 flex items-center gap-1.5">
+          <span class="rounded-full px-3 py-1 text-xs font-medium shadow-sm" :class="statusClass">
+            {{ statusText }}
+          </span>
+          <PlatformSourceBadge :source="batch.request.source" />
+        </div>
       </button>
       <div v-if="$slots['top-right']" class="absolute right-3 top-3 z-[2]">
         <slot name="top-right" :attempt="selectedAttempt" />
@@ -80,7 +83,9 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { batchStatus, formatElapsed, MODEL_LABELS } from '@/seedream-ui';
+import PlatformSourceBadge from '@/components/ai-creation/PlatformSourceBadge.vue';
+import { useModelDisplayName } from '@/composables/useModelDisplayName';
+import { batchStatus, formatElapsed } from '@/seedream-ui';
 import { writeSeedreamImageDrag } from '@/seedream-image-drag';
 import type { SeedreamAttempt, SeedreamBatch, SeedreamBatchStatus } from '@/types';
 
@@ -99,7 +104,8 @@ const selectedAttempt = computed(() => (
   ?? succeededAttempts.value[0]
   ?? null
 ));
-const modelLabel = computed(() => MODEL_LABELS[props.batch.request.model] ?? props.batch.request.model);
+const { modelName } = useModelDisplayName();
+const modelLabel = computed(() => modelName(props.batch.request.model, 'image'));
 const createdAt = computed(() => formatDate(props.batch.created_at));
 const totalElapsed = computed(() => {
   const started = Date.parse(props.batch.created_at);

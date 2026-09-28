@@ -8,8 +8,9 @@
  *   恢复尝试期间不改 status —— 保持登录态外观不闪,确认不可恢复才回游客态。
  */
 import { defineStore } from 'pinia';
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import * as authApi from '@/api/auth';
+import { api } from '@/api';
 import {
   getToken,
   setToken,
@@ -44,6 +45,15 @@ export const useAuthStore = defineStore('auth', () => {
 
   // Getters
   const isLoggedIn = computed(() => status.value === 'authenticated');
+
+  // 平台源（ForFuner AI）配置随 token 变化实时推送进 Python 内存：
+  // 登录/静默重登/登出/会话失效都经过 token 这一个出口，watch 全覆盖。
+  // 桥不可用时静默忽略——下次 token 变化会再推；token 本身不落盘不入日志。
+  watch(token, (value) => {
+    void api.platform
+      .setConfig(import.meta.env.VITE_APP_API_BASE_URL ?? '', value)
+      .catch(() => { /* bridge not ready yet; next token change retries */ });
+  }, { immediate: true });
 
   let retryingUserInfo = false;
 

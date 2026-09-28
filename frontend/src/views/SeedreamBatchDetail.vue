@@ -1,7 +1,10 @@
 <template>
   <SeedreamShell>
     <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
-      <h1 class="text-xl font-semibold text-white">{{ t('aiCreation.imageDetailTitle') }}</h1>
+      <h1 class="flex items-center gap-2 text-xl font-semibold text-white">
+        {{ t('aiCreation.imageDetailTitle') }}
+        <PlatformSourceBadge v-if="batch" :source="batch.request.source" />
+      </h1>
       <button
         type="button"
         class="ml-auto flex w-fit items-center gap-2 rounded-lg px-1 py-2 text-base text-gray-400 transition-colors hover:text-white focus:outline-none focus:ring-2 focus:ring-primary/60"
@@ -298,17 +301,20 @@ import { ArrowLeft, Check, Copy, Download } from 'lucide-vue-next';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 import Button from '@/components/common/Button.vue';
+import PlatformSourceBadge from '@/components/ai-creation/PlatformSourceBadge.vue';
 import RecentMediaFavoriteButton from '@/components/ai-creation/RecentMediaFavoriteButton.vue';
 import SeedreamImageEraser from '@/components/seedream/SeedreamImageEraser.vue';
 import SeedreamPanel from '@/components/seedream/SeedreamPanel.vue';
 import SeedreamShell from '@/components/seedream/SeedreamShell.vue';
 import { trapModalTab } from '@/modal-focus';
 import { useRecentMediaFavorites } from '@/recent-media-favorites';
-import { batchStatus, formatElapsed, isBatchDeletable, MODEL_LABELS } from '@/seedream-ui';
+import { useModelDisplayName } from '@/composables/useModelDisplayName';
+import { batchStatus, formatElapsed, isBatchDeletable } from '@/seedream-ui';
 import { useSeedreamStore } from '@/stores/seedream';
 import type { GenerationLayout, SeedreamAttempt, SeedreamBatch, SeedreamBatchStatus } from '@/types';
 
 const { t } = useI18n();
+const { modelName } = useModelDisplayName();
 const route = useRoute();
 const router = useRouter();
 const store = useSeedreamStore();
@@ -370,7 +376,7 @@ const statusBadgeClass = computed(() => {
 
 const modelLabel = computed(() => {
   const model = batch.value?.request.model;
-  return model ? (MODEL_LABELS[model] ?? model) : '';
+  return model ? modelName(model, 'image') : '';
 });
 
 const isTerminal = computed(() => batch.value ? !['generating'].includes(batchStatus(batch.value)) : false);

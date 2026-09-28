@@ -75,6 +75,23 @@
           </div>
         </div>
 
+        <div
+          v-if="capabilitiesBlocked"
+          class="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning"
+          data-test="seedream-capabilities-blocked"
+          role="alert"
+        >
+          <span>{{ workspace.capabilitiesError ? t('aiCreation.capabilitiesFailed', { message: workspace.capabilitiesError }) : t('aiCreation.capabilitiesLoading') }}</span>
+          <button
+            type="button"
+            class="rounded-md border border-warning/40 px-2 py-0.5 text-xs transition-colors hover:bg-warning/20"
+            data-test="seedream-capabilities-retry"
+            @click="reloadCapabilities()"
+          >
+            {{ t('aiCreation.capabilitiesRetry') }}
+          </button>
+        </div>
+
         <div class="mt-4 flex flex-wrap items-center gap-2 border-t border-[#343434] pt-4">
           <div class="inline-flex h-10 items-center rounded-xl border border-[#414141] bg-[#2d2d2d] p-1">
             <button
@@ -213,7 +230,13 @@
 
           <div class="ml-auto flex min-w-0 items-center gap-3 pl-2">
             <div v-if="showCreditEstimate" class="text-right" data-test="generation-credits" aria-live="polite">
-              <p class="text-sm text-gray-300">{{ estimatedCredits === null ? t('aiCreation.creditsUnavailable') : t('aiCreation.estimatedCredits', { credits: estimatedCredits }) }}</p>
+              <template v-if="platformGenerationSelected">
+                <p v-if="quoteLoading" class="text-sm text-gray-500">{{ t('aiCreation.platformQuoteLoading') }}</p>
+                <p v-else-if="platformQuoteTotal !== null" class="text-sm text-gray-300">{{ t('aiCreation.estimatedCredits', { credits: platformQuoteTotal }) }}</p>
+                <p v-else-if="quoteError" class="max-w-[16rem] text-xs leading-5 text-warning">{{ t('aiCreation.platformQuoteFailed', { message: quoteError }) }}</p>
+                <p v-else class="text-sm text-gray-500">{{ t('aiCreation.creditsUnavailable') }}</p>
+              </template>
+              <p v-else class="text-sm text-gray-300">{{ estimatedCredits === null ? t('aiCreation.creditsUnavailable') : t('aiCreation.estimatedCredits', { credits: estimatedCredits }) }}</p>
             </div>
             <CreationModelSelect
               v-if="showGenerationSourceSelector"
@@ -226,9 +249,9 @@
             <button
               type="submit"
               class="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#ffbd5c] text-[#242424] transition hover:bg-[#ffc975] disabled:cursor-not-allowed disabled:bg-[#4a4a4a] disabled:text-[#777]"
-              :disabled="submitting || platformGenerationSelected || !form.prompt.trim()"
-              :aria-label="platformGenerationSelected ? t('aiCreation.platformGenerationUnavailable') : t('seedream.create.createBatch')"
-              :title="platformGenerationSelected ? t('aiCreation.platformGenerationUnavailable') : t('seedream.create.createBatch')"
+              :disabled="submitting || capabilitiesBlocked || !form.prompt.trim()"
+              :aria-label="t('seedream.create.createBatch')"
+              :title="t('seedream.create.createBatch')"
               data-test="seedream-submit"
             >
               <span
@@ -274,7 +297,9 @@
           class="mt-3 list-decimal space-y-2 pl-5 text-sm leading-6 text-gray-300"
         >
           <li>
-            {{ t('seedream.confirm.cost') }}<span class="text-warning" data-test="seedream-paid-confirm-irrevocable">{{ t('seedream.confirm.irrevocable') }}</span>
+            <template v-if="platformGenerationSelected">{{ t('aiCreation.platformBilledOnSubmit') }}</template>
+            <template v-else>{{ t('seedream.confirm.cost') }}</template>
+            <span class="text-warning" data-test="seedream-paid-confirm-irrevocable">{{ t('seedream.confirm.irrevocable') }}</span>
           </li>
           <li v-if="form.reference_image" data-test="seedream-confirm-reference">
             {{ t('seedream.confirm.reference') }}
@@ -318,7 +343,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { ArrowUp, Check, ChevronDown, Copy, Settings2 } from 'lucide-vue-next';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
@@ -335,8 +360,8 @@ import {
   ALLOWED_COUNTS,
   ALLOWED_RATIOS,
   DEFAULT_COUNT,
-  MODEL_RESOLUTIONS,
   correctResolution,
+  localModelResolutions,
   createRequest,
   defaultForm,
   promptCount,
@@ -347,6 +372,8 @@ import { useSeedanceStore } from '@/stores/seedance';
 import { useConfigStore } from '@/stores/config';
 import { useAuthStore } from '@/stores/auth';
 import { useAICreationStore, type CreationMode, type GenerationSource } from '@/stores/aiCreation';
+import { usePlatformCapabilities } from '@/composables/usePlatformCapabilities';
+import { platformModelOptions, type ModelOption } from '@/platform-models';
 import type { SeedreamModel, SeedreamRatio, SeedreamResolution } from '@/types';
 
 withDefaults(defineProps<{
@@ -371,27 +398,87 @@ const keySettingsStore = useSeedanceStore();
 const configStore = useConfigStore();
 const authStore = useAuthStore();
 const workspace = useAICreationStore();
+// 平台能力清单的加载时机：登录后 / 切到平台源 / 登出清空。
+const { reload: reloadCapabilities } = usePlatformCapabilities();
 
 const allResolutions: SeedreamResolution[] = ['1K', '1.5K', '2K'];
 const allowedRatios: SeedreamRatio[] = ALLOWED_RATIOS;
 const allowedCounts = ALLOWED_COUNTS;
-const modelOptions = computed(() => [
+// 平台源下模型与尺寸档由能力清单决定（每个模型只暴露自己有定价的档位，
+// 未定价的模型如 Flash 根本不会出现）；直连源仍用客户端预设表。
+const platformImageModels = computed(() => workspace.capabilities?.image.models ?? []);
+const localImageModelOptions = (): ModelOption[] => [
   { value: 'pro', label: t('seedream.models.pro') },
   { value: 'flash', label: t('seedream.models.flash') },
   { value: 'lite', label: t('seedream.models.lite') },
-]);
+];
+const modelOptions = computed<ModelOption[]>(() => (
+  platformGenerationSelected.value
+    ? platformModelOptions(platformImageModels.value)
+    : localImageModelOptions()
+));
 
 const form: CreateForm = workspace.imageDraft;
 const estimatedCredits = computed(() => imageGenerationCredits(form.model, form.resolution, form.count));
-const showGenerationSourceSelector = computed(() => authStore.isLoggedIn && keySettingsStore.settings?.api_key_configured);
+const showGenerationSourceSelector = computed(() => authStore.isLoggedIn);
 const generationSourceOptions = computed(() => [
   { value: 'api-key', label: t('aiCreation.customApiKey') },
   { value: 'forfuner-ai', label: t('aiCreation.forfunerAI') },
 ]);
 const platformGenerationSelected = computed(() => workspace.generationSource === 'forfuner-ai');
+// 降级（design D3）：平台源下拉取失败/未就绪时**阻断提交**并提示重试，
+// 绝不回退到客户端预设模型表——那会把"选中后必然失败"的组合重新放出来。
+const capabilitiesBlocked = computed(() => (
+  platformGenerationSelected.value
+  && (authStore.isLoggedIn && (!workspace.capabilities || !!workspace.capabilitiesError))
+));
 const showCreditEstimate = computed(() => (
   authStore.isLoggedIn && (!keySettingsStore.settings?.api_key_configured || platformGenerationSelected.value)
 ));
+// 平台源报价：单价来自服务端（model + size），总数 = 单价 × 生成数量（N 张 = N 个平台任务）。
+const quoteLoading = ref(false);
+const quoteUnit = ref<number | null>(null);
+const quoteError = ref('');
+const platformQuoteTotal = computed(() => (
+  quoteUnit.value === null ? null : quoteUnit.value * form.count
+));
+const QUOTE_DEBOUNCE_MS = 350;
+let quoteTimer: ReturnType<typeof setTimeout> | null = null;
+let quoteRequestId = 0;
+
+function quoteSignature() {
+  return [form.model, form.resolution].join('|');
+}
+
+async function refreshPlatformQuote() {
+  if (!platformGenerationSelected.value || !authStore.isLoggedIn) {
+    quoteUnit.value = null;
+    quoteError.value = '';
+    quoteLoading.value = false;
+    return;
+  }
+  const requestId = ++quoteRequestId;
+  quoteLoading.value = true;
+  quoteError.value = '';
+  const data = await store.quoteImage(createRequest(form));
+  // 只接受最后一次请求的结果，避免快速切模型时旧响应覆盖新报价。
+  if (requestId !== quoteRequestId) return;
+  quoteLoading.value = false;
+  if (data && typeof data.quote === 'number') {
+    quoteUnit.value = data.quote;
+    return;
+  }
+  quoteUnit.value = null;
+  quoteError.value = store.error?.message ?? t('aiCreation.creditsUnavailable');
+}
+
+function scheduleQuoteRefresh() {
+  if (quoteTimer) clearTimeout(quoteTimer);
+  quoteTimer = setTimeout(() => {
+    quoteTimer = null;
+    void refreshPlatformQuote();
+  }, QUOTE_DEBOUNCE_MS);
+}
 const submitting = ref(false);
 const parametersOpen = ref(false);
 const confirmModal = ref(false);
@@ -404,7 +491,32 @@ const promptInfo = computed(() => promptCount(form.prompt));
 const clearConfirmOpen = ref(false);
 const accessDialogOpen = ref(false);
 const promptOverLimit = computed(() => promptInfo.value.count > promptInfo.value.limit);
-const supportedResolutions = computed(() => MODEL_RESOLUTIONS[form.model as SeedreamModel]);
+const platformModelEntry = computed(() => (
+  platformImageModels.value.find((entry) => entry.model === form.model) ?? null
+));
+const supportedResolutions = computed<SeedreamResolution[]>(() => {
+  if (platformGenerationSelected.value) {
+    return (platformModelEntry.value?.sizes ?? []) as SeedreamResolution[];
+  }
+  return localModelResolutions(form.model);
+});
+/**
+ * 平台源：把模型/尺寸收敛到清单给的合法域（切源、切模型、清单到达后都要调）。
+ * lite 只有 2K 这类单档情形就靠这里回退。
+ */
+function clampToPlatformModel() {
+  const models = platformImageModels.value;
+  if (!models.length) return;
+  let entry = models.find((candidate) => candidate.model === form.model);
+  if (!entry) {
+    entry = models[0];
+    form.model = entry.model;
+  }
+  const sizes = (entry.sizes ?? []) as SeedreamResolution[];
+  if (sizes.length && !sizes.includes(form.resolution)) {
+    form.resolution = sizes[0];
+  }
+}
 const paidConfirmationEnabled = computed(() => configStore.config?.paid_generation_confirmation_enabled !== false);
 
 onMounted(async () => {
@@ -472,11 +584,32 @@ function clearReferenceImage() {
 
 function selectModel(model: string) {
   form.model = model as SeedreamModel;
-  fixResolution();
+  if (platformGenerationSelected.value) clampToPlatformModel();
+  else fixResolution();
 }
 
+// 切模型/分辨率刷新平台报价；数量是本地倍率，改数量无需重查。
+watch(
+  () => [platformGenerationSelected.value, quoteSignature()].join('#'),
+  () => scheduleQuoteRefresh(),
+);
+
+// 清单是异步到达的：到了之后收敛一次（也覆盖"清单刷新导致档位变少"）。
+watch(platformImageModels, () => {
+  if (platformGenerationSelected.value) clampToPlatformModel();
+});
+
 function selectGenerationSource(source: string) {
-  workspace.setGenerationSource(source as GenerationSource);
+  const next = source as GenerationSource;
+  workspace.setGenerationSource(next);
+  if (next === 'forfuner-ai') {
+    clampToPlatformModel();
+  } else if (!localModelResolutions(form.model).length) {
+    // 切回直连：模型可能还是上游 ID，本地表不认，重置为预设默认。
+    form.model = 'pro';
+    fixResolution();
+  }
+  scheduleQuoteRefresh();
 }
 
 async function copyPrompt() {
@@ -495,8 +628,8 @@ async function copyPrompt() {
 
 async function submit() {
   if (submitting.value || confirmModal.value) return;
+  if (capabilitiesBlocked.value) return;
   if (!form.prompt.trim()) return;
-  if (platformGenerationSelected.value) return;
   if (!ensureGenerationAccess()) return;
   if (!paidConfirmationEnabled.value) {
     await confirmSubmit();
@@ -509,6 +642,11 @@ async function submit() {
 }
 
 function ensureGenerationAccess(): boolean {
+  if (platformGenerationSelected.value) {
+    if (authStore.isLoggedIn) return true;
+    accessDialogOpen.value = true;
+    return false;
+  }
   if (keySettingsStore.settings?.api_key_configured) return true;
   accessDialogOpen.value = true;
   return false;
@@ -540,6 +678,10 @@ function onConfirmKeydown(event: KeyboardEvent) {
 }
 
 onBeforeUnmount(() => {
+  if (quoteTimer) {
+    clearTimeout(quoteTimer);
+    quoteTimer = null;
+  }
   confirmModal.value = false;
 });
 
@@ -548,7 +690,13 @@ async function confirmSubmit() {
   submitting.value = true;
   try {
     const request = createRequest(form);
-    const batch = await store.createBatch(request);
+    const source = workspace.generationSource;
+    let batch = await store.createBatch(request, source);
+    // 平台 401：token 过期——先静默重登（token watcher 会自动把新 token 推进 Python），重试一次。
+    if (!batch && source === 'forfuner-ai' && store.error?.code === 'UNAUTHORIZED') {
+      const recovered = await authStore.silentRelogin();
+      if (recovered) batch = await store.createBatch(request, source);
+    }
     if (batch) {
       confirmModal.value = false;
       workspace.setCurrentGeneration({ kind: 'image', localId: batch.local_id });

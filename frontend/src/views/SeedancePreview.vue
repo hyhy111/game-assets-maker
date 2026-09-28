@@ -1,7 +1,10 @@
 <template>
   <SeedanceShell>
     <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
-      <h1 class="text-xl font-semibold text-white">{{ t('aiCreation.videoDetailTitle') }}</h1>
+      <h1 class="flex items-center gap-2 text-xl font-semibold text-white">
+        {{ t('aiCreation.videoDetailTitle') }}
+        <PlatformSourceBadge v-if="task" :source="task.source" />
+      </h1>
       <button
         type="button"
         class="ml-auto flex w-fit items-center gap-2 rounded-lg px-1 py-2 text-base text-gray-400 transition-colors hover:text-white focus:outline-none focus:ring-2 focus:ring-primary/60"
@@ -182,6 +185,7 @@ import { ArrowLeft, Download } from 'lucide-vue-next';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 import Button from '@/components/common/Button.vue';
+import PlatformSourceBadge from '@/components/ai-creation/PlatformSourceBadge.vue';
 import RecentMediaFavoriteButton from '@/components/ai-creation/RecentMediaFavoriteButton.vue';
 import SeedanceEmptyState from '@/components/seedance/SeedanceEmptyState.vue';
 import SeedanceGenerationInfo from '@/components/seedance/SeedanceGenerationInfo.vue';

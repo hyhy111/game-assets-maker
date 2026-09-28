@@ -6,8 +6,9 @@
     <div class="flex min-h-14 items-center gap-3 px-4 py-3">
       <div class="min-w-0 flex-1">
         <p class="text-sm font-medium text-white">{{ t('aiCreation.currentGeneration') }}</p>
-        <p class="mt-0.5 text-xs text-gray-400" data-test="image-current-summary">
-          {{ batchStatusLabel }} · {{ succeededAttempts.length }}/{{ batch.attempts.length }}
+        <p class="mt-0.5 flex items-center gap-1.5 text-xs text-gray-400" data-test="image-current-summary">
+          <span>{{ batchStatusLabel }} · {{ succeededAttempts.length }}/{{ batch.attempts.length }}</span>
+          <PlatformSourceBadge :source="batch.request.source" />
         </p>
       </div>
     </div>
@@ -69,6 +70,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
+import PlatformSourceBadge from '@/components/ai-creation/PlatformSourceBadge.vue';
 import { batchStatus } from '@/seedream-ui';
 import type { SeedreamAttempt, SeedreamBatch } from '@/types';
 

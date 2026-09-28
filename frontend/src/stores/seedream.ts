@@ -92,12 +92,12 @@ export const useSeedreamStore = defineStore('seedream', () => {
     }
   }
 
-  async function createBatch(request: SeedreamCreateRequest): Promise<SeedreamBatch | null> {
+  async function createBatch(request: SeedreamCreateRequest, source: string = 'api-key'): Promise<SeedreamBatch | null> {
     if (creatingBatch.value) return null;
     creatingBatch.value = true;
     beginLoading();
     try {
-      const result = await api.seedream.createBatch(request);
+      const result = await api.seedream.createBatch(request, source);
       if (!result.success) {
         setError(result.error);
         return null;
@@ -111,6 +111,24 @@ export const useSeedreamStore = defineStore('seedream', () => {
     } finally {
       endLoading();
       creatingBatch.value = false;
+    }
+  }
+
+  /** 平台源单价报价（只读）；直连源不使用。 */
+  async function quoteImage(request: SeedreamCreateRequest): Promise<{ quote: number } | null> {
+    beginLoading();
+    try {
+      const result = await api.seedream.quoteImage(request);
+      if (!result.success) {
+        setError(result.error);
+        return null;
+      }
+      return result.data;
+    } catch (caught) {
+      setError(caught);
+      return null;
+    } finally {
+      endLoading();
     }
   }
 
@@ -375,6 +393,7 @@ export const useSeedreamStore = defineStore('seedream', () => {
     error,
     upsertBatch,
     createBatch,
+    quoteImage,
     selectReferenceImage,
     loadBatch,
     loadBatches,

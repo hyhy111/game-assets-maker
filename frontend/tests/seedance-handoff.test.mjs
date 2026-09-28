@@ -85,10 +85,10 @@ test('SeedanceCreate submit remains guarded by paid confirmation, first_frame an
   );
 
   // The submit button stays disabled when draftLoadFailed, first_frame, or prompt is missing.
-  assert.match(source, /:disabled="submitting \|\| platformGenerationSelected \|\| draftLoadFailed \|\| !form\.first_frame \|\| !form\.prompt\.trim\(\)"/);
+  assert.match(source, /:disabled="submitting \|\| capabilitiesBlocked \|\| draftLoadFailed \|\| !form\.first_frame \|\| !form\.prompt\.trim\(\)"/);
   // The paid confirmation action delegates to the single guarded task-creation helper.
   const confirmMatch = source.match(/async function confirmPaidAction\(\)\s*\{[\s\S]*?\n\}/);
   assert.ok(confirmMatch, 'confirmPaidAction function should exist');
   assert.match(confirmMatch[0], /await createPendingTask\(\)/);
-  assert.match(source, /async function createPendingTask\(\)[\s\S]*const request = pendingRequest;[\s\S]*store\.createTask\(request\)/);
+  assert.match(source, /async function createPendingTask\(\)[\s\S]*const request = pendingRequest;[\s\S]*store\.createTask\(request, source\)/);
 });

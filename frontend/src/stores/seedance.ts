@@ -127,12 +127,12 @@ export const useSeedanceStore = defineStore('seedance', () => {
     }
   }
 
-  async function createTask(request: SeedanceCreateRequest): Promise<SeedanceTask | null> {
+  async function createTask(request: SeedanceCreateRequest, source: string = 'api-key'): Promise<SeedanceTask | null> {
     if (creatingTask.value) return null;
     creatingTask.value = true;
     const ticket = beginOperation('task-action');
     try {
-      const result = await api.seedance.createTask(request);
+      const result = await api.seedance.createTask(request, source);
       if (!asyncGuard.isResourceCurrent(ticket)) return null;
       const task = useTaskResult(ticket, result);
       if (task) currentTask.value = task;
@@ -143,6 +143,21 @@ export const useSeedanceStore = defineStore('seedance', () => {
     } finally {
       endLoading();
       creatingTask.value = false;
+    }
+  }
+
+  /** 平台源报价预览（只读）；直连源不使用。 */
+  async function quoteVideo(request: SeedanceCreateRequest): Promise<{ quote: number } | null> {
+    const ticket = beginOperation('task-action');
+    try {
+      const result = await api.seedance.quoteVideo(request);
+      if (!asyncGuard.isResourceCurrent(ticket)) return null;
+      return useDataResult(ticket, result);
+    } catch (caught) {
+      setOperationError(ticket, caught);
+      return null;
+    } finally {
+      endLoading();
     }
   }
 
@@ -160,10 +175,10 @@ export const useSeedanceStore = defineStore('seedance', () => {
     }
   }
 
-  async function validateRequest(request: SeedanceCreateRequest): Promise<boolean> {
+  async function validateRequest(request: SeedanceCreateRequest, source: string = 'api-key'): Promise<boolean> {
     const ticket = beginOperation('task-action');
     try {
-      const result = await api.seedance.validateRequest(request);
+      const result = await api.seedance.validateRequest(request, source);
       if (!asyncGuard.isResourceCurrent(ticket)) return false;
       return useDataResult(ticket, result)?.valid === true;
     } catch (caught) {
@@ -422,6 +437,7 @@ export const useSeedanceStore = defineStore('seedance', () => {
     selectImageFile,
     saveVideo,
     createTask,
+    quoteVideo,
     validateRequest,
     loadTasks,
     loadTask,

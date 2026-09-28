@@ -212,7 +212,7 @@ def test_seedance_continue_is_an_explicit_safe_facade(runtime_config_path):
     result = SeedanceAPI(manager, media_resolver=MissingResolver()).continue_task("source-task")
 
     assert result["success"] is True
-    assert manager.calls == [("continue", "source-task")]
+    assert manager.calls == [("get", "source-task"), ("continue", "source-task")]
     assert "first_frame" not in result["task"]
 
 

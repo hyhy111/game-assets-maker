@@ -7,7 +7,8 @@ from backend.image_input import (
     image_data_url,
     read_image_metadata,
 )
-from backend.seedance.models import MODEL_CAPABILITIES, SeedanceRequest
+from backend.platform.sources import PLATFORM_SOURCE
+from backend.seedance.models import MODEL_CAPABILITIES, SeedanceRequest, platform_model_id
 
 _ALLOWED_RATIOS = {"adaptive", "16:9", "1:1", "4:3"}
 _MAX_PAYLOAD_BYTES = 64 * 1024 * 1024
@@ -47,10 +48,13 @@ def _validate_integer(value: int, field: str, minimum: int, maximum: int, code: 
 
 
 def validate_request(request: SeedanceRequest) -> None:
-    if request.model not in MODEL_CAPABILITIES:
-        raise ValidationError("model", "UNSUPPORTED_MODEL", "Unsupported Seedance model")
-    if request.resolution not in MODEL_CAPABILITIES[request.model]["resolutions"]:
-        raise ValidationError("resolution", "UNSUPPORTED_RESOLUTION", "Resolution is unsupported for this model")
+    # 平台源下 model 是能力清单下发的上游 ID，合法域由后端（parseVideo + 查价）判定；
+    # 本地表只描述直连模式的短键，用它拦截会让"运营上新模型"在客户端被提前拒掉。
+    if request.source != PLATFORM_SOURCE:
+        if request.model not in MODEL_CAPABILITIES:
+            raise ValidationError("model", "UNSUPPORTED_MODEL", "Unsupported Seedance model")
+        if request.resolution not in MODEL_CAPABILITIES[request.model]["resolutions"]:
+            raise ValidationError("resolution", "UNSUPPORTED_RESOLUTION", "Resolution is unsupported for this model")
     if request.ratio not in _ALLOWED_RATIOS:
         raise ValidationError("ratio", "UNSUPPORTED_RATIO", "Unsupported aspect ratio")
     if type(request.duration) is not int or (request.duration != -1 and not 4 <= request.duration <= 15):
@@ -80,7 +84,7 @@ def _build_payload(request: SeedanceRequest) -> dict[str, Any]:
     if request.last_frame is not None:
         content.append(_image_content(request.last_frame, "last_frame"))
     return {
-        "model": MODEL_CAPABILITIES[request.model]["id"],
+        "model": platform_model_id(request.model),
         "content": content,
         "resolution": request.resolution,
         "ratio": request.ratio,

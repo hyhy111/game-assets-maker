@@ -20,7 +20,9 @@ ALLOWED_IMAGE_FORMATS = {
     "HEIC": "image/heic",
     "HEIF": "image/heif",
 }
-MAX_IMAGE_BYTES = 30 * 1024 * 1024
+# 单图上限 10MB：上游允许 30MB，但平台与直连都以 Base64 内联交付，
+# 30MB 图会撑成约 40MB 请求体，贴着上游 64MB 上限且违背其"大文件勿用 base64"的告警。
+MAX_IMAGE_BYTES = 10 * 1024 * 1024
 
 
 class ImageInputError(ValueError):
@@ -39,7 +41,7 @@ def read_image_metadata(path: Path) -> tuple[str, int, int]:
     if not path.is_file():
         raise ImageInputError("IMAGE_NOT_FOUND", "Image file does not exist")
     if file_size(path) >= MAX_IMAGE_BYTES:
-        raise ImageInputError("IMAGE_TOO_LARGE", "Each image must be smaller than 30 MiB")
+        raise ImageInputError("IMAGE_TOO_LARGE", "Each image must be smaller than 10 MiB")
     try:
         with Image.open(path) as image:
             image.verify()

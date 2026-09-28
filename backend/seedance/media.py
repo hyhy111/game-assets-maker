@@ -7,7 +7,7 @@ from pathlib import Path
 from backend.seedance.repository import TaskRepository
 
 _INPUT_ASSETS = {"first_frame", "last_frame"}
-_OUTPUT_ASSETS = {"video", "returned_last_frame", "thumbnail"}
+_OUTPUT_ASSETS = {"video", "returned_last_frame", "continuation_frame", "thumbnail"}
 _ASSET_KEYS = _INPUT_ASSETS | _OUTPUT_ASSETS
 
 
