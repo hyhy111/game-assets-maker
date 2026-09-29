@@ -9,6 +9,7 @@ import os
 import shutil
 import sys
 import threading
+from collections.abc import Callable
 from http.server import SimpleHTTPRequestHandler
 from pathlib import Path
 from queue import Empty, Queue
@@ -18,8 +19,9 @@ from urllib.parse import unquote, urlsplit
 
 import webview
 
-from src.utils.app_config import current_storage_locations
+from src.utils.app_config import current_storage_locations, save_app_config
 from src.utils.data_paths import data_root
+from src.utils.storage_migration import StorageMigrationCoordinator
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent))
@@ -107,6 +109,20 @@ def schedule_macos_window_controls(window) -> None:
         AppHelper.callAfter(_configure_native_window_controls, window)
     except Exception as e:
         print(f"Failed to schedule macOS window controls configuration: {e}")
+
+
+def build_restart_command() -> list[str]:
+    """Build the os.execv command used to restart the app in place.
+
+    Frozen builds re-exec the packaged executable with its original
+    arguments; source runs re-exec the current interpreter as
+    ``python -m backend.main`` so the module entry point is preserved (and
+    dev_start.py keeps waiting on the same backend process instead of
+    shutting the Vite dev server down early).
+    """
+    if getattr(sys, "frozen", False):
+        return [sys.executable, *sys.argv[1:]]
+    return [sys.executable, "-m", "backend.main", *sys.argv[1:]]
 
 
 def start_assets_server(
@@ -335,9 +351,17 @@ class API:
     Combines all API modules into a single interface
     """
 
-    def __init__(self, window=None, assets_base_url: str = "http://localhost:8080"):
+    def __init__(
+        self,
+        window=None,
+        assets_base_url: str = "http://localhost:8080",
+        restart_handler: Callable[[], dict[str, Any]] | None = None,
+        close_handler: Callable[[], dict[str, Any]] | None = None,
+    ):
         self._window = window
         self._assets_base_url = assets_base_url.rstrip("/")
+        self._restart_handler = restart_handler
+        self._close_handler = close_handler
         # Resolve storage roots once at startup; every consumer shares this
         # result until a migration-triggered restart replaces the process.
         self._storage_locations = current_storage_locations()
@@ -351,6 +375,54 @@ class API:
         self._seedance_api_instance = None
         self._seedream_api_instance = None
         self._seedream_exit_confirmed = False
+        self._storage_settings_api_instance = None
+        # One app-level coordinator owns the migration mutex, the one-shot
+        # confirmation token and the post-commit restart-required state.
+        # Activity providers read the lazily-created API instances directly so
+        # a settings save never spawns managers just to check for activity.
+        activity_attributes = {
+            "process": "_process_api_instance",
+            "batch_trim": "_batch_trim_api_instance",
+            "seedream": "_seedream_api_instance",
+            "seedance": "_seedance_api_instance",
+        }
+        self._storage_migration_coordinator = StorageMigrationCoordinator(
+            commit_config=save_app_config,
+            activity_providers={
+                name: lambda attribute=attribute: self._api_has_active_writes(attribute)
+                for name, attribute in activity_attributes.items()
+            },
+            progress_callback=self._dispatch_migration_progress,
+        )
+
+    def _api_has_active_writes(self, instance_attribute: str) -> bool:
+        instance = getattr(self, instance_attribute)
+        return instance is not None and instance.has_active_writes()
+
+    @property
+    def _storage_settings_api(self):
+        if self._storage_settings_api_instance is None:
+            from backend.api.storage_settings_api import StorageSettingsAPI
+
+            self._storage_settings_api_instance = StorageSettingsAPI(
+                coordinator=self._storage_migration_coordinator,
+                data_root=data_root(),
+            )
+        return self._storage_settings_api_instance
+
+    def _dispatch_migration_progress(self, kind: str, copied: int, total: int) -> None:
+        """Forward copy progress to the frontend as a DOM CustomEvent."""
+        if self._window is None:
+            return
+        js_code = f"""
+            window.dispatchEvent(new CustomEvent('storage-migration-progress', {{
+                detail: {{ kind: '{kind}', copied: {copied}, total: {total} }}
+            }}));
+        """
+        try:
+            self._window.evaluate_js(js_code)
+        except Exception as error:
+            print(f"Failed to emit migration progress: {error}")
 
     @property
     def storage_locations(self):
@@ -622,6 +694,27 @@ class API:
         """Save application configuration"""
         return self._config_api.save_config(config)
 
+    # ==================== Storage Settings & Migration API ====================
+
+    def storage_get_settings(self) -> dict[str, Any]:
+        """Read persisted storage values plus resolved display paths."""
+        return self._storage_settings_api.get_settings()
+
+    def storage_save_settings(self, draft: dict[str, Any]) -> dict[str, Any]:
+        """Save the settings draft, or precheck a storage migration."""
+        return self._storage_settings_api.save_settings(draft)
+
+    def storage_execute_migration(self, token: str) -> dict[str, Any]:
+        """Run the confirmed migration and commit the settings draft."""
+        return self._storage_settings_api.execute_migration(token)
+
+    def storage_migration_state(self) -> dict[str, Any]:
+        """Report whether a committed migration makes this runtime stale."""
+        return {
+            "success": True,
+            "restart_required": self._storage_migration_coordinator.restart_required,
+        }
+
     def get_available_sizes(self) -> list[int]:
         """Get available pixelization sizes"""
         return [64, 128, 256, 512]
@@ -657,6 +750,33 @@ class API:
     def get_app_version(self) -> str:
         """Get application version"""
         return "2.0.0"
+
+    # ==================== App Lifecycle API ====================
+
+    def request_app_restart(self) -> dict[str, Any]:
+        """Request a one-shot in-place application restart.
+
+        Called by the settings page after a successful storage migration.
+        The bridge only records the restart intent and starts the window
+        close flow; the actual restart happens in MainApp.run() once the
+        regular closed-event cleanup has completed.
+        """
+        if self._restart_handler is None:
+            return {"success": False, "error": "restart handler unavailable"}
+        return self._restart_handler()
+
+    def close_app(self) -> dict[str, Any]:
+        """Close the main window without requesting a restart.
+
+        Called from the restart-required overlay when the user chooses to
+        close instead of restarting. Routing through the backend keeps the
+        regular closed-event cleanup (local server, agent server, managers)
+        instead of relying on JS ``window.close()``, which PyWebView does not
+        reliably route to native window destruction.
+        """
+        if self._close_handler is None:
+            return {"success": False, "error": "close handler unavailable"}
+        return self._close_handler()
 
     def open_subscription_window(self, url: str) -> bool:
         """Open subscription landing page in an isolated PyWebView window.
@@ -893,7 +1013,10 @@ class MainApp:
 
     def __init__(self):
         self.is_dev = os.environ.get("DEV_MODE") == "1"
-        self.api = API()
+        # One-shot restart intent set via the bridge after a storage
+        # migration; consumed in run() once webview.start() returns.
+        self.restart_requested = False
+        self.api = API(restart_handler=self._handle_restart_request, close_handler=self._handle_close_request)
         self.assets_port = 0
         self.stop_event = threading.Event()
         self.assets_thread = None
@@ -916,6 +1039,54 @@ class MainApp:
                 # Fallback to dev server if dist not built
                 print(f"Warning: Frontend build not found at {frontend_path}")
                 return "http://localhost:5173"
+
+    def _handle_restart_request(self) -> dict[str, Any]:
+        """Record the one-shot restart intent and start the close flow.
+
+        Repeated requests are idempotent: the state is set once and the main
+        window is destroyed once, while every call reports success so
+        duplicate clicks from the settings page are harmless.
+        """
+        if not self.restart_requested:
+            self.restart_requested = True
+            if self.window is not None:
+                try:
+                    self.window.destroy()
+                except Exception as error:
+                    print(f"Failed to destroy window for restart: {error}")
+        return {"success": True, "restart_requested": True}
+
+    def _handle_close_request(self) -> dict[str, Any]:
+        """Destroy the main window without setting the restart intent.
+
+        The closed event then runs the regular cleanup and ``webview.start()``
+        returns normally, so the process exits instead of restarting.
+        """
+        if self.window is not None:
+            try:
+                self.window.destroy()
+            except Exception as error:
+                print(f"Failed to destroy window for close: {error}")
+        return {"success": True, "close_requested": True}
+
+    def _restart_in_place(self) -> None:
+        """Replace this process with a fresh app instance via os.execv.
+
+        os.execv inherits the current environment. A failure must not raise:
+        migrated data and configuration were already committed, so the user
+        can start the app manually and the new configuration takes effect on
+        the next launch.
+        """
+        command = build_restart_command()
+        print(f"Restarting application in place: {command}")
+        try:
+            os.execv(command[0], command)
+        except OSError as error:
+            print(
+                f"In-place restart failed: {error}. "
+                "Please start Game Assets Maker manually; "
+                "the saved configuration will be applied on the next launch."
+            )
 
     def on_window_closed(self):
         """Handle window closed event"""
@@ -1039,6 +1210,15 @@ class MainApp:
             private_mode=False,
             storage_path=str(data_root() / "webview_profile"),
         )
+
+        # webview.start() returns only after the window was destroyed and the
+        # closed-event cleanup (asset server, agent server, managers) has run,
+        # so an in-place restart requested via the bridge always happens after
+        # that cleanup. Replacing the process image (rather than spawning a
+        # second instance) avoids two instances sharing the WebView profile,
+        # config, and caches.
+        if self.restart_requested:
+            self._restart_in_place()
 
 
 def main():

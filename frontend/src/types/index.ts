@@ -250,6 +250,7 @@ export interface AppConfig {
   theme: string;
   logger_enabled: boolean;
   paid_generation_confirmation_enabled: boolean;
+  project_dir: string;
   logger_config: LoggerConfig;
   seedance: SeedanceSettings;
 }
@@ -434,6 +435,67 @@ export type SeedanceDataResult<T> =
 export type SeedanceHandoffResult =
   | { success: true; project_id: string; task: SeedanceTask }
   | { success: false; error: SeedanceApiError };
+
+/**
+ * Storage location settings & migration
+ */
+export interface StorageSettings {
+  /** Persisted config values (relative defaults stay migratable). */
+  project_dir: string;
+  cache_dir: string;
+  /** Resolved absolute display paths. */
+  projects_root: string;
+  ai_cache_root: string;
+}
+
+export type StorageLocationKind = 'project' | 'ai_cache';
+
+export interface StorageMigrationEntry {
+  kind: StorageLocationKind;
+  source: string;
+  target: string;
+  file_count: number;
+  total_bytes: number;
+}
+
+export interface StorageMigrationSummary {
+  token: string;
+  entries: StorageMigrationEntry[];
+}
+
+export interface StorageSettingsDraft {
+  project_dir?: string;
+  seedance?: SeedanceSettingsUpdate;
+  seedream?: SeedreamSettings;
+  logger_enabled?: boolean;
+  paid_generation_confirmation_enabled?: boolean;
+}
+
+export interface StorageApiError {
+  code: string;
+  message: string;
+  stage: string;
+}
+
+export type StorageSettingsResult =
+  | { success: true; settings: StorageSettings }
+  | { success: false; error: StorageApiError };
+export type StorageSaveResult =
+  | { success: true; migration_required: false }
+  | { success: true; migration_required: true; migration: StorageMigrationSummary }
+  | { success: false; error: StorageApiError };
+export type StorageMigrationResult =
+  | { success: true; restart_required: boolean }
+  | { success: false; error: StorageApiError };
+export type StorageMigrationStateResult =
+  | { success: true; restart_required: boolean }
+  | { success: false; error: StorageApiError };
+
+export interface StorageMigrationProgress {
+  kind: StorageLocationKind;
+  copied: number;
+  total: number;
+}
 
 /**
  * Player types

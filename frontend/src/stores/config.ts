@@ -27,6 +27,7 @@ export const useConfigStore = defineStore('config', () => {
         theme: 'dark',
         logger_enabled: false,
         paid_generation_confirmation_enabled: true,
+        project_dir: 'project',
         logger_config: {
           log_dir: './logs',
           max_log_size_mb: 10,

@@ -33,6 +33,11 @@ import type {
   SeedanceCacheInfo,
   SeedanceCacheCleanResult,
   GenerationLayout,
+  StorageSettingsDraft,
+  StorageSettingsResult,
+  StorageSaveResult,
+  StorageMigrationResult,
+  StorageMigrationStateResult,
 } from './index';
 
 /**
@@ -79,6 +84,16 @@ export interface PyWebViewWindow extends Window {
       // Config API
       get_config: () => Promise<AppConfig>;
       save_config: (config: AppConfig) => Promise<boolean>;
+
+      // Storage settings & migration API
+      storage_get_settings: () => Promise<StorageSettingsResult>;
+      storage_save_settings: (draft: StorageSettingsDraft) => Promise<StorageSaveResult>;
+      storage_execute_migration: (token: string) => Promise<StorageMigrationResult>;
+      storage_migration_state: () => Promise<StorageMigrationStateResult>;
+
+      // App lifecycle API
+      request_app_restart: () => Promise<{ success: boolean; restart_requested?: boolean; error?: string }>;
+      close_app: () => Promise<{ success: boolean; close_requested?: boolean; error?: string }>;
       get_available_sizes: () => Promise<number[]>;
 
       // System API

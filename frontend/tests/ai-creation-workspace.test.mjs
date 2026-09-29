@@ -172,7 +172,7 @@ test('unified settings cannot save placeholder defaults when any source failed t
   assert.match(settings, /:disabled="!settingsReady"/);
   assert.match(settings, /if \(!settingsReady\.value\) return/);
   assert.match(settings, /seedanceSettingsLoaded\.value/);
-  assert.match(settings, /const \[settingsLoaded\] = await Promise\.all/);
+  assert.match(settings, /const \[settingsLoaded, , , , storageResult\] = await Promise\.all/);
   assert.match(settings, /store\.settings[\s\S]*seedreamStore\.settings[\s\S]*configStore\.config/);
   assert.match(settings, /seedreamStore\.error[\s\S]*configStore\.error/);
   assert.match(config, /const error = ref<string \| null>\(null\)/);

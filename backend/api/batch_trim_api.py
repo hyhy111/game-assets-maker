@@ -1,8 +1,10 @@
 """Batch trim API for transparent margin cropping."""
 
+import contextlib
 import json
 import math
 import os
+import threading
 import wave
 from pathlib import Path
 from typing import Any
@@ -44,6 +46,24 @@ class BatchTrimAPI:
     def __init__(self, projects_root: Path | None = None):
         self._projects_root = projects_root if projects_root is not None else default_projects_root()
         self._output_root = self._projects_root / "global-output"
+        self._trim_lock = threading.Lock()
+        self._active_trims = 0
+
+    @contextlib.contextmanager
+    def _trim_activity(self):
+        """Mark a batch trim as in flight so storage migration stays blocked."""
+        with self._trim_lock:
+            self._active_trims += 1
+        try:
+            yield
+        finally:
+            with self._trim_lock:
+                self._active_trims -= 1
+
+    def has_active_writes(self) -> bool:
+        """True while a batch trim may still write project output data."""
+        with self._trim_lock:
+            return self._active_trims > 0
 
     def _get_project_info(self, project_id: str) -> tuple[str, str, Path]:
         role, action = split_project_id(project_id)
@@ -508,6 +528,10 @@ class BatchTrimAPI:
 
     def execute_trim(self, params: dict[str, Any]) -> list[dict[str, Any]]:
         """Execute batch trimming."""
+        with self._trim_activity():
+            return self._execute_trim(params)
+
+    def _execute_trim(self, params: dict[str, Any]) -> list[dict[str, Any]]:
         project_ids = params.get("projectIds", [])
         mode = params.get("mode", "global")
         role_output_roots = self._get_role_output_roots(project_ids)

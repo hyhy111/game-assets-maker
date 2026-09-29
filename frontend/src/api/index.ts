@@ -55,6 +55,11 @@ import type {
   AudioTimelineResult,
   AudioSaveResult,
   AudioClip,
+  StorageSettingsDraft,
+  StorageSettingsResult,
+  StorageSaveResult,
+  StorageMigrationResult,
+  StorageMigrationStateResult,
 } from '@/types';
 
 declare const window: PyWebViewWindow;
@@ -608,6 +613,45 @@ export const seedreamApi = {
 };
 
 /**
+ * Storage settings & migration API
+ */
+export const storageApi = {
+  async getSettings(): Promise<StorageSettingsResult> {
+    return callApi<StorageSettingsResult>('storage_get_settings', 'storageGetSettings');
+  },
+
+  async saveSettings(draft: StorageSettingsDraft): Promise<StorageSaveResult> {
+    return callApi<StorageSaveResult>('storage_save_settings', 'storageSaveSettings', draft);
+  },
+
+  async executeMigration(token: string): Promise<StorageMigrationResult> {
+    return callApi<StorageMigrationResult>('storage_execute_migration', 'storageExecuteMigration', token);
+  },
+
+  async getMigrationState(): Promise<StorageMigrationStateResult> {
+    return callApi<StorageMigrationStateResult>('storage_migration_state', 'storageMigrationState');
+  }
+};
+
+/**
+ * App lifecycle API
+ */
+export const lifecycleApi = {
+  async requestAppRestart(): Promise<{ success: boolean; restart_requested?: boolean; error?: string }> {
+    return callApi<{ success: boolean; restart_requested?: boolean; error?: string }>(
+      'request_app_restart',
+      'requestAppRestart'
+    );
+  },
+  async closeApp(): Promise<{ success: boolean; close_requested?: boolean; error?: string }> {
+    return callApi<{ success: boolean; close_requested?: boolean; error?: string }>(
+      'close_app',
+      'closeApp'
+    );
+  }
+};
+
+/**
  * Combined API export
  */
 export const api = {
@@ -621,5 +665,7 @@ export const api = {
   audio: audioApi,
   seedance: seedanceApi,
   seedream: seedreamApi,
+  storage: storageApi,
+  lifecycle: lifecycleApi,
   isAvailable: isApiAvailable
 };

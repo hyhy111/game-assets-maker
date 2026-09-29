@@ -94,6 +94,10 @@ class SeedreamAPI:
             self._manager.set_event_sink(None)
         self._started = False
 
+    def has_active_writes(self) -> bool:
+        """True while image attempts may still write the AI picture cache."""
+        return self._manager is not None and self._manager.has_active_batches()
+
     def select_image_file(self) -> str | None:
         window = self._window or self._window_getter()
         if window is None:

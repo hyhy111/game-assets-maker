@@ -467,6 +467,10 @@ class ProcessAPI:
 
         return result
 
+    def has_active_writes(self) -> bool:
+        """True while any processing task may still write project data."""
+        return any(task.status in ("pending", "running") for task in self.tasks.values())
+
     def cancel_task(self, task_id: str) -> bool:
         """Cancel a running task"""
         task = self.tasks.get(task_id)

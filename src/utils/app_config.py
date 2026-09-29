@@ -173,6 +173,13 @@ def default_projects_root() -> Path:
     return current_storage_locations().projects_root
 
 
+def merge_config_update(current: dict[str, Any], update: dict[str, Any]) -> dict[str, Any]:
+    """Return a copy of ``current`` with known keys from ``update`` applied."""
+    merged = deepcopy(current)
+    _merge_known_keys(merged, update)
+    return merged
+
+
 def _merge_known_keys(target: dict[str, Any], update: dict[str, Any]) -> None:
     for key, value in update.items():
         if key not in target:

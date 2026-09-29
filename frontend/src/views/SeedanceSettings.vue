@@ -90,6 +90,36 @@
 
       <SeedancePanel
         class="xl:col-span-2"
+        :title="t('storage.title')"
+        :description="t('storage.description')"
+      >
+        <div class="grid gap-4 sm:grid-cols-2">
+          <label class="text-sm text-gray-300">
+            {{ t('storage.projectDir') }}
+            <span class="mt-2 flex flex-col gap-2 sm:flex-row">
+              <input :value="projectDisplayPath" class="seedance-control min-w-0 flex-1" readonly data-test="storage-project-dir">
+              <Button type="button" class="h-[42px] shrink-0" @click="selectStorageDirectory('project_dir')">
+                {{ t('seedance.ui.chooseFolder') }}
+              </Button>
+            </span>
+          </label>
+          <label class="text-sm text-gray-300">
+            {{ t('storage.aiCacheDir') }}
+            <span class="mt-2 flex flex-col gap-2 sm:flex-row">
+              <input :value="cacheDisplayPath" class="seedance-control min-w-0 flex-1" readonly data-test="storage-cache-dir">
+              <Button type="button" class="h-[42px] shrink-0" @click="selectStorageDirectory('cache_dir')">
+                {{ t('seedance.ui.chooseFolder') }}
+              </Button>
+            </span>
+          </label>
+        </div>
+        <p v-if="migrationError" class="mt-3 text-sm text-danger" data-test="storage-migration-error">
+          {{ t('storage.migrationFailed') }}: {{ migrationError }}
+        </p>
+      </SeedancePanel>
+
+      <SeedancePanel
+        class="xl:col-span-2"
         :title="t('seedance.settings.defaults')"
         :description="t('seedance.settings.defaultsDescription')"
       >
@@ -179,16 +209,7 @@
       >
         <div class="grid gap-5 xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,.8fr)]">
           <div>
-            <label class="text-sm text-gray-300">
-              {{ t('seedance.settings.cacheDirectory') }}
-              <span class="mt-2 flex flex-col gap-2 sm:flex-row">
-                <input v-model="draft.cache_dir" class="seedance-control min-w-0 flex-1" readonly>
-                <Button type="button" class="h-[42px] shrink-0" @click="selectDirectory">
-                  {{ t('seedance.ui.chooseFolder') }}
-                </Button>
-              </span>
-            </label>
-            <label class="mt-5 block text-sm text-gray-300">
+            <label class="block text-sm text-gray-300">
               {{ t('seedance.settings.retention') }}
               <select v-model.number="draft.retention_days" class="seedance-control mt-2">
                 <option :value="0">{{ t('seedance.ui.never') }}</option>
@@ -288,6 +309,68 @@
     </div>
 
     <div
+      v-if="migrationSummary"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="storage-migration-title"
+      aria-describedby="storage-migration-description"
+      data-test="storage-migration-confirm"
+    >
+      <div class="max-w-lg rounded-xl border border-dark-border bg-dark-surface p-6">
+        <h2 id="storage-migration-title" class="text-lg font-semibold text-white">{{ t('storage.migrationTitle') }}</h2>
+        <p id="storage-migration-description" class="mt-3 text-gray-300">{{ t('storage.migrationDescription') }}</p>
+        <ul class="mt-4 space-y-3">
+          <li
+            v-for="entry in migrationSummary.entries"
+            :key="entry.kind"
+            class="rounded-lg border border-[var(--seedance-border)] bg-black/15 p-3 text-sm"
+          >
+            <p class="font-medium text-gray-200">
+              {{ entry.kind === 'project' ? t('storage.scopeProject') : t('storage.scopeAiCache') }}
+            </p>
+            <p class="mt-1 break-all text-gray-400">{{ entry.source }} → {{ entry.target }}</p>
+            <p class="mt-1 text-xs text-[var(--seedance-muted)]">
+              {{ entry.file_count }} · {{ formatBytes(entry.total_bytes) }}
+            </p>
+          </li>
+        </ul>
+        <p class="mt-4 text-sm text-gray-300">{{ t('storage.keepOldNotice') }}</p>
+        <p class="mt-2 text-sm text-amber-300">{{ t('storage.restartNotice') }}</p>
+        <p v-if="migrationProgress" class="mt-3 text-sm text-gray-300">
+          {{ t('storage.migrationProgress', { copied: migrationProgress.copied, total: migrationProgress.total }) }}
+        </p>
+        <div class="mt-5 flex justify-end gap-2">
+          <Button type="button" variant="secondary" :disabled="executingMigration" @click="closeMigrationConfirmation">
+            {{ t('common.cancel') }}
+          </Button>
+          <Button type="button" variant="danger" :loading="executingMigration" @click="executeMigration">
+            {{ t('storage.migrationConfirm') }}
+          </Button>
+        </div>
+      </div>
+    </div>
+
+    <div
+      v-if="restartRequired"
+      class="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4"
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="storage-restart-title"
+      aria-describedby="storage-restart-description"
+      data-test="storage-restart-required"
+    >
+      <div class="max-w-md rounded-xl border border-dark-border bg-dark-surface p-6">
+        <h2 id="storage-restart-title" class="text-lg font-semibold text-white">{{ t('storage.restartRequiredTitle') }}</h2>
+        <p id="storage-restart-description" class="mt-3 text-gray-300">{{ t('storage.restartRequiredDescription') }}</p>
+        <div class="mt-5 flex justify-end gap-2">
+          <Button type="button" variant="secondary" @click="closeApp">{{ t('storage.closeApp') }}</Button>
+          <Button type="button" data-test="storage-restart-now" @click="restartNow">{{ t('storage.restartNow') }}</Button>
+        </div>
+      </div>
+    </div>
+
+    <div
       v-if="confirmLeave"
       ref="leaveModalRoot"
       class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
@@ -340,7 +423,15 @@ import {
 import { useConfigStore } from '@/stores/config';
 import { useSeedanceStore } from '@/stores/seedance';
 import { useSeedreamStore } from '@/stores/seedream';
-import type { SeedanceCacheCleanResult, SeedanceSettings, SeedreamSettings } from '@/types';
+import type {
+  SeedanceCacheCleanResult,
+  SeedanceSettings,
+  SeedreamSettings,
+  StorageMigrationProgress,
+  StorageMigrationSummary,
+  StorageSettings,
+  StorageSettingsDraft,
+} from '@/types';
 
 const { t } = useI18n();
 const router = useRouter();
@@ -390,6 +481,15 @@ const draft = reactive<Omit<SeedanceSettings, 'api_key_configured' | 'last_clean
   default_return_last_frame: false,
   retention_days: 0,
 });
+// Storage-location drafts hold the *configured* values; the inputs display
+// the resolved absolute paths. Edits stay draft-only until Save is clicked.
+const storageSettings = ref<StorageSettings | null>(null);
+const storageDraft = reactive({ project_dir: '', cache_dir: '' });
+const migrationSummary = ref<StorageMigrationSummary | null>(null);
+const migrationError = ref('');
+const migrationProgress = ref<StorageMigrationProgress | null>(null);
+const executingMigration = ref(false);
+const restartRequired = ref(false);
 const settings = computed(() => store.settings);
 const settingsReady = computed(() => Boolean(
   store.settings
@@ -408,8 +508,24 @@ const currentSnapshot = computed(() => JSON.stringify({
   app: { ...appDraft },
   seedance: { ...draft },
   seedream: { ...seedreamDraft },
+  storage: { ...storageDraft },
   apiKeyChanged: apiKey.value.length > 0,
 }));
+// Relative configured values display as the backend-resolved absolute roots;
+// a chosen (absolute) directory displays as itself.
+const isAbsoluteStoragePath = (value: string) => /^(~|[a-zA-Z]:[\\/]|\\\\|\/)/.test(value.trim());
+const storageDisplayPath = (draft: string, resolvedRoot: string | undefined) => (
+  isAbsoluteStoragePath(draft) ? draft : resolvedRoot ?? draft
+);
+const projectDisplayPath = computed(() => storageDisplayPath(storageDraft.project_dir, storageSettings.value?.projects_root));
+const cacheDisplayPath = computed(() => storageDisplayPath(storageDraft.cache_dir, storageSettings.value?.ai_cache_root));
+// Textual comparison is only an immediate hint for routing the save; the
+// backend re-resolves and stays the authority on physical path equality.
+const storagePathsChanged = computed(() => Boolean(
+  storageSettings.value
+  && (storageDraft.project_dir !== storageSettings.value.project_dir
+    || storageDraft.cache_dir !== storageSettings.value.cache_dir)
+));
 const hasUnsavedChanges = computed(() => (
   savedSnapshot.value.length > 0 && currentSnapshot.value !== savedSnapshot.value
 ));
@@ -425,14 +541,20 @@ const settingsError = computed(() => {
 
 onMounted(async () => {
   seedanceSettingsLoaded.value = false;
-  const [settingsLoaded] = await Promise.all([
+  const [settingsLoaded, , , , storageResult] = await Promise.all([
     store.loadSettings(),
     store.loadCacheStatus(),
     configStore.loadConfig(),
     seedreamStore.loadSettings(),
+    api.storage.getSettings(),
   ]);
   seedanceSettingsLoaded.value = settingsLoaded;
   initialLoadComplete.value = true;
+  if (storageResult.success) {
+    storageSettings.value = storageResult.settings;
+    storageDraft.project_dir = storageResult.settings.project_dir;
+    storageDraft.cache_dir = storageResult.settings.cache_dir;
+  }
   if (store.settings) {
     Object.assign(draft, store.settings);
     draft.default_duration = correctDuration(draft.default_duration);
@@ -446,6 +568,9 @@ watch(settings, (value) => {
   if (value) {
     Object.assign(draft, value);
     draft.default_duration = correctDuration(draft.default_duration);
+    // Fallback while the storage endpoint is unavailable: keep the cache
+    // directory draft aligned with the Seedance settings.
+    if (!storageSettings.value) storageDraft.cache_dir = value.cache_dir;
   }
 }, { immediate: true });
 
@@ -454,7 +579,10 @@ watch(() => seedreamStore.settings, (value) => {
 }, { immediate: true });
 
 watch(() => configStore.config, (value) => {
-  if (value) syncAppDraft(value);
+  if (value) {
+    syncAppDraft(value);
+    if (!storageSettings.value && value.project_dir) storageDraft.project_dir = value.project_dir;
+  }
 }, { immediate: true });
 
 onBeforeUnmount(() => {
@@ -463,6 +591,9 @@ onBeforeUnmount(() => {
 });
 
 onBeforeRouteLeave((to) => {
+  // A committed migration makes this runtime stale: the only allowed exits
+  // are the one-click restart or closing the app from the blocking overlay.
+  if (restartRequired.value) return false;
   if (!hasUnsavedChanges.value || allowPendingNavigation) {
     allowPendingNavigation = false;
     return true;
@@ -521,9 +652,9 @@ function onLeaveKeydown(event: KeyboardEvent) {
   if (leaveModalRoot.value) trapModalTab(event, leaveModalRoot.value);
 }
 
-async function selectDirectory() {
+async function selectStorageDirectory(field: 'project_dir' | 'cache_dir') {
   const path = await api.system.selectDirectory();
-  if (path) draft.cache_dir = path;
+  if (path) storageDraft[field] = path;
 }
 
 async function testConnection() {
@@ -592,16 +723,114 @@ async function save() {
   if (!settingsReady.value) return;
   saving.value = true;
   saveFeedback.value = '';
+  migrationError.value = '';
+  if (storagePathsChanged.value) {
+    await saveWithMigrationCheck();
+  } else {
+    await savePlain();
+  }
+  saving.value = false;
+}
+
+async function savePlain() {
   const appSaved = await configStore.saveConfig({ ...appDraft });
   const update = { ...draft, ...(apiKey.value ? { api_key: apiKey.value } : {}) };
   const seedanceSaved = appSaved ? await store.saveSettings(update) : null;
   const seedreamSaved = seedanceSaved ? await seedreamStore.saveSettings({ ...seedreamDraft }) : null;
-  saving.value = false;
   if (seedreamSaved) {
     apiKey.value = '';
     markSettingsSaved();
     saveFeedback.value = t('seedance.settings.saved');
   }
+}
+
+async function saveWithMigrationCheck() {
+  // A newly entered API key travels inside the transactional draft: it is
+  // committed together with every other setting on execute, and nothing is
+  // persisted when the migration fails. After a successful migration the app
+  // restarts anyway, so the Seedance manager picks the key up on next launch.
+  const combined: StorageSettingsDraft = {
+    logger_enabled: appDraft.logger_enabled,
+    paid_generation_confirmation_enabled: appDraft.paid_generation_confirmation_enabled,
+    project_dir: storageDraft.project_dir,
+    seedance: {
+      ...draft,
+      cache_dir: storageDraft.cache_dir,
+      ...(apiKey.value ? { api_key: apiKey.value } : {}),
+    },
+    seedream: { ...seedreamDraft },
+  };
+  const result = await api.storage.saveSettings(combined);
+  if (!result.success) {
+    migrationError.value = result.error.message;
+    return;
+  }
+  if (!result.migration_required) {
+    // Plain save (equivalent path spellings): no migration to fail, so rebuild
+    // the Seedance manager for a newly entered key like the normal flow does.
+    if (apiKey.value) {
+      const keySaved = await store.saveSettings({ api_key: apiKey.value });
+      if (!keySaved) return;
+    }
+    apiKey.value = '';
+    if (storageSettings.value) {
+      storageSettings.value = {
+        ...storageSettings.value,
+        project_dir: storageDraft.project_dir,
+        cache_dir: storageDraft.cache_dir,
+      };
+    }
+    markSettingsSaved();
+    saveFeedback.value = t('seedance.settings.saved');
+    return;
+  }
+  migrationSummary.value = result.migration;
+}
+
+function closeMigrationConfirmation() {
+  migrationSummary.value = null;
+  migrationProgress.value = null;
+}
+
+async function executeMigration() {
+  if (!migrationSummary.value) return;
+  executingMigration.value = true;
+  migrationError.value = '';
+  migrationProgress.value = null;
+  window.addEventListener('storage-migration-progress', onMigrationProgress);
+  try {
+    const result = await api.storage.executeMigration(migrationSummary.value.token);
+    if (!result.success) {
+      // Nothing was committed: keep the draft dirty so the user can retry.
+      migrationError.value = result.error.message;
+      migrationSummary.value = null;
+      return;
+    }
+    migrationSummary.value = null;
+    markSettingsSaved();
+    restartRequired.value = true;
+  } finally {
+    executingMigration.value = false;
+    window.removeEventListener('storage-migration-progress', onMigrationProgress);
+  }
+}
+
+function onMigrationProgress(event: Event) {
+  migrationProgress.value = (event as CustomEvent<StorageMigrationProgress>).detail;
+}
+
+async function restartNow() {
+  // Enter the application close flow immediately: the bridge records the
+  // restart intent and destroys the window, so there is no plain-save
+  // success message to wait for.
+  await api.lifecycle.requestAppRestart();
+}
+
+function closeApp() {
+  // Route through the backend so the closed event runs the regular cleanup;
+  // PyWebView does not reliably route a plain JS window close to the native
+  // window.
+  api.lifecycle.closeApp();
 }
 
 async function clean() {

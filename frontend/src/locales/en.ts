@@ -78,6 +78,28 @@ export default {
     enableLogging: 'Enable Logging',
     paidGenerationConfirmation: 'Confirm before generation requests',
   },
+  storage: {
+    title: 'Storage Locations',
+    description:
+      'Full storage paths for projects and the AI cache. Changing a directory migrates existing data when you save.',
+    projectDir: 'Project Directory',
+    aiCacheDir: 'AI Cache Directory',
+    migrationTitle: 'Migrate Storage Locations',
+    migrationDescription:
+      'Saving will copy the following data to the new directories. Each target must not exist or be empty; nothing is merged or overwritten.',
+    scopeProject: 'Project data (including per-project cache and output)',
+    scopeAiCache: 'AI cache (image and video generation assets)',
+    keepOldNotice: 'The original directories are kept intact after a successful migration; delete them manually once verified.',
+    restartNotice: 'The app must restart after the migration and will use the new locations afterwards.',
+    migrationConfirm: 'Start Migration',
+    migrationProgress: 'Copied {copied}/{total} files',
+    migrationFailed: 'Migration failed',
+    restartRequiredTitle: 'Restart Required',
+    restartRequiredDescription:
+      'Storage locations were migrated and saved. Project processing and AI generation are unavailable until you restart or close the app.',
+    restartNow: 'Restart Now',
+    closeApp: 'Close App',
+  },
   aiCreation: {
     generationAccessTitle: 'Choose how to generate',
     generationAccessDescription: 'Sign in or configure your own API key before generating.',

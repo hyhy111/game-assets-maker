@@ -84,6 +84,10 @@ class SeedanceAPI:
             self._manager.shutdown()
         self._started = False
 
+    def has_active_writes(self) -> bool:
+        """True while polling or downloads may still write the AI video cache."""
+        return self._manager is not None and self._manager.has_active_writes()
+
     def select_image_file(self) -> str | None:
         window = self._window or self._window_getter()
         if window is None:

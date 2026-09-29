@@ -274,6 +274,13 @@ class SeedanceTaskManager:
     def cache_status(self) -> dict[str, int]:
         return self._cache_manager.status()
 
+    def has_active_writes(self) -> bool:
+        """True while polling or downloads may still write the video cache."""
+        return any(
+            task.remote_status in _POLLABLE_STATUSES or task.download_status == "downloading"
+            for task in self._repository.list()
+        )
+
     def clean_cache(self, older_than_days: int | None = None) -> dict[str, int]:
         days = self._retention_days() if older_than_days is None else older_than_days
         if days <= 0:
