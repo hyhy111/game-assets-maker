@@ -71,7 +71,7 @@ class _AppHarness:
         monkeypatch.setattr(
             backend_main,
             "start_assets_server",
-            lambda *args: args[5].put(40123),
+            lambda *args, **kwargs: args[5].put(40123),
         )
 
         harness = self
