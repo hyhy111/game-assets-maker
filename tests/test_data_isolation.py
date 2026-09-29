@@ -48,20 +48,26 @@ def installed_data_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path
 
 def test_dev_mode_resolves_workspace_data_root(dev_workspace: Path):
     from src.utils import data_paths
+    from src.utils.storage_locations import resolve_storage_locations
 
     assert data_paths.data_mode() == "dev"
     assert data_paths.data_root() == dev_workspace
-    assert data_paths.projects_root() == dev_workspace / "project"
+    assert resolve_storage_locations(None, None, data_root=data_paths.data_root()).projects_root == (
+        dev_workspace / "project"
+    )
     repo_root = Path(__file__).resolve().parents[1]
     assert data_paths.models_root() == repo_root / "models" / "rembg"
 
 
 def test_installed_mode_resolves_per_user_data_root(installed_data_root: Path):
     from src.utils import data_paths
+    from src.utils.storage_locations import resolve_storage_locations
 
     assert data_paths.data_mode() == "installed"
     assert data_paths.data_root() == installed_data_root
-    assert data_paths.projects_root() == installed_data_root / "project"
+    assert resolve_storage_locations(None, None, data_root=data_paths.data_root()).projects_root == (
+        installed_data_root / "project"
+    )
     assert data_paths.models_root() == installed_data_root / "models" / "rembg"
 
 
@@ -82,9 +88,12 @@ def test_data_root_environment_override_wins(monkeypatch: pytest.MonkeyPatch, tm
     monkeypatch.setenv("GAM_DATA_ROOT", str(tmp_path / "custom-root"))
 
     from src.utils import data_paths
+    from src.utils.storage_locations import resolve_storage_locations
 
     assert data_paths.data_root() == tmp_path / "custom-root"
-    assert data_paths.projects_root() == tmp_path / "custom-root" / "project"
+    assert resolve_storage_locations(None, None, data_root=data_paths.data_root()).projects_root == (
+        tmp_path / "custom-root" / "project"
+    )
 
 
 def test_legacy_environment_variables_do_not_override_gam_contract(
@@ -268,7 +277,7 @@ def test_installed_frame_and_ai_cache_paths_follow_data_root(installed_data_root
 
     frame_api = FrameAPI("http://127.0.0.1:9000")
     frame = installed_data_root / "project" / "mage" / "walk" / "output" / "01_frames" / "frame_000001.png"
-    assert frame_api.get_frame_url(str(frame)).startswith("http://127.0.0.1:9000/project/mage/walk/")
+    assert frame_api.get_frame_url(str(frame)).startswith("http://127.0.0.1:9000/project-media/mage/walk/")
 
     assert ai_video_cache_root(None) == installed_data_root / "cache" / "ai-video-cache"
     assert ai_pic_cache_root(None) == installed_data_root / "cache" / "ai-pic-cache"

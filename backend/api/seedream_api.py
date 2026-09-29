@@ -33,6 +33,7 @@ from backend.seedream.repository import BatchRepository
 from src.utils.ai_cache_paths import ai_pic_cache_root
 from backend.seedream.validation import ValidationError, _ALLOWED_RATIOS, validate_request
 from src.utils.app_config import load_app_config, save_app_config
+from src.utils.storage_locations import StorageLocations
 
 _DEFAULT_MODEL = "pro"
 _DEFAULT_RESOLUTION = "1K"
@@ -56,6 +57,7 @@ class SeedreamAPI:
         client_factory: Callable[[str], ArkClient] = ArkClient,
         media_base_url: str = "http://localhost:8080",
         media_resolver: SeedreamMediaResolver | None = None,
+        storage_locations: StorageLocations | None = None,
     ) -> None:
         self._window_getter = window_getter or self._active_window
         self._client_factory = client_factory
@@ -63,6 +65,7 @@ class SeedreamAPI:
         self._manager = manager
         self._external_manager = manager is not None
         self._media_resolver = media_resolver
+        self._storage_locations = storage_locations
         self._window = None
         self._started = False
 
@@ -466,7 +469,13 @@ class SeedreamAPI:
     def _ensure_manager(self) -> SeedreamBatchManager:
         if self._manager is None:
             config = load_app_config()["seedance"]
-            repository = BatchRepository(ai_pic_cache_root(config.get("cache_dir")))
+            # Injected locations win: see SeedanceAPI._ensure_manager.
+            cache_root = (
+                self._storage_locations.ai_pic_cache_root
+                if self._storage_locations is not None
+                else ai_pic_cache_root(config.get("cache_dir"))
+            )
+            repository = BatchRepository(cache_root)
             self._manager = SeedreamBatchManager(
                 self._client_factory(config["api_key"]),
                 repository,

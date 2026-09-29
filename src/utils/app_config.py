@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from src.utils.data_paths import DATA_DIR_NAME, DATA_ROOT_ENV_VAR, INSTALLED_MODE, data_mode, data_root
+from src.utils.storage_locations import DEFAULT_PROJECT_DIR, StorageLocations, storage_locations_from_config
 
 CONFIG_ENV_VAR = "GAM_CONFIG"
 
@@ -20,6 +21,7 @@ DEFAULT_APP_CONFIG: dict[str, Any] = {
     "theme": "dark",
     "logger_enabled": False,
     "paid_generation_confirmation_enabled": True,
+    "project_dir": DEFAULT_PROJECT_DIR,
     "logger_config": {
         "log_dir": "logs",
         "max_log_size_mb": 10,
@@ -159,6 +161,16 @@ def public_app_config(config: dict[str, Any]) -> dict[str, Any]:
     seedance = public.setdefault("seedance", {})
     seedance["api_key_configured"] = bool(seedance.pop("api_key", ""))
     return public
+
+
+def current_storage_locations() -> StorageLocations:
+    """Resolve the storage roots from the live config and stable data root."""
+    return storage_locations_from_config(load_app_config(), data_root=data_root())
+
+
+def default_projects_root() -> Path:
+    """Configured project root for consumers constructed without injection."""
+    return current_storage_locations().projects_root
 
 
 def _merge_known_keys(target: dict[str, Any], update: dict[str, Any]) -> None:

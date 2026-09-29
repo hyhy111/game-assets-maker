@@ -1,5 +1,6 @@
 """Shared cache paths for AI image and video generation."""
 
+import os
 from pathlib import Path
 
 from src.utils.data_paths import data_root
@@ -14,8 +15,12 @@ def ai_cache_root(configured_dir: object, *, base_dir: Path | None = None) -> Pa
         configured = Path(configured_dir).expanduser()
         # Relative configured directories resolve against the data root, never
         # against the launch directory of an installed release.
-        return configured if configured.is_absolute() else base / configured
-    return base / "cache"
+        resolved = configured if configured.is_absolute() else base / configured
+    else:
+        resolved = base / "cache"
+    # Lexical normalization keeps spellings comparable with the
+    # storage_locations layer that migration change-detection relies on.
+    return Path(os.path.normpath(resolved))
 
 
 def ai_pic_cache_root(configured_dir: object, *, base_dir: Path | None = None) -> Path:

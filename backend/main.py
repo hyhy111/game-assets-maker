@@ -18,6 +18,7 @@ from urllib.parse import unquote, urlsplit
 
 import webview
 
+from src.utils.app_config import current_storage_locations
 from src.utils.data_paths import data_root
 
 # Add parent directory to path for imports
@@ -30,6 +31,83 @@ sys.path.insert(0, str(Path(__file__).parent))
 # allowlisted prefixes is served.
 _STATIC_ASSET_PREFIXES = ("project", "cache")
 
+_SUBSCRIPTION_CLOSE_BUTTON_SCRIPT = """
+(() => {
+  const id = 'gam-subscription-close';
+  if (document.getElementById(id)) return;
+
+  const button = document.createElement('button');
+  button.id = id;
+  button.type = 'button';
+  button.setAttribute('aria-label', '关闭订阅窗口');
+  button.title = '关闭';
+  button.textContent = '×';
+  Object.assign(button.style, {
+    position: 'fixed',
+    top: '12px',
+    right: '12px',
+    width: '34px',
+    height: '34px',
+    border: '1px solid rgba(255, 255, 255, 0.18)',
+    borderRadius: '9999px',
+    background: 'rgba(10, 10, 12, 0.82)',
+    color: '#f5f2ea',
+    font: '24px/30px -apple-system, BlinkMacSystemFont, sans-serif',
+    cursor: 'pointer',
+    zIndex: '2147483647',
+    backdropFilter: 'blur(8px)',
+  });
+  button.addEventListener('click', () => {
+    void window.pywebview.api.close_subscription_window();
+  });
+  document.body.appendChild(button);
+})();
+"""
+
+
+def _configure_native_window_controls(window) -> None:
+    """Hide the title text field and keep native window buttons active.
+
+    On macOS 26 the title text field of an untreated window sits at the
+    top-left of the titlebar and swallows clicks aimed at the native
+    close/minimize/zoom buttons; hiding title visibility removes it from
+    hit-testing. Must run on Cocoa's main thread.
+    """
+    try:
+        import AppKit
+
+        native_window = getattr(window, "native", None)
+        if not native_window:
+            return
+
+        native_window.setTitleVisibility_(AppKit.NSWindowTitleHidden)
+
+        button_types = (
+            AppKit.NSWindowCloseButton,
+            AppKit.NSWindowMiniaturizeButton,
+            AppKit.NSWindowZoomButton,
+        )
+        for button_type in button_types:
+            button = native_window.standardWindowButton_(button_type)
+            if button:
+                button.setHidden_(False)
+                button.setEnabled_(True)
+    except Exception as e:
+        print(f"Failed to configure macOS window controls: {e}")
+
+
+def schedule_macos_window_controls(window) -> None:
+    """Apply _configure_native_window_controls on Cocoa's main thread."""
+    if sys.platform != "darwin" or window is None:
+        return
+
+    try:
+        from PyObjCTools import AppHelper
+
+        AppHelper.callAfter(_configure_native_window_controls, window)
+    except Exception as e:
+        print(f"Failed to schedule macOS window controls configuration: {e}")
+
 
 def start_assets_server(
     root_dir: str,
@@ -38,6 +116,7 @@ def start_assets_server(
     seedance_media_resolver=None,
     seedream_media_resolver=None,
     startup_queue: Queue | None = None,
+    project_media_root: Path | None = None,
 ):
     """Start a lightweight HTTP server for serving frame assets"""
 
@@ -54,6 +133,8 @@ def start_assets_server(
                 return
             if self._serve_seedream_media():
                 return
+            if self._serve_project_media():
+                return
             if not self._static_path_allowed():
                 return
             super().do_GET()
@@ -62,6 +143,8 @@ def start_assets_server(
             if self._serve_seedance_media(head_only=True):
                 return
             if self._serve_seedream_media(head_only=True):
+                return
+            if self._serve_project_media(head_only=True):
                 return
             if not self._static_path_allowed():
                 return
@@ -155,6 +238,47 @@ def start_assets_server(
                     shutil.copyfileobj(asset_file, self.wfile)
             return True
 
+        def _serve_project_media(self, head_only: bool = False) -> bool:
+            """Serve project media from the explicit, resolved project root.
+
+            The project root may live outside the data root when the user
+            configured a custom location; only resources that resolve inside
+            that root are served, so the mapping never widens local file
+            exposure to the chosen directory's parents or siblings.
+            """
+            parsed = urlsplit(self.path)
+            prefix = "/project-media/"
+            if not parsed.path.startswith(prefix):
+                return False
+            if project_media_root is None:
+                self.send_error(404)
+                return True
+            raw_segments = parsed.path[len(prefix) :].split("/")
+            decoded_segments = [unquote(segment) for segment in raw_segments]
+            if not raw_segments or any(segment in ("", ".", "..") for segment in raw_segments + decoded_segments):
+                self.send_error(404)
+                return True
+            try:
+                root = Path(project_media_root).resolve()
+                asset_path = root.joinpath(*decoded_segments).resolve()
+                asset_path.relative_to(root)
+            except (OSError, RuntimeError, ValueError):
+                self.send_error(404)
+                return True
+            if not asset_path.is_file():
+                self.send_error(404)
+                return True
+
+            mime_type = mimetypes.guess_type(asset_path.name)[0] or "application/octet-stream"
+            self.send_response(200)
+            self.send_header("Content-Type", mime_type)
+            self.send_header("Content-Length", str(asset_path.stat().st_size))
+            self.end_headers()
+            if not head_only:
+                with asset_path.open("rb") as asset_file:
+                    shutil.copyfileobj(asset_file, self.wfile)
+            return True
+
         def log_message(self, format, *args):
             # Suppress logs
             pass
@@ -214,6 +338,9 @@ class API:
     def __init__(self, window=None, assets_base_url: str = "http://localhost:8080"):
         self._window = window
         self._assets_base_url = assets_base_url.rstrip("/")
+        # Resolve storage roots once at startup; every consumer shares this
+        # result until a migration-triggered restart replaces the process.
+        self._storage_locations = current_storage_locations()
         self._project_api_instance = None
         self._video_api_instance = None
         self._frame_api_instance = None
@@ -224,14 +351,18 @@ class API:
         self._seedance_api_instance = None
         self._seedream_api_instance = None
         self._seedream_exit_confirmed = False
-        self._subscription_bridge = SubscriptionWindowBridge()
+
+    @property
+    def storage_locations(self):
+        """The storage roots resolved once at startup and shared by all APIs."""
+        return self._storage_locations
 
     @property
     def _project_api(self):
         if self._project_api_instance is None:
             from backend.api.project_api import ProjectAPI
 
-            self._project_api_instance = ProjectAPI()
+            self._project_api_instance = ProjectAPI(projects_root=self._storage_locations.projects_root)
         return self._project_api_instance
 
     @property
@@ -247,7 +378,9 @@ class API:
         if self._frame_api_instance is None:
             from backend.api.frame_api import FrameAPI
 
-            self._frame_api_instance = FrameAPI(self._assets_base_url)
+            self._frame_api_instance = FrameAPI(
+                self._assets_base_url, projects_root=self._storage_locations.projects_root
+            )
         return self._frame_api_instance
 
     @property
@@ -255,7 +388,7 @@ class API:
         if self._process_api_instance is None:
             from backend.api.process_api import ProcessAPI
 
-            self._process_api_instance = ProcessAPI(self._window)
+            self._process_api_instance = ProcessAPI(self._window, projects_root=self._storage_locations.projects_root)
         return self._process_api_instance
 
     @property
@@ -271,7 +404,7 @@ class API:
         if self._batch_trim_api_instance is None:
             from backend.api.batch_trim_api import BatchTrimAPI
 
-            self._batch_trim_api_instance = BatchTrimAPI()
+            self._batch_trim_api_instance = BatchTrimAPI(projects_root=self._storage_locations.projects_root)
         return self._batch_trim_api_instance
 
     @property
@@ -279,7 +412,9 @@ class API:
         if self._audio_api_instance is None:
             from backend.api.audio_api import AudioAPI
 
-            self._audio_api_instance = AudioAPI(self._assets_base_url)
+            self._audio_api_instance = AudioAPI(
+                self._assets_base_url, projects_root=self._storage_locations.projects_root
+            )
         return self._audio_api_instance
 
     @property
@@ -291,6 +426,7 @@ class API:
                 project_api=self._project_api,
                 window_getter=lambda: self._window,
                 media_base_url=self._assets_base_url,
+                storage_locations=self._storage_locations,
             )
         return self._seedance_api_instance
 
@@ -306,6 +442,7 @@ class API:
             self._seedream_api_instance = SeedreamAPI(
                 window_getter=lambda: self._window,
                 media_base_url=self._assets_base_url,
+                storage_locations=self._storage_locations,
             )
         return self._seedream_api_instance
 
@@ -532,19 +669,43 @@ class API:
             if not url or not url.startswith(("http://", "https://")):
                 print(f"open_subscription_window: invalid url {url!r}")
                 return False
+            # PyWebView's Cocoa backend schedules child-window creation on the
+            # AppKit main thread. Keep this call on the JS API worker thread so
+            # PyWebView recognizes it as a child window and creates it now.
+            return self._create_subscription_window(url)
+        except Exception as e:
+            print(f"Error opening subscription window: {e}")
+            return False
+
+    def _create_subscription_window(self, url: str) -> bool:
+        try:
+            bridge = SubscriptionWindowBridge()
             window = webview.create_window(
-                "订阅会员 - ForFuner",
+                "",
                 url,
-                js_api=self._subscription_bridge,
+                js_api=bridge,
                 width=520,
                 height=720,
                 resizable=True,
             )
-            self._subscription_bridge._set_window(window)
+            if window is None:
+                return False
+            bridge._set_window(window)
+            # Remove the titlebar text field from hit-testing as soon as the
+            # window is shown, so the native close button stays clickable.
+            window.events.shown += lambda: schedule_macos_window_controls(window)
+            window.events.loaded += lambda: self._inject_subscription_close_button(window)
             return True
         except Exception as e:
-            print(f"Error opening subscription window: {e}")
+            print(f"Error creating subscription window: {e}")
             return False
+
+    @staticmethod
+    def _inject_subscription_close_button(window) -> None:
+        try:
+            window.evaluate_js(_SUBSCRIPTION_CLOSE_BUTTON_SCRIPT)
+        except Exception as e:
+            print(f"Error adding subscription window close button: {e}")
 
     # ==================== Batch Trim API ====================
 
@@ -810,42 +971,7 @@ class MainApp:
 
     def configure_macos_window_controls(self):
         """Schedule native macOS window control changes on Cocoa's main thread."""
-        if sys.platform != "darwin" or not self.window:
-            return
-
-        try:
-            from PyObjCTools import AppHelper
-
-            AppHelper.callAfter(self._configure_macos_window_controls_on_main_thread)
-        except Exception as e:
-            print(f"Failed to schedule macOS window controls configuration: {e}")
-
-    def _configure_macos_window_controls_on_main_thread(self):
-        """Hide the title text and keep native macOS window buttons active."""
-        if sys.platform != "darwin" or not self.window:
-            return
-
-        try:
-            import AppKit
-
-            native_window = getattr(self.window, "native", None)
-            if not native_window:
-                return
-
-            native_window.setTitleVisibility_(AppKit.NSWindowTitleHidden)
-
-            button_types = (
-                AppKit.NSWindowCloseButton,
-                AppKit.NSWindowMiniaturizeButton,
-                AppKit.NSWindowZoomButton,
-            )
-            for button_type in button_types:
-                button = native_window.standardWindowButton_(button_type)
-                if button:
-                    button.setHidden_(False)
-                    button.setEnabled_(True)
-        except Exception as e:
-            print(f"Failed to configure macOS window controls: {e}")
+        schedule_macos_window_controls(self.window)
 
     def run(self):
         """Run the application"""
@@ -863,7 +989,9 @@ class MainApp:
 
         # Bind the assets server before WebView starts loading media URLs.
         # The server root is the resolved data root, so installed releases
-        # serve the same media regardless of the launch directory.
+        # serve the same media regardless of the launch directory. Project
+        # media is served through an explicit restricted mapping so a custom
+        # project root outside the data root stays the only exposed boundary.
         project_root = str(data_root())
         startup_queue = Queue(maxsize=1)
         self.assets_thread = threading.Thread(
@@ -876,6 +1004,7 @@ class MainApp:
                 self.api.seedream_media_resolver,
                 startup_queue,
             ),
+            kwargs={"project_media_root": self.api.storage_locations.projects_root},
             daemon=True,
         )
         self.assets_thread.start()

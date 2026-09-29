@@ -29,6 +29,7 @@ from backend.seedance.repository import TaskRepository
 from backend.seedance.validation import ValidationError, build_api_payload, validate_request
 from src.utils.ai_cache_paths import ai_cache_root, ai_video_cache_root
 from src.utils.app_config import load_app_config, public_app_config, save_app_config
+from src.utils.storage_locations import StorageLocations
 
 _IMAGE_FILE_TYPES = (
     "Image files (*.jpg;*.jpeg;*.png;*.webp;*.bmp;*.tif;*.tiff;*.gif;*.heic;*.heif)",
@@ -47,6 +48,7 @@ class SeedanceAPI:
         client_factory: Callable[[str], ArkClient] = ArkClient,
         media_base_url: str = "http://localhost:8080",
         media_resolver: SeedanceMediaResolver | None = None,
+        storage_locations: StorageLocations | None = None,
     ) -> None:
         self._project_api = project_api
         self._window_getter = window_getter or self._active_window
@@ -55,6 +57,7 @@ class SeedanceAPI:
         self._manager = manager
         self._external_manager = manager is not None
         self._media_resolver = media_resolver
+        self._storage_locations = storage_locations
         self._window = None
         self._started = False
 
@@ -165,7 +168,7 @@ class SeedanceAPI:
             if edit_source.size != source_size:
                 raise ValueError("Edit source dimensions must match the selected image")
 
-            output_dir = self._configured_cache_root() / "edited-inputs"
+            output_dir = self._video_cache_root() / "edited-inputs"
             output_dir.mkdir(parents=True, exist_ok=True)
             destination = output_dir / f"{uuid4().hex}.png"
             temporary = output_dir / f".{destination.name}.tmp"
@@ -379,7 +382,10 @@ class SeedanceAPI:
     def _ensure_manager(self) -> SeedanceTaskManager:
         if self._manager is None:
             config = load_app_config()["seedance"]
-            cache_root = self._configured_cache_root(config)
+            # Injected locations win: the composition root freezes the cache
+            # root for the process lifetime; standalone constructions (tests,
+            # CLI) resolve from the current config instead.
+            cache_root = self._video_cache_root(config)
             repository = TaskRepository(cache_root)
             self._manager = SeedanceTaskManager(
                 self._client_factory(config["api_key"]),
@@ -392,6 +398,11 @@ class SeedanceAPI:
         if self._media_resolver is None:
             self._media_resolver = SeedanceMediaResolver(self._manager._repository)
         return self._manager
+
+    def _video_cache_root(self, config: dict[str, Any] | None = None) -> Path:
+        if self._storage_locations is not None:
+            return self._storage_locations.ai_video_cache_root
+        return self._configured_cache_root(config)
 
     @staticmethod
     def _configured_cache_root(config: dict[str, Any] | None = None) -> Path:

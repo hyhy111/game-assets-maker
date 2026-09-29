@@ -24,7 +24,8 @@ from backend.core.video_utils import (
     detect_background_color_from_frames,
     export_frames_step1,
 )
-from src.utils.data_paths import data_root, projects_root
+from src.utils.app_config import default_projects_root
+from src.utils.data_paths import data_root
 
 
 def _write_debug_log(msg: str):
@@ -64,10 +65,10 @@ class Task:
 class ProcessAPI:
     """API for processing tasks"""
 
-    def __init__(self, window=None, *, model_loader: ModelLoader | None = None):
+    def __init__(self, window=None, *, model_loader: ModelLoader | None = None, projects_root: Path | None = None):
         self.tasks: dict[str, Task] = {}
         self.executor = ThreadPoolExecutor(max_workers=2)
-        self._projects_root = projects_root()
+        self._projects_root = projects_root if projects_root is not None else default_projects_root()
         self._window = window  # PyWebView window instance
         self._model_preloader = ModelPreloader(model_loader or RembgModelLoader(), self._emit_model_status)
 
