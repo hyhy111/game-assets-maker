@@ -9,6 +9,7 @@ import os
 import shutil
 import sys
 import threading
+from collections.abc import Callable
 from http.server import SimpleHTTPRequestHandler
 from pathlib import Path
 from queue import Empty, Queue
@@ -29,6 +30,20 @@ sys.path.insert(0, str(Path(__file__).parent))
 # root also holds config.json (credentials), so nothing outside these
 # allowlisted prefixes is served.
 _STATIC_ASSET_PREFIXES = ("project", "cache")
+
+
+def build_restart_command() -> list[str]:
+    """Build the os.execv command used to restart the app in place.
+
+    Frozen builds re-exec the packaged executable with its original
+    arguments; source runs re-exec the current interpreter as
+    ``python -m backend.main`` so the module entry point is preserved (and
+    dev_start.py keeps waiting on the same backend process instead of
+    shutting the Vite dev server down early).
+    """
+    if getattr(sys, "frozen", False):
+        return [sys.executable, *sys.argv[1:]]
+    return [sys.executable, "-m", "backend.main", *sys.argv[1:]]
 
 
 def start_assets_server(
@@ -211,9 +226,15 @@ class API:
     Combines all API modules into a single interface
     """
 
-    def __init__(self, window=None, assets_base_url: str = "http://localhost:8080"):
+    def __init__(
+        self,
+        window=None,
+        assets_base_url: str = "http://localhost:8080",
+        restart_handler: Callable[[], dict[str, Any]] | None = None,
+    ):
         self._window = window
         self._assets_base_url = assets_base_url.rstrip("/")
+        self._restart_handler = restart_handler
         self._project_api_instance = None
         self._video_api_instance = None
         self._frame_api_instance = None
@@ -521,6 +542,20 @@ class API:
         """Get application version"""
         return "2.0.0"
 
+    # ==================== App Lifecycle API ====================
+
+    def request_app_restart(self) -> dict[str, Any]:
+        """Request a one-shot in-place application restart.
+
+        Called by the settings page after a successful storage migration.
+        The bridge only records the restart intent and starts the window
+        close flow; the actual restart happens in MainApp.run() once the
+        regular closed-event cleanup has completed.
+        """
+        if self._restart_handler is None:
+            return {"success": False, "error": "restart handler unavailable"}
+        return self._restart_handler()
+
     def open_subscription_window(self, url: str) -> bool:
         """Open subscription landing page in an isolated PyWebView window.
 
@@ -732,7 +767,10 @@ class MainApp:
 
     def __init__(self):
         self.is_dev = os.environ.get("DEV_MODE") == "1"
-        self.api = API()
+        # One-shot restart intent set via the bridge after a storage
+        # migration; consumed in run() once webview.start() returns.
+        self.restart_requested = False
+        self.api = API(restart_handler=self._handle_restart_request)
         self.assets_port = 0
         self.stop_event = threading.Event()
         self.assets_thread = None
@@ -755,6 +793,41 @@ class MainApp:
                 # Fallback to dev server if dist not built
                 print(f"Warning: Frontend build not found at {frontend_path}")
                 return "http://localhost:5173"
+
+    def _handle_restart_request(self) -> dict[str, Any]:
+        """Record the one-shot restart intent and start the close flow.
+
+        Repeated requests are idempotent: the state is set once and the main
+        window is destroyed once, while every call reports success so
+        duplicate clicks from the settings page are harmless.
+        """
+        if not self.restart_requested:
+            self.restart_requested = True
+            if self.window is not None:
+                try:
+                    self.window.destroy()
+                except Exception as error:
+                    print(f"Failed to destroy window for restart: {error}")
+        return {"success": True, "restart_requested": True}
+
+    def _restart_in_place(self) -> None:
+        """Replace this process with a fresh app instance via os.execv.
+
+        os.execv inherits the current environment. A failure must not raise:
+        migrated data and configuration were already committed, so the user
+        can start the app manually and the new configuration takes effect on
+        the next launch.
+        """
+        command = build_restart_command()
+        print(f"Restarting application in place: {command}")
+        try:
+            os.execv(command[0], command)
+        except OSError as error:
+            print(
+                f"In-place restart failed: {error}. "
+                "Please start Game Assets Maker manually; "
+                "the saved configuration will be applied on the next launch."
+            )
 
     def on_window_closed(self):
         """Handle window closed event"""
@@ -910,6 +983,15 @@ class MainApp:
             private_mode=False,
             storage_path=str(data_root() / "webview_profile"),
         )
+
+        # webview.start() returns only after the window was destroyed and the
+        # closed-event cleanup (asset server, agent server, managers) has run,
+        # so an in-place restart requested via the bridge always happens after
+        # that cleanup. Replacing the process image (rather than spawning a
+        # second instance) avoids two instances sharing the WebView profile,
+        # config, and caches.
+        if self.restart_requested:
+            self._restart_in_place()
 
 
 def main():
