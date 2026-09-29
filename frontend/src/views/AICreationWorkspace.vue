@@ -42,6 +42,7 @@
           :handoff-pending="workspace.candidateHandoffPending"
           :handoff-error="workspace.candidateHandoffError"
           @create-video="handoffCandidateToVideo"
+          @close="dismissCurrentGeneration"
         />
         <VideoCurrentGenerationPanel
           v-else-if="currentVideoTask"
@@ -49,6 +50,7 @@
           @cancel="seedance.cancelTask"
           @retry-download="seedance.retryDownload"
           @open-detail="openVideoDetail"
+          @close="dismissCurrentGeneration"
         />
       </div>
 
@@ -143,6 +145,13 @@ onBeforeRouteLeave(() => {
 
 function openVideoDetail(localId: string) {
   return router.push(`/video-generation/tasks/${encodeURIComponent(localId)}`);
+}
+
+function dismissCurrentGeneration() {
+  // Prototype preview data is driven by the route query, not the store, so
+  // dismissing only applies to real generations.
+  if (prototypeVariant.value) return;
+  workspace.dismissCurrentGeneration();
 }
 
 function handoffCandidateToVideo(attemptIndex: number) {

@@ -30,6 +30,7 @@ test('settings page shows selectable, copyable resolved paths for project and AI
   assert.match(cacheInput, /readonly/);
   assert.match(projectInput, /:value="projectDisplayPath"/);
   assert.match(cacheInput, /:value="cacheDisplayPath"/);
+  assert.match(view, /<div class="grid gap-4">[\s\S]*storage-project-dir[\s\S]*storage-cache-dir/);
 
   // Resolved display paths fall back to the backend-resolved roots while the
   // configured value stays relative.

@@ -210,14 +210,15 @@ def test_main_app_initializes_agent_control_server_to_none():
 
 
 def test_macos_window_controls_are_dispatched_to_main_thread(monkeypatch):
+    import backend.main as main_module
     from backend.main import MainApp
 
     scheduled = []
 
     class FakeAppHelper:
         @staticmethod
-        def callAfter(callback):
-            scheduled.append(callback)
+        def callAfter(callback, *args):
+            scheduled.append((callback, args))
 
     fake_pyobjc_tools = types.ModuleType("PyObjCTools")
     fake_pyobjc_tools.AppHelper = FakeAppHelper
@@ -237,7 +238,7 @@ def test_macos_window_controls_are_dispatched_to_main_thread(monkeypatch):
 
     app.configure_macos_window_controls()
 
-    assert scheduled == [app._configure_macos_window_controls_on_main_thread]
+    assert scheduled == [(main_module._configure_native_window_controls, (app.window,))]
     assert native_window.title_visibility_calls == 0
 
 

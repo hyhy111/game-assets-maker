@@ -23,9 +23,12 @@ test('project manager presents AI creation hero and lazily previews extracted an
   assert.match(zhLocale, /heroSubtitle: '一站式游戏资产工作台'/);
   assert.match(zhLocale, /heroStart: '开始 AI 创作'/);
 
-  assert.match(source, /v-if="!loading && legacyProjects\.length > 0"/);
-  assert.match(source, /font-mono text-\[10px\] tracking-\[0\.16em\] text-primary[^>]*>\s*Game Assets/);
-  assert.doesNotMatch(source, /Animation Library/);
+  assert.match(source, /v-if="!loading && legacyProjects\.length > 0 && legacyMigrationVisible"/);
+  assert.match(source, /@click="legacyMigrationVisible = false"/);
+  assert.match(source, /<Select[\s\S]*:placeholder="t\('projectManager\.selectRole'\)"/);
+  assert.match(source, /font-mono text-\[10px\] tracking-\[0\.16em\] text-primary uppercase whitespace-nowrap[^>]*>\s*Game Assets/);
+  assert.match(source, /t\('projectManager\.animationLibrary'\)/);
+  assert.match(source, /flex items-end justify-between gap-3/);
   assert.match(source, /@mouseenter="startProjectPreview\(project\)"/);
   assert.match(source, /step\.count > 0 && \(step\.data_ready \|\| step\.completed\)/);
   assert.match(source, /getFrames\(project\.id, previewSourceStep\(project\), 1, 12, true\)/);
@@ -34,7 +37,7 @@ test('project manager presents AI creation hero and lazily previews extracted an
   assert.match(previewStatusTag, /data-test="project-preview-status"/);
   assert.doesNotMatch(previewStatusTag, /opacity-0|group-hover:opacity-100|group-focus:opacity-100/);
   assert.match(zhLocale, /batchTrim: '统一裁剪并导出'/);
-  assert.match(zhLocale, /animationLibrary: '游戏资产'/);
+  assert.match(zhLocale, /animationLibrary: '动画库'/);
   assert.match(zhLocale, /deleteProject: '删除动画'/);
   assert.match(zhLocale, /deleteProjectConfirm: '确定要删除动画/);
   assert.doesNotMatch(zhLocale, /deleteProject: '删除项目'/);
@@ -84,13 +87,40 @@ test('project manager imports a user-selected legacy project directory', async (
     readFile(new URL('../src/locales/zh-CN.ts', import.meta.url), 'utf8'),
   ]);
 
-  assert.match(manager, /data-test="import-legacy-projects"/);
+  // No persistent import card on the home page.
+  assert.doesNotMatch(manager, /importLegacyProjectsHint/);
+  assert.doesNotMatch(zhLocale, /importLegacyProjectsHint/);
+
+  // The animation library header keeps the refresh button and adds a "more" menu.
+  const roleDock = manager.match(/data-test="project-manager-role-dock"[\s\S]*?<\/aside>/)?.[0] ?? '';
+  assert.match(roleDock, /RefreshCw/);
+  assert.match(roleDock, /<Menu[\s\S]*<MenuButton[\s\S]*<MenuItems[\s\S]*data-test="import-legacy-projects"/);
+  assert.match(roleDock, /@click="importLegacyProjectDirectory"/);
+
+  // The empty library state exposes a lightweight text entry for the same flow.
+  const emptyState = manager.match(/class="empty-library"[\s\S]*?<\/div>\s*<\/div>/)?.[0] ?? '';
+  assert.match(emptyState, /data-test="import-legacy-projects-empty"/);
+  assert.match(emptyState, /@click="importLegacyProjectDirectory"/);
+  assert.equal((manager.match(/@click="importLegacyProjectDirectory"/g) ?? []).length, 2);
+  assert.equal((manager.match(/:disabled="importingLegacyDirectory"/g) ?? []).length, 2);
+
+  // Both entries reuse the same directory selection and import call chain.
   assert.match(manager, /api\.system\.selectDirectory\(\)/);
+  assert.match(manager, /if \(!directory\) return;/);
   assert.match(manager, /projectStore\.importLegacyProjectDirectory\(directory\)/);
   assert.match(store, /api\.project\.importLegacyProjectDirectory\(sourceDirectory\)/);
   assert.match(store, /await loadProjects\(\)/);
+
+  // Feedback renders only after an attempt, reports the resolved source, and is dismissible.
+  assert.match(manager, /v-if="importMessage"/);
+  assert.match(manager, /role="status"[\s\S]*aria-live="polite"[\s\S]*data-test="import-legacy-result"/);
+  assert.match(manager, /@click="importMessage = ''"/);
+  assert.match(manager, /result\.failed\[0\]\?\.reason \|\| t\('projectManager\.importLegacyProjectsFailed'\)/);
+  assert.match(manager, /source: result\.source/);
   assert.match(zhLocale, /importLegacyProjects: '导入旧版项目'/);
-  assert.match(zhLocale, /importLegacyProjectsHint: '选择旧版 Video to Sheet 的 project 目录/);
+  assert.match(zhLocale, /importLegacyProjectsLink: '从旧版项目导入'/);
+  assert.match(zhLocale, /importLegacyProjectsResult: '已从 \{source\} 导入/);
+  assert.match(zhLocale, /moreActions: '更多操作'/);
 });
 
 test('project manager selects and directly trims animation cards', async () => {

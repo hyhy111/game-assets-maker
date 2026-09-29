@@ -82,6 +82,13 @@ class _PendingMigration:
     migrations: tuple[LocationMigration, ...]
 
 
+@dataclass(frozen=True)
+class _PublishedMigration:
+    migration: LocationMigration
+    created_target: bool
+    moved_paths: tuple[Path, ...]
+
+
 def _is_within(path: Path, root: Path) -> bool:
     return path == root or root in path.parents
 
@@ -185,14 +192,33 @@ class StorageMigrationCoordinator:
         if target.exists():
             if not target.is_dir():
                 raise MigrationError("precheck", "target exists and is not a directory", location=migration.kind)
-            if any(target.iterdir()):
-                raise MigrationError("precheck", "target directory is not empty", location=migration.kind)
             if not os.access(target, os.W_OK):
                 raise MigrationError("precheck", "target directory is not writable", location=migration.kind)
+            self._check_target_conflicts(migration)
             return
         anchor = _nearest_existing_ancestor(target.parent)
         if not os.access(anchor, os.W_OK | os.X_OK):
             raise MigrationError("precheck", "target parent is not writable", location=migration.kind)
+
+    def _check_target_conflicts(self, migration: LocationMigration) -> None:
+        for _, relative in self._iter_scoped_entries(migration):
+            destination = migration.target / relative
+            if destination.exists() or destination.is_symlink():
+                raise MigrationError(
+                    "precheck",
+                    f"target contains conflicting path: {relative.as_posix()}",
+                    location=migration.kind,
+                )
+
+    def _iter_scoped_entries(self, migration: LocationMigration):
+        for root, relative_base in self._scoped_roots(migration):
+            if relative_base != Path("."):
+                yield root, relative_base
+            for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
+                current = Path(dirpath)
+                for name in dirnames + filenames:
+                    entry = current / name
+                    yield entry, relative_base / entry.relative_to(root)
 
     def _measure_source(self, migration: LocationMigration) -> tuple[int, int]:
         file_count = 0
@@ -238,13 +264,12 @@ class StorageMigrationCoordinator:
 
     def _run(self, pending: _PendingMigration) -> None:
         staged: list[tuple[LocationMigration, Path]] = []
-        published: list[tuple[LocationMigration, bool]] = []
+        published: list[_PublishedMigration] = []
         try:
             for migration in pending.migrations:
                 staged.append((migration, self._stage(migration, pending.token)))
             for migration, staging in staged:
-                removed_empty = self._publish(migration, staging)
-                published.append((migration, removed_empty))
+                published.append(self._publish(migration, staging))
             try:
                 self._commit_config(pending.settings_draft)
             except Exception as error:
@@ -267,7 +292,7 @@ class StorageMigrationCoordinator:
     def _rollback(
         self,
         unpublished: list[tuple[LocationMigration, Path]],
-        published: list[tuple[LocationMigration, bool]],
+        published: list[_PublishedMigration],
     ) -> list[Path]:
         """Remove only data this run created; the source is never touched.
 
@@ -277,13 +302,20 @@ class StorageMigrationCoordinator:
         leftovers: list[Path] = []
         for _, staging in unpublished:
             shutil.rmtree(staging, ignore_errors=True)
-        for migration, removed_empty in reversed(published):
-            shutil.rmtree(migration.target, ignore_errors=True)
-            if migration.target.exists():
-                leftovers.append(migration.target)
-            elif removed_empty:
-                with suppress(OSError):
-                    migration.target.mkdir()
+        for published_migration in reversed(published):
+            if published_migration.created_target:
+                shutil.rmtree(published_migration.migration.target, ignore_errors=True)
+                if published_migration.migration.target.exists():
+                    leftovers.append(published_migration.migration.target)
+                continue
+            for path in reversed(published_migration.moved_paths):
+                if path.is_dir() and not path.is_symlink():
+                    shutil.rmtree(path, ignore_errors=True)
+                else:
+                    with suppress(OSError):
+                        path.unlink()
+                if path.exists() or path.is_symlink():
+                    leftovers.append(path)
         return leftovers
 
     # ==================== Staged copy ====================
@@ -397,24 +429,42 @@ class StorageMigrationCoordinator:
 
     # ==================== Publish ====================
 
-    def _publish(self, migration: LocationMigration, staging: Path) -> bool:
-        """Rename the verified staging directory onto the target root."""
+    def _publish(self, migration: LocationMigration, staging: Path) -> _PublishedMigration:
+        """Publish verified staging data without overwriting a user-selected target."""
         target = migration.target
-        removed_empty = False
         if target.is_symlink() or (target.exists() and not target.is_dir()):
             raise MigrationError("publish", "target changed since the confirmed precheck")
+        if not target.exists():
+            try:
+                os.rename(staging, target)
+            except OSError as error:
+                raise MigrationError("publish", f"failed to publish {target}: {error}") from error
+            return _PublishedMigration(migration, True, ())
+
+        moved: list[Path] = []
         try:
-            if target.exists():
-                # The confirmed precheck found an empty directory; rmdir only
-                # succeeds when it is still empty, so nothing is overwritten.
-                target.rmdir()
-                removed_empty = True
-            os.rename(staging, target)
+            for entry in staging.iterdir():
+                destination = target / entry.name
+                if destination.exists() or destination.is_symlink():
+                    raise MigrationError("publish", f"target contains conflicting path: {entry.name}")
+                os.rename(entry, destination)
+                moved.append(destination)
+            staging.rmdir()
+        except MigrationError:
+            self._remove_published_paths(moved)
+            shutil.rmtree(staging, ignore_errors=True)
+            raise
         except OSError as error:
-            if removed_empty:
-                # Restore the pre-existing empty target so a failed publish
-                # leaves the target as the confirmed precheck found it.
-                with suppress(OSError):
-                    target.mkdir()
+            self._remove_published_paths(moved)
+            shutil.rmtree(staging, ignore_errors=True)
             raise MigrationError("publish", f"failed to publish {target}: {error}") from error
-        return removed_empty
+        return _PublishedMigration(migration, False, tuple(moved))
+
+    @staticmethod
+    def _remove_published_paths(paths: list[Path]) -> None:
+        for path in reversed(paths):
+            if path.is_dir() and not path.is_symlink():
+                shutil.rmtree(path, ignore_errors=True)
+            else:
+                with suppress(OSError):
+                    path.unlink()

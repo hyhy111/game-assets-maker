@@ -1,4 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
+import os
 import sys
 
 """
@@ -9,8 +10,11 @@ Uses one-directory mode. Model weights are downloaded on demand and are not bund
 """
 
 from PyInstaller.building.build_main import Analysis
-from PyInstaller.building.api import BUNDLE, COLLECT, EXE, PYZ
+from PyInstaller.building.api import COLLECT, EXE, PYZ
 from PyInstaller.utils.hooks import copy_metadata
+
+if sys.platform == 'darwin':
+    from PyInstaller.building.osx import BUNDLE
 
 APP_DISPLAY_NAME = 'Game Assets Maker'
 
@@ -24,8 +28,9 @@ a = Analysis(
         ('src/core', 'src/core'),
         ('src/utils', 'src/utils'),
         ('icon', 'icon'),
-        ('config.json', '.'),
-    ] + copy_metadata('rembg') + copy_metadata('pymatting'),
+        # config.json is an optional gitignored legacy dev config; installed
+        # releases read the per-user config and do not require it.
+    ] + ([('config.json', '.')] if os.path.exists('config.json') else []) + copy_metadata('rembg') + copy_metadata('pymatting'),
     hiddenimports=[
         'rembg',
         'rembg.session_factory',
@@ -72,7 +77,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon='icon/logo-2.ico',
+    icon='icon/app-icon.ico',
     contents_directory='_internal',
 )
 
@@ -91,4 +96,5 @@ if sys.platform == 'darwin':
         coll,
         name=f'{APP_DISPLAY_NAME}.app',
         bundle_identifier='com.hyhy111.game-assets-maker',
+        icon='icon/app-icon.icns',
     )

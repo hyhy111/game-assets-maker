@@ -9,32 +9,24 @@
       <ProjectManagerHero @start-ai-creation="goToAICreation" />
 
       <section class="mx-auto w-full max-w-[1320px] space-y-4 px-4 pb-20 pt-10 sm:px-6">
-        <div class="flex flex-col gap-3 rounded-xl border border-dark-border bg-dark-surface/60 p-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p class="text-sm font-medium text-white">
-              {{ t('projectManager.importLegacyProjects') }}
-            </p>
-            <p class="mt-1 text-xs text-gray-500">
-              {{ t('projectManager.importLegacyProjectsHint') }}
-            </p>
-          </div>
-          <Button
-            variant="secondary"
-            size="sm"
-            data-test="import-legacy-projects"
-            :loading="importingLegacyDirectory"
-            @click="importLegacyProjectDirectory"
-          >
-            <FolderOpen class="mr-1 h-4 w-4" />
-            {{ t('projectManager.importLegacyProjects') }}
-          </Button>
-        </div>
-
         <div
           v-if="importMessage"
-          class="rounded-lg border border-dark-border bg-dark-surface p-3 text-sm text-gray-300"
+          class="flex items-start justify-between gap-3 rounded-lg border border-dark-border bg-dark-surface p-3 text-sm text-gray-300"
+          role="status"
+          aria-live="polite"
+          data-test="import-legacy-result"
         >
-          {{ importMessage }}
+          <p class="min-w-0 flex-1 break-all">
+            {{ importMessage }}
+          </p>
+          <button
+            type="button"
+            class="flex-none rounded-md p-1 text-gray-500 transition-colors hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            :aria-label="t('projectManager.close')"
+            @click="importMessage = ''"
+          >
+            <X class="h-4 w-4" />
+          </button>
         </div>
 
         <div
@@ -48,7 +40,7 @@
         </div>
 
         <div
-          v-if="!loading && legacyProjects.length > 0"
+          v-if="!loading && legacyProjects.length > 0 && legacyMigrationVisible"
           class="p-4 border border-warning/30 bg-warning/10 rounded-lg space-y-4"
         >
           <div class="flex items-start gap-3">
@@ -61,6 +53,14 @@
                 {{ t('projectManager.legacyHint') }}
               </p>
             </div>
+            <button
+              type="button"
+              class="rounded-md p-1 text-gray-500 transition-colors hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              :aria-label="t('projectManager.close')"
+              @click="legacyMigrationVisible = false"
+            >
+              <X class="h-4 w-4" />
+            </button>
           </div>
 
           <div class="flex flex-col sm:flex-row gap-2 sm:items-center">
@@ -113,25 +113,13 @@
                     {{ project.action || project.name || project.id }}
                   </td>
                   <td class="py-2 px-3">
-                    <select
+                    <Select
                       v-if="migrationDrafts[project.id]"
                       v-model="migrationDrafts[project.id].targetRole"
-                      class="w-full px-3 py-2 bg-dark-surface border border-dark-border rounded-lg text-white text-sm"
-                    >
-                      <option
-                        value=""
-                        disabled
-                      >
-                        {{ t('projectManager.selectRole') }}
-                      </option>
-                      <option
-                        v-for="role in migrationRoleOptions"
-                        :key="role"
-                        :value="role"
-                      >
-                        {{ role }}
-                      </option>
-                    </select>
+                      :options="migrationRoleSelectOptions"
+                      :placeholder="t('projectManager.selectRole')"
+                      :aria-label="t('projectManager.targetRole')"
+                    />
                   </td>
                   <td class="py-2 px-3">
                     <input
@@ -183,6 +171,15 @@
             <ImagePlus class="mr-2 h-4 w-4" />
             {{ t('projectManager.startWithAICreation') }}
           </Button>
+          <button
+            type="button"
+            class="mt-3 text-sm text-gray-500 underline-offset-4 transition-colors hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
+            data-test="import-legacy-projects-empty"
+            :disabled="importingLegacyDirectory"
+            @click="importLegacyProjectDirectory"
+          >
+            {{ t('projectManager.importLegacyProjectsLink') }}
+          </button>
         </div>
 
         <div
@@ -201,24 +198,56 @@
             class="role-dock"
             data-test="project-manager-role-dock"
           >
-            <div class="flex items-center justify-between gap-3">
+            <div class="flex items-end justify-between gap-3">
               <div>
-                <p class="font-mono text-[10px] tracking-[0.16em] text-primary">
+                <p class="font-mono text-[10px] tracking-[0.16em] text-primary uppercase whitespace-nowrap">
                   Game Assets
                 </p>
                 <h2 class="mt-1 text-xl font-semibold text-white">
                   {{ t('projectManager.animationLibrary') }}
                 </h2>
               </div>
-              <button
-                type="button"
-                class="rounded-lg p-2 text-gray-500 transition-colors hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                :title="t('common.refresh')"
-                :aria-label="t('common.refresh')"
-                @click="loadProjects"
-              >
-                <RefreshCw class="h-4 w-4" />
-              </button>
+              <div class="flex items-center gap-1">
+                <button
+                  type="button"
+                  class="rounded-lg p-2 text-gray-500 transition-colors hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  :title="t('common.refresh')"
+                  :aria-label="t('common.refresh')"
+                  @click="loadProjects"
+                >
+                  <RefreshCw class="h-4 w-4" />
+                </button>
+                <Menu
+                  as="div"
+                  class="relative"
+                >
+                  <MenuButton
+                    type="button"
+                    class="rounded-lg p-2 text-gray-500 transition-colors hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    :title="t('projectManager.moreActions')"
+                    :aria-label="t('projectManager.moreActions')"
+                  >
+                    <MoreVertical class="h-4 w-4" />
+                  </MenuButton>
+                  <MenuItems class="absolute right-0 z-50 mt-2 w-48 origin-top-right rounded-lg border border-dark-border bg-dark-surface shadow-lg focus:outline-none">
+                    <MenuItem v-slot="{ active }">
+                      <button
+                        type="button"
+                        data-test="import-legacy-projects"
+                        :disabled="importingLegacyDirectory"
+                        :class="[
+                          'flex w-full items-center gap-2 px-4 py-2 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50',
+                          active ? 'bg-dark-border text-white' : 'text-gray-300'
+                        ]"
+                        @click="importLegacyProjectDirectory"
+                      >
+                        <FolderOpen class="h-4 w-4" />
+                        {{ t('projectManager.importLegacyProjects') }}
+                      </button>
+                    </MenuItem>
+                  </MenuItems>
+                </Menu>
+              </div>
             </div>
 
             <button
@@ -751,19 +780,22 @@ import {
   ImageOff,
   ImagePlus,
   Loader2,
+  MoreVertical,
   Play,
   Plus,
   RefreshCw,
   Scissors,
   Search,
   Trash2,
+  X,
 } from 'lucide-vue-next';
-import { Dialog, DialogPanel, DialogTitle, TransitionChild, TransitionRoot } from '@headlessui/vue';
+import { Dialog, DialogPanel, DialogTitle, Menu, MenuButton, MenuItem, MenuItems, TransitionChild, TransitionRoot } from '@headlessui/vue';
 import { useProjectStore } from '@/stores/project';
 import { usePlayerStore } from '@/stores/player';
 import { api } from '@/api';
 import type { BatchTrimResult, Frame, Project } from '@/types';
 import Button from '@/components/common/Button.vue';
+import Select from '@/components/common/Select.vue';
 import Header from '@/components/layout/Header.vue';
 import ProjectManagerHero from '@/components/project-manager/ProjectManagerHero.vue';
 
@@ -784,6 +816,7 @@ const openingProjectId = ref<string | null>(null);
 const migrating = ref(false);
 const migrationMessage = ref('');
 const migrationDrafts = ref<Record<string, { targetRole: string; targetAction: string }>>({});
+const legacyMigrationVisible = ref(true);
 const newMigrationRole = ref('');
 const customMigrationRoles = ref<string[]>([]);
 const migrationRoleMessage = ref('');
@@ -894,6 +927,10 @@ const migrationRoleOptions = computed(() => {
   }
   return Array.from(roles).sort((a, b) => a.localeCompare(b, 'zh-CN'));
 });
+const migrationRoleSelectOptions = computed(() => migrationRoleOptions.value.map(role => ({
+  value: role,
+  label: role,
+})));
 
 watch(
   legacyProjects,
@@ -946,11 +983,16 @@ async function importLegacyProjectDirectory() {
   importMessage.value = '';
   try {
     const result = await projectStore.importLegacyProjectDirectory(directory);
-    importMessage.value = t('projectManager.importLegacyProjectsResult', {
-      imported: result.imported.length,
-      skipped: result.skipped.length,
-      failed: result.failed.length,
-    });
+    if (!result.success && result.imported.length === 0 && result.skipped.length === 0) {
+      importMessage.value = result.failed[0]?.reason || t('projectManager.importLegacyProjectsFailed');
+    } else {
+      importMessage.value = t('projectManager.importLegacyProjectsResult', {
+        source: result.source,
+        imported: result.imported.length,
+        skipped: result.skipped.length,
+        failed: result.failed.length,
+      });
+    }
   } catch (error) {
     importMessage.value = error instanceof Error ? error.message : t('projectManager.importLegacyProjectsFailed');
   } finally {

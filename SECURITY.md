@@ -7,7 +7,7 @@ Instead, report it privately via GitHub's private vulnerability reporting
 ("Security" tab → "Report a vulnerability") or by contacting the maintainer
 directly.
 
-## Repository Hygiene / 仓库卫生
+## Repository Hygiene
 
 Please never commit any of the following:
 

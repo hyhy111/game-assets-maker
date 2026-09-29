@@ -33,6 +33,10 @@ _SUCCESS_INTERVAL_SECONDS = 10
 _MAX_FAILURE_INTERVAL_SECONDS = 300
 _EVENT_QUEUE_SIZE = 64
 _EVENT_SHUTDOWN_TIMEOUT_SECONDS = 1.0
+# The poller may be blocked in a provider request (the HTTP timeout is much
+# longer than any reasonable shutdown wait), so quitting must not join it
+# indefinitely; the daemon worker is torn down with the interpreter.
+_WORKER_SHUTDOWN_TIMEOUT_SECONDS = 3.0
 
 
 class SeedanceTaskManager:
@@ -93,7 +97,7 @@ class SeedanceTaskManager:
             worker = self._worker
             self._stop_event.set()
         if worker is not None and worker is not threading.current_thread():
-            worker.join()
+            worker.join(timeout=_WORKER_SHUTDOWN_TIMEOUT_SECONDS)
         with self._scheduler_lock:
             if self._worker is worker:
                 self._worker = None

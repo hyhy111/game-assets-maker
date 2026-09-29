@@ -1,6 +1,6 @@
 <template>
   <aside
-    class="overflow-hidden rounded-[24px] border border-white/10 bg-[#1d1e24] shadow-2xl shadow-black/20"
+    class="overflow-hidden rounded-[24px] border border-white/10 bg-[#1f1f1f] shadow-2xl shadow-black/20"
     data-test="image-current-panel"
   >
     <div class="flex min-h-14 items-center gap-3 px-4 py-3">
@@ -10,6 +10,17 @@
           {{ batchStatusLabel }} · {{ succeededAttempts.length }}/{{ batch.attempts.length }}
         </p>
       </div>
+      <button
+        type="button"
+        class="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-gray-400 transition-colors hover:bg-white/[0.06] hover:text-white"
+        :aria-label="t('aiCreation.dismissCurrent')"
+        data-test="image-current-close"
+        @click="emit('close')"
+      >
+        <svg class="h-4 w-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+          <path d="M3 3l10 10M13 3L3 13" />
+        </svg>
+      </button>
     </div>
 
     <div class="border-t border-white/[0.06] p-4">
@@ -80,6 +91,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'create-video': [attemptIndex: number];
+  close: [];
 }>();
 
 const { t } = useI18n();

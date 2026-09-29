@@ -420,6 +420,40 @@ def test_start_marks_interrupted_submission_unknown_without_reposting(
         manager.shutdown()
 
 
+def test_shutdown_returns_promptly_when_worker_is_blocked_in_a_request(manager, fake_client, seedance_request):
+    request_entered = threading.Event()
+    release_request = threading.Event()
+
+    def hanging_get(remote_id: str) -> dict[str, Any]:
+        request_entered.set()
+        # Simulate a stalled provider response; the HTTP client allows up to
+        # 25 minutes, so shutdown must not wait for the worker indefinitely.
+        release_request.wait()
+        return _remote(remote_id, "queued")
+
+    fake_client.create_results.append(_remote("remote-1", "queued"))
+    fake_client.get_task = hanging_get
+    task = _queued_task(manager, fake_client, seedance_request)
+
+    manager.start()
+    try:
+        assert manager._scheduled_at[task.local_id] <= manager._monotonic()
+        assert request_entered.wait(timeout=5)
+
+        shutdown_finished = threading.Event()
+
+        def run_shutdown() -> None:
+            manager.shutdown()
+            shutdown_finished.set()
+
+        threading.Thread(target=run_shutdown, daemon=True).start()
+
+        assert shutdown_finished.wait(timeout=5), "shutdown() blocked on an in-flight provider request"
+    finally:
+        release_request.set()
+        manager.shutdown()
+
+
 def test_failed_cleanup_does_not_advance_the_cleanup_timestamp(
     manager, cache_manager, monkeypatch: pytest.MonkeyPatch
 ):

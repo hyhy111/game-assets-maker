@@ -25,7 +25,7 @@ models/
 *.safetensors
 
 # Local app data (runtime projects, caches, logs)
-/project/
+/project*/
 /cache/
 /input/
 /output/
@@ -37,6 +37,7 @@ seedream-cache/
 # Runtime config (may contain local preferences or credentials)
 config.json
 config.dev.json
+.keystore
 .env
 .env.local
 *.local
@@ -67,3 +68,4 @@ Thumbs.db
 .codegraph/
 .worktrees/
 .scratch/
+.kimi-code/

@@ -359,7 +359,8 @@ test('Seedance image editor opens resize controls directly and places restore be
 });
 
 test('Seedance settings uses the shared workspace without losing safe controls', async () => {
-  const html = await renderSfc('views/SeedanceSettings.vue', {
+  const [html, source] = await Promise.all([
+    renderSfc('views/SeedanceSettings.vue', {
     route: '/video-generation/settings',
     piniaState: {
       seedance: {
@@ -409,18 +410,17 @@ test('Seedance settings uses the shared workspace without losing safe controls',
         error: null,
       },
     },
-  });
+    }),
+    readFile(new URL('../src/views/SeedanceSettings.vue', import.meta.url), 'utf8'),
+  ]);
   assert.match(html, />设置</);
   assert.match(html, /API Key/);
   assert.match(html, /测试连接/);
   assert.match(html, /默认生成参数/);
-  const durationSelect = html.match(/时长 <select[\s\S]*?<\/select>/)?.[0] ?? '';
-  assert.match(durationSelect, /<option[^>]*value="4"[^>]*>4 秒<\/option>/);
-  assert.match(durationSelect, /<option[^>]*value="5"[^>]*>5 秒<\/option>/);
-  assert.match(durationSelect, /<option[^>]*value="6"[^>]*>6 秒<\/option>/);
-  assert.doesNotMatch(durationSelect, /<option[^>]*value="(?:-1|7|15)"/);
+  assert.match(source, /:options="seedanceDurationOptions"/);
+  assert.match(source, /DURATION_OPTIONS\.map\(value/);
   assert.match(html, /data-test="seedream-settings-model"/);
-  assert.match(html, /<option[^>]*value="flash"[^>]*>Seedream 5\.0 Flash<\/option>/);
+  assert.match(source, /\{ value: 'flash', label: t\('seedream\.models\.flash'\) \}/);
   assert.doesNotMatch(html, /value="v45"|value="v40"/);
   assert.match(html, /应用设置/);
   assert.doesNotMatch(html, /默认 FPS/);

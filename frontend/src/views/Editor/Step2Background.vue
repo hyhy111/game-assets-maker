@@ -9,6 +9,12 @@
       </p>
     </div>
 
+    <ModelStatusCard
+      v-if="shouldShowModelStatus"
+      :status="modelStatus"
+      @retry="processStore.retryModel($event)"
+    />
+
     <!-- Canvas Background Color Selector -->
     <div class="space-y-2">
       <label class="block text-sm font-medium text-gray-300">{{ t('step2.previewBgColor') }}</label>
@@ -130,12 +136,6 @@
       </div>
     </div>
 
-    <ModelStatusCard
-      v-if="!isProcessing"
-      :status="modelStatus"
-      @retry="processStore.retryModel($event)"
-    />
-
     <!-- Processing Progress -->
     <div
       v-if="isProcessing"
@@ -242,6 +242,7 @@ const stepStatus = computed(() => projectStore.currentProject?.steps?.['2']);
 const selectedModel = computed(() => s2Params.value.model ?? 'u2net');
 
 const canProcess = computed(() => canStartStep2(step1Completed.value, modelStatus.value, selectedModel.value));
+const shouldShowModelStatus = computed(() => !isProcessing.value && modelStatus.value.phase !== 'ready');
 
 onMounted(() => {
   void processStore.preloadModel(selectedModel.value);

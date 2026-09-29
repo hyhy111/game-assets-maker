@@ -194,6 +194,102 @@ def test_import_legacy_project_directory_rejects_directory_without_projects(api,
     assert not any(Path("project").iterdir())
 
 
+def test_import_legacy_project_directory_accepts_parent_application_directory(api, test_assets, tmp_path):
+    app_root = tmp_path / "old-video-to-sheet"
+    source_project = app_root / "project" / "legacy_walk"
+    shutil.copytree(test_assets / "legacy_projects" / "legacy_walk", source_project)
+    (app_root / "unrelated").mkdir()
+
+    result = api.import_legacy_project_directory(str(app_root))
+
+    assert result["success"] is True
+    assert Path(result["source"]).resolve() == (app_root / "project").resolve()
+    assert [item["projectId"] for item in result["imported"]] == ["legacy_walk"]
+    assert result["skipped"] == []
+    assert result["failed"] == []
+    assert source_project.is_dir()
+    assert Path("project/legacy_walk/cache/global_params.json").is_file()
+
+
+def test_import_legacy_project_directory_prefers_selected_directory_over_project_child(api, test_assets, tmp_path):
+    source_root = tmp_path / "legacy-root"
+    shutil.copytree(test_assets / "legacy_projects" / "legacy_walk", source_root / "direct_pick")
+    shutil.copytree(test_assets / "legacy_projects" / "legacy_walk", source_root / "project" / "nested_pick")
+
+    result = api.import_legacy_project_directory(str(source_root))
+
+    assert result["success"] is True
+    assert Path(result["source"]).resolve() == source_root.resolve()
+    assert [item["projectId"] for item in result["imported"]] == ["direct_pick"]
+    assert Path("project/direct_pick").is_dir()
+    assert not Path("project/nested_pick").exists()
+
+
+def test_import_legacy_project_directory_does_not_recurse_into_other_directories(api, test_assets, tmp_path):
+    source_root = tmp_path / "legacy-root"
+    shutil.copytree(test_assets / "legacy_projects" / "legacy_walk", source_root / "other" / "legacy_walk")
+    shutil.copytree(test_assets / "legacy_projects" / "legacy_walk", source_root / "project" / "nested" / "legacy_walk")
+
+    result = api.import_legacy_project_directory(str(source_root))
+
+    assert result["success"] is False
+    assert result["imported"] == []
+    assert result["failed"] == [{"projectId": "", "reason": "所选目录中没有有效的旧项目"}]
+    assert not any(Path("project").iterdir())
+
+
+def test_import_legacy_project_directory_rejects_current_project_root(api, test_assets):
+    current_root = Path("project").resolve()
+    shutil.copytree(test_assets / "legacy_projects" / "legacy_walk", current_root / "legacy_walk")
+
+    with pytest.raises(ValueError, match="所选目录已经是当前项目目录"):
+        api.import_legacy_project_directory(str(current_root))
+
+    with pytest.raises(ValueError, match="所选目录已经是当前项目目录"):
+        api.import_legacy_project_directory(str(current_root.parent))
+
+    assert (current_root / "legacy_walk" / "cache" / "global_params.json").is_file()
+
+
+def test_import_legacy_project_directory_skips_invalid_project_metadata(api, test_assets, tmp_path):
+    source_root = tmp_path / "legacy-root"
+    shutil.copytree(test_assets / "legacy_projects" / "legacy_walk", source_root / "valid_pick")
+    invalid_cache = source_root / "invalid_pick" / "cache"
+    invalid_cache.mkdir(parents=True)
+    (invalid_cache / "global_params.json").write_text("{broken", encoding="utf-8")
+
+    result = api.import_legacy_project_directory(str(source_root))
+
+    assert result["success"] is True
+    assert [item["projectId"] for item in result["imported"]] == ["valid_pick"]
+    assert not Path("project/invalid_pick").exists()
+
+
+def test_import_legacy_project_directory_records_failure_and_cleans_staging(api, test_assets, tmp_path, monkeypatch):
+    source_root = tmp_path / "legacy-root"
+    shutil.copytree(test_assets / "legacy_projects" / "legacy_walk", source_root / "broken_copy")
+    shutil.copytree(test_assets / "legacy_projects" / "legacy_walk", source_root / "good_copy")
+
+    real_copytree = shutil.copytree
+
+    def flaky_copytree(src, dst, *args, **kwargs):
+        if Path(src).name == "broken_copy":
+            raise OSError("simulated copy failure")
+        return real_copytree(src, dst, *args, **kwargs)
+
+    monkeypatch.setattr("backend.api.project_api.shutil.copytree", flaky_copytree)
+
+    result = api.import_legacy_project_directory(str(source_root))
+
+    assert result["success"] is False
+    assert [item["projectId"] for item in result["imported"]] == ["good_copy"]
+    assert [item["projectId"] for item in result["failed"]] == ["broken_copy"]
+    assert "simulated copy failure" in result["failed"][0]["reason"]
+    assert Path("project/good_copy/cache/global_params.json").is_file()
+    assert not list(Path("project").glob(".gam-import-*"))
+    assert (source_root / "broken_copy" / "cache" / "global_params.json").is_file()
+
+
 def test_delete_role(api, test_assets, asset_catalog):
     sample = asset_catalog[0]
     _create_project(api, "delete_me", "walk", _video(test_assets, sample["role"], sample["actions"][0]))

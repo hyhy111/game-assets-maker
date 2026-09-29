@@ -52,6 +52,10 @@ test('current video generation panel matches the composer surface and keeps only
   assert.match(html, /<video[^>]+src="http:\/\/localhost\/video\.mp4"/);
   assert.match(html, /查看详情/);
   assert.match(html, /bg-\[#1f1f1f\]/);
+  const closeButton = html.match(/<button[^>]*data-test="video-current-close"[^>]*>/)?.[0] ?? '';
+  assert.ok(closeButton, 'close button should render');
+  assert.match(closeButton, /aria-label="关闭当前任务"/);
+  assert.match(workspaceSource, /@close="dismissCurrentGeneration"/);
   assert.match(html, /flex h-full flex-col/);
   assert.match(html, /min-h-0 flex-1/);
   assert.match(html, /mt-4 flex h-11 flex-nowrap items-center/);

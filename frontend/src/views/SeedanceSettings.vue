@@ -93,7 +93,7 @@
         :title="t('storage.title')"
         :description="t('storage.description')"
       >
-        <div class="grid gap-4 sm:grid-cols-2">
+        <div class="grid gap-4">
           <label class="text-sm text-gray-300">
             {{ t('storage.projectDir') }}
             <span class="mt-2 flex flex-col gap-2 sm:flex-row">
@@ -126,34 +126,40 @@
         <div class="grid gap-4 sm:grid-cols-2">
           <label class="text-sm text-gray-300">
             {{ t('seedance.settings.model') }}
-            <select v-model="draft.default_model" class="seedance-control mt-2" @change="correctDefault">
-              <option value="standard">{{ t('seedance.models.standard') }}</option>
-              <option value="fast">{{ t('seedance.models.fast') }}</option>
-              <option value="mini">{{ t('seedance.models.mini') }}</option>
-            </select>
+            <Select
+              v-model="draft.default_model"
+              class="mt-2"
+              :options="seedanceModelOptions"
+              :aria-label="t('seedance.settings.model')"
+              @update:model-value="correctDefault"
+            />
           </label>
           <label class="text-sm text-gray-300">
             {{ t('seedance.settings.resolution') }}
-            <select v-model="draft.default_resolution" class="seedance-control mt-2">
-              <option v-for="option in supported" :key="option" :value="option">{{ option }}</option>
-            </select>
+            <Select
+              v-model="draft.default_resolution"
+              class="mt-2"
+              :options="seedanceResolutionOptions"
+              :aria-label="t('seedance.settings.resolution')"
+            />
           </label>
           <label class="text-sm text-gray-300">
             {{ t('seedance.create.ratio') }}
-            <select v-model="draft.default_ratio" class="seedance-control mt-2">
-              <option value="adaptive">{{ t('seedance.create.adaptive') }}</option>
-              <option value="16:9">16:9</option>
-              <option value="1:1">1:1</option>
-              <option value="4:3">4:3</option>
-            </select>
+            <Select
+              v-model="draft.default_ratio"
+              class="mt-2"
+              :options="seedanceRatioOptions"
+              :aria-label="t('seedance.create.ratio')"
+            />
           </label>
           <label class="text-sm text-gray-300">
             {{ t('seedance.create.duration') }}
-            <select v-model.number="draft.default_duration" class="seedance-control mt-2">
-              <option v-for="duration in DURATION_OPTIONS" :key="duration" :value="duration">
-                {{ t('seedance.ui.seconds', { value: duration }) }}
-              </option>
-            </select>
+            <Select
+              v-model="draft.default_duration"
+              class="mt-2"
+              :options="seedanceDurationOptions"
+              :aria-label="t('seedance.create.duration')"
+            />
           </label>
         </div>
         <div class="mt-5 flex flex-wrap gap-6">
@@ -170,33 +176,44 @@
         <div class="grid gap-4 sm:grid-cols-2">
           <label class="text-sm text-gray-300">
             {{ t('seedream.create.model') }}
-            <select v-model="seedreamDraft.default_model" class="seedance-control mt-2" data-test="seedream-settings-model" @change="fixSeedreamDefault">
-              <option value="pro">{{ t('seedream.models.pro') }}</option>
-              <option value="flash">{{ t('seedream.models.flash') }}</option>
-              <option value="lite">{{ t('seedream.models.lite') }}</option>
-            </select>
+            <Select
+              v-model="seedreamDraft.default_model"
+              class="mt-2"
+              :options="seedreamModelOptions"
+              :aria-label="t('seedream.create.model')"
+              data-test="seedream-settings-model"
+              @update:model-value="fixSeedreamDefault"
+            />
           </label>
           <label class="text-sm text-gray-300">
             {{ t('seedream.create.resolution') }}
-            <select v-model="seedreamDraft.default_resolution" class="seedance-control mt-2" data-test="seedream-settings-resolution">
-              <option v-for="option in seedreamSupportedResolutions" :key="option" :value="option">{{ option }}</option>
-            </select>
+            <Select
+              v-model="seedreamDraft.default_resolution"
+              class="mt-2"
+              :options="seedreamResolutionOptions"
+              :aria-label="t('seedream.create.resolution')"
+              data-test="seedream-settings-resolution"
+            />
           </label>
           <label class="text-sm text-gray-300">
             {{ t('seedream.create.ratio') }}
-            <select v-model="seedreamDraft.default_ratio" class="seedance-control mt-2" data-test="seedream-settings-ratio">
-              <option v-for="ratio in seedreamAllowedRatios" :key="ratio" :value="ratio">{{ ratio }}</option>
-            </select>
+            <Select
+              v-model="seedreamDraft.default_ratio"
+              class="mt-2"
+              :options="seedreamRatioOptions"
+              :aria-label="t('seedream.create.ratio')"
+              data-test="seedream-settings-ratio"
+            />
           </label>
           <label class="text-sm text-gray-300">
             {{ t('seedream.settings.defaultCount') }}
-            <select
-              v-model.number="seedreamDraft.default_count"
-              class="seedance-control mt-2"
+            <Select
+              v-model="seedreamDraft.default_count"
+              class="mt-2"
+              :options="seedreamCountOptions"
+              :aria-label="t('seedream.settings.defaultCount')"
               data-test="seedream-settings-count"
-            >
-              <option v-for="count in allowedCounts" :key="count" :value="count">{{ count }}</option>
-            </select>
+            />
           </label>
         </div>
         <p class="mt-3 text-xs leading-5 text-[var(--seedance-muted)]">{{ t('seedream.settings.defaultCountHint') }}</p>
@@ -211,12 +228,12 @@
           <div>
             <label class="block text-sm text-gray-300">
               {{ t('seedance.settings.retention') }}
-              <select v-model.number="draft.retention_days" class="seedance-control mt-2">
-                <option :value="0">{{ t('seedance.ui.never') }}</option>
-                <option v-for="day in [7, 30, 90, 180]" :key="day" :value="day">
-                  {{ t('seedance.ui.days', { value: day }) }}
-                </option>
-              </select>
+              <Select
+                v-model="draft.retention_days"
+                class="mt-2"
+                :options="retentionOptions"
+                :aria-label="t('seedance.settings.retention')"
+              />
             </label>
             <p v-if="retentionDisabled" class="mt-2 text-sm text-[var(--seedance-muted)]">
               {{ t('seedance.ui.retentionDisabled') }}
@@ -407,6 +424,7 @@ import { useI18n } from 'vue-i18n';
 import { onBeforeRouteLeave, useRouter } from 'vue-router';
 import { api } from '@/api';
 import Button from '@/components/common/Button.vue';
+import Select from '@/components/common/Select.vue';
 import Switch from '@/components/common/Switch.vue';
 import Header from '@/components/layout/Header.vue';
 import SeedancePageBar from '@/components/seedance/SeedancePageBar.vue';
@@ -501,9 +519,34 @@ const settingsReady = computed(() => Boolean(
 ));
 const cache = computed(() => store.cacheStatus);
 const supported = computed(() => MODEL_RESOLUTIONS[draft.default_model]);
+const seedanceModelOptions = computed(() => [
+  { value: 'standard', label: t('seedance.models.standard') },
+  { value: 'fast', label: t('seedance.models.fast') },
+  { value: 'mini', label: t('seedance.models.mini') },
+]);
+const seedanceResolutionOptions = computed(() => supported.value.map(value => ({ value, label: value })));
+const seedanceRatioOptions = computed(() => [
+  { value: 'adaptive', label: t('seedance.create.adaptive') },
+  { value: '16:9', label: '16:9' },
+  { value: '1:1', label: '1:1' },
+  { value: '4:3', label: '4:3' },
+]);
+const seedanceDurationOptions = computed(() => DURATION_OPTIONS.map(value => ({ value, label: t('seedance.ui.seconds', { value }) })));
 const retentionDisabled = computed(() => draft.retention_days === 0);
 const seedreamAllowedRatios = ALLOWED_RATIOS;
 const seedreamSupportedResolutions = computed(() => SEEDREAM_MODEL_RESOLUTIONS[seedreamDraft.default_model]);
+const seedreamModelOptions = computed(() => [
+  { value: 'pro', label: t('seedream.models.pro') },
+  { value: 'flash', label: t('seedream.models.flash') },
+  { value: 'lite', label: t('seedream.models.lite') },
+]);
+const seedreamResolutionOptions = computed(() => seedreamSupportedResolutions.value.map(value => ({ value, label: value })));
+const seedreamRatioOptions = computed(() => seedreamAllowedRatios.map(value => ({ value, label: value })));
+const seedreamCountOptions = computed(() => allowedCounts.map(value => ({ value, label: String(value) })));
+const retentionOptions = computed(() => [
+  { value: 0, label: t('seedance.ui.never') },
+  ...[7, 30, 90, 180].map(value => ({ value, label: t('seedance.ui.days', { value }) })),
+]);
 const currentSnapshot = computed(() => JSON.stringify({
   app: { ...appDraft },
   seedance: { ...draft },

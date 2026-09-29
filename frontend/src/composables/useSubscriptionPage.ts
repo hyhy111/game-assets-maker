@@ -31,7 +31,10 @@ async function callOpenWindow(url: string): Promise<void> {
   if (typeof fn !== 'function') {
     throw new Error('open_subscription_window not exposed by backend');
   }
-  await fn(url);
+  const opened = await fn(url);
+  if (opened !== true) {
+    throw new Error('订阅窗口打开失败');
+  }
 }
 
 /** 打开订阅落地页（隔离窗）；token 经 URL fragment 交给落地页 */

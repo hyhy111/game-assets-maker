@@ -9,11 +9,6 @@
       </p>
     </div>
 
-    <ModelStatusCard
-      :status="modelStatus"
-      @retry="processStore.retryModel($event)"
-    />
-
     <!-- Frame Interval setting -->
     <div class="space-y-2">
       <label class="block text-sm font-medium text-gray-300">{{ t('step1.frameInterval') }}</label>
@@ -152,14 +147,13 @@ import { api } from '@/api';
 import type { VideoInfo } from '@/types';
 import Button from '@/components/common/Button.vue';
 import Input from '@/components/common/Input.vue';
-import ModelStatusCard from '@/components/editor/ModelStatusCard.vue';
 
 const projectStore = useProjectStore();
 const processStore = useProcessStore();
 const playerStore = usePlayerStore();
 const { t } = useI18n();
 
-const { s1Params, isProcessing, s2Params, modelStatus } = storeToRefs(processStore);
+const { s1Params, isProcessing } = storeToRefs(processStore);
 const { currentIndex } = storeToRefs(playerStore);
 
 const isStepCompleted = computed(() => projectStore.isStepCompleted(1));
@@ -172,9 +166,6 @@ const maxFrame = computed(() =>
 
 onMounted(async () => {
   if (!projectStore.currentProject) return;
-
-  // Background preload model for Step 2
-  processStore.preloadModel(s2Params.value.model);
 
   const path = projectStore.currentProject.video_path;
   if (!path) return;

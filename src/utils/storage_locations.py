@@ -15,6 +15,7 @@ import os
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from typing import ClassVar
 
 from src.utils.ai_cache_paths import AI_PIC_CACHE_DIRNAME, AI_VIDEO_CACHE_DIRNAME
 
@@ -28,6 +29,12 @@ class StorageLocations:
 
     projects_root: Path
     ai_cache_root: Path
+
+    # PyWebView recursively serializes every public, non-callable js_api
+    # attribute into the JS bridge; pathlib objects do not survive that walk.
+    # This marker tells the bridge to skip the composition root's injected
+    # instance (the settings API exposes plain string paths instead).
+    _serializable: ClassVar[bool] = False
 
     @property
     def ai_pic_cache_root(self) -> Path:

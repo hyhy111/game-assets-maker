@@ -125,6 +125,7 @@ export default {
     clearTitle: 'Confirm Clear',
     clearConfirm: 'This draft has unsubmitted changes. Clear it?',
     currentGeneration: 'Current Generation',
+    dismissCurrent: 'Dismiss current generation',
     candidateDownloading: 'Downloading',
     useImageForVideo: 'Use This Image for Video',
     recent: {
@@ -223,9 +224,10 @@ export default {
     actionName: 'Animation Name',
     batchMigrate: 'Batch Migrate',
     importLegacyProjects: 'Import Legacy Projects',
-    importLegacyProjectsHint: 'Select the project directory from legacy Video to Sheet. Projects are copied and the source is left unchanged.',
-    importLegacyProjectsResult: 'Import complete: {imported} imported, {skipped} skipped, {failed} failed.',
+    importLegacyProjectsLink: 'Import from a legacy project',
+    importLegacyProjectsResult: 'Imported from {source}: {imported} imported, {skipped} skipped, {failed} failed.',
     importLegacyProjectsFailed: 'Failed to import legacy projects',
+    moreActions: 'More actions',
     actions: '{count} animation(s)',
   },
   projectCreate: {

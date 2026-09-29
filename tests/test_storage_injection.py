@@ -6,6 +6,7 @@ batch-trim, Seedream and Seedance consumers, while explicit roots passed by
 tests or the CLI keep higher priority.
 """
 
+import dataclasses
 from pathlib import Path
 
 import pytest
@@ -59,6 +60,17 @@ def test_current_locations_follow_the_saved_config(custom_roots: CustomRoots):
 
     assert locations.projects_root == custom_roots.projects
     assert locations.ai_cache_root == custom_roots.ai_cache
+
+
+def test_storage_locations_opt_out_of_js_bridge_serialization(tmp_path: Path):
+    """PyWebView recursively serializes public js_api attributes; the injected
+    StorageLocations must opt out so bridge setup never walks pathlib
+    internals (logged as "Error while processing storage_locations...")."""
+    locations = storage_locations_from_config({}, data_root=tmp_path)
+
+    assert getattr(locations, "_serializable", True) is False
+    # The marker is a class attribute, not a dataclass init field.
+    assert {field.name for field in dataclasses.fields(locations)} == {"projects_root", "ai_cache_root"}
 
 
 # ==================== Project-tree consumers ====================

@@ -150,16 +150,16 @@ def test_save_never_persists_api_key_fields(api, tmp_path: Path):
     assert load_app_config()["seedance"]["api_key"] == "secret-key"
 
 
-def test_save_reports_precheck_failures_without_writing_config(api, tmp_path: Path):
+def test_save_reports_conflicting_targets_without_writing_config(api, tmp_path: Path):
     target = tmp_path / "occupied"
     target.mkdir()
-    (target / "file.txt").write_text("keep", encoding="utf-8")
+    (target / "mage").write_text("keep", encoding="utf-8")
 
     result = api.save_settings(_draft(project_dir=str(target)))
 
     assert result["success"] is False
     assert result["error"]["stage"] == "precheck"
-    assert "not empty" in result["error"]["message"]
+    assert "conflicting path: mage" in result["error"]["message"]
     assert load_app_config()["project_dir"] == "project"
 
 

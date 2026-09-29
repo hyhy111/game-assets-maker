@@ -17,10 +17,6 @@
         v-else-if="status.phase === 'failed'"
         class="mt-0.5 h-4 w-4 shrink-0"
       />
-      <Download
-        v-else
-        class="mt-0.5 h-4 w-4 shrink-0"
-      />
 
       <div class="min-w-0 flex-1">
         <p class="text-sm font-medium">
@@ -45,12 +41,16 @@
           />
         </div>
 
-        <label v-if="status.phase === 'needs_download' || presentation.retryable" class="mt-3 block text-xs">
+        <label
+          v-if="status.phase === 'needs_download' || presentation.retryable"
+          class="mt-3 block text-xs"
+        >
           {{ t('modelStatus.downloadSource') }}
-          <select v-model="source" class="mt-1 block w-full rounded border border-dark-border bg-dark-bg p-2 text-sm text-white">
-            <option value="modelscope">{{ t('modelStatus.modelscope') }}</option>
-            <option value="github">GitHub</option>
-          </select>
+          <Select
+            v-model="source"
+            :options="sourceOptions"
+            class="mt-1"
+          />
         </label>
         <Button
           v-if="status.phase === 'needs_download' || presentation.retryable"
@@ -68,17 +68,22 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { AlertCircle, CheckCircle, Download, Loader2 } from 'lucide-vue-next';
+import { AlertCircle, CheckCircle, Loader2 } from 'lucide-vue-next';
 import { useI18n } from 'vue-i18n';
 import { modelApproximateSizeMb, modelProgressPercent, modelStatusPresentation } from '@/model-status';
 import type { ModelStatus } from '@/types';
 import Button from '@/components/common/Button.vue';
+import Select from '@/components/common/Select.vue';
 
 const props = defineProps<{ status: ModelStatus }>();
 defineEmits<{ retry: [source: 'modelscope' | 'github'] }>();
 const source = ref<'modelscope' | 'github'>('modelscope');
 
 const { t } = useI18n();
+const sourceOptions = computed(() => [
+  { value: 'modelscope', label: t('modelStatus.modelscope') },
+  { value: 'github', label: 'GitHub' },
+]);
 const presentation = computed(() => modelStatusPresentation(props.status));
 const progress = computed(() => modelProgressPercent(props.status));
 const toneClasses = computed(() => ({

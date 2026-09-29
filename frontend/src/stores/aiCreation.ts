@@ -95,6 +95,11 @@ export const useAICreationStore = defineStore('ai-creation', () => {
     candidateHandoffError.value = '';
   }
 
+  function dismissCurrentGeneration() {
+    currentGeneration.value = null;
+    candidateHandoffError.value = '';
+  }
+
   function setRecentFilter(filter: RecentGenerationFilter) {
     recentFilter.value = filter;
   }
@@ -163,6 +168,7 @@ export const useAICreationStore = defineStore('ai-creation', () => {
     imageDraftChanged,
     videoDraftChanged,
     setCurrentGeneration,
+    dismissCurrentGeneration,
     setRecentFilter,
     setGenerationSource,
     loadMoreRecent,

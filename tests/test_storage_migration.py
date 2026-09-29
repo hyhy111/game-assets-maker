@@ -131,18 +131,147 @@ def test_target_as_ancestor_of_source_is_rejected(coordinator: StorageMigrationC
 # ==================== Precheck: target state ====================
 
 
-def test_non_empty_target_is_rejected(coordinator: StorageMigrationCoordinator, source_project: Path, tmp_path: Path):
+def test_non_empty_target_is_accepted_and_preserved(
+    coordinator: StorageMigrationCoordinator,
+    source_project: Path,
+    tmp_path: Path,
+    commits: list[dict],
+):
     target = tmp_path / "new" / "project"
     target.mkdir(parents=True)
     (target / "pre-existing.txt").write_text("keep me", encoding="utf-8")
+    source_before = _tree_snapshot(source_project)
+    target_before = _tree_snapshot(target)
+    draft = {"project_dir": str(target)}
 
-    with pytest.raises(MigrationError, match="not empty"):
+    report = coordinator.precheck(
+        [LocationMigration(PROJECT_LOCATION, source_project, target)],
+        draft,
+    )
+
+    assert _tree_snapshot(source_project) == source_before
+    assert _tree_snapshot(target) == target_before
+    assert commits == []
+
+    coordinator.execute(report.token)
+
+    assert (target / "pre-existing.txt").read_text(encoding="utf-8") == "keep me"
+    assert (target / "mage" / "walk" / "output" / "frame.png").is_file()
+    assert (source_project / "mage" / "walk" / "output" / "frame.png").is_file()
+    assert commits == [draft]
+
+
+def test_non_empty_ai_cache_target_is_accepted_and_preserved(
+    coordinator: StorageMigrationCoordinator,
+    source_cache: Path,
+    tmp_path: Path,
+    commits: list[dict],
+):
+    target = tmp_path / "new" / "cache"
+    target.mkdir(parents=True)
+    (target / "pre-existing.txt").write_text("keep me", encoding="utf-8")
+    source_before = _tree_snapshot(source_cache)
+    target_before = _tree_snapshot(target)
+    draft = {"seedance": {"cache_dir": str(target)}}
+
+    report = coordinator.precheck(
+        [LocationMigration(AI_CACHE_LOCATION, source_cache, target)],
+        draft,
+    )
+
+    assert _tree_snapshot(source_cache) == source_before
+    assert _tree_snapshot(target) == target_before
+    assert commits == []
+
+    coordinator.execute(report.token)
+
+    assert (target / "pre-existing.txt").read_text(encoding="utf-8") == "keep me"
+    assert (target / "ai-pic-cache" / "batches" / "b1" / "batch.json").is_file()
+    assert (source_cache / "ai-pic-cache" / "batches" / "b1" / "batch.json").is_file()
+    assert commits == [draft]
+
+
+@pytest.mark.parametrize("occupant", ["file", "directory", "symlink"])
+def test_conflicting_target_path_is_rejected(
+    coordinator: StorageMigrationCoordinator, source_project: Path, tmp_path: Path, occupant: str
+):
+    target = tmp_path / "new" / "project"
+    target.mkdir(parents=True)
+    conflict = target / "mage"
+    if occupant == "file":
+        conflict.write_text("existing file", encoding="utf-8")
+    elif occupant == "directory":
+        conflict.mkdir()
+    else:
+        conflict.symlink_to("elsewhere")
+
+    with pytest.raises(MigrationError, match="conflicting path: mage"):
         coordinator.precheck(
             [LocationMigration(PROJECT_LOCATION, source_project, target)],
             {"project_dir": str(target)},
         )
 
-    assert (target / "pre-existing.txt").read_text(encoding="utf-8") == "keep me"
+    assert conflict.exists() or conflict.is_symlink()
+
+
+@pytest.mark.parametrize("occupant", ["file", "directory", "symlink"])
+def test_conflicting_ai_cache_target_path_is_rejected(
+    coordinator: StorageMigrationCoordinator,
+    source_cache: Path,
+    tmp_path: Path,
+    occupant: str,
+):
+    target = tmp_path / "new" / "cache"
+    target.mkdir(parents=True)
+    conflict = target / "ai-pic-cache"
+    if occupant == "file":
+        conflict.write_text("existing file", encoding="utf-8")
+    elif occupant == "directory":
+        conflict.mkdir()
+    else:
+        conflict.symlink_to("elsewhere")
+
+    with pytest.raises(MigrationError, match="conflicting path: ai-pic-cache"):
+        coordinator.precheck(
+            [LocationMigration(AI_CACHE_LOCATION, source_cache, target)],
+            {"seedance": {"cache_dir": str(target)}},
+        )
+
+    assert conflict.exists() or conflict.is_symlink()
+
+
+def test_conflict_prevents_the_entire_double_location_transaction(
+    coordinator: StorageMigrationCoordinator,
+    source_project: Path,
+    source_cache: Path,
+    tmp_path: Path,
+    commits: list[dict],
+):
+    project_target = tmp_path / "new" / "project"
+    cache_target = tmp_path / "new" / "cache"
+    project_target.mkdir(parents=True)
+    cache_target.mkdir(parents=True)
+    (project_target / "mage").mkdir()
+    (cache_target / "pre-existing.txt").write_text("keep me", encoding="utf-8")
+    project_before = _tree_snapshot(project_target)
+    cache_before = _tree_snapshot(cache_target)
+    source_project_before = _tree_snapshot(source_project)
+    source_cache_before = _tree_snapshot(source_cache)
+
+    with pytest.raises(MigrationError, match="conflicting path: mage"):
+        coordinator.precheck(
+            [
+                LocationMigration(PROJECT_LOCATION, source_project, project_target),
+                LocationMigration(AI_CACHE_LOCATION, source_cache, cache_target),
+            ],
+            {"project_dir": str(project_target), "seedance": {"cache_dir": str(cache_target)}},
+        )
+
+    assert _tree_snapshot(project_target) == project_before
+    assert _tree_snapshot(cache_target) == cache_before
+    assert _tree_snapshot(source_project) == source_project_before
+    assert _tree_snapshot(source_cache) == source_cache_before
+    assert commits == []
 
 
 def test_unwritable_target_parent_is_rejected(
@@ -475,6 +604,74 @@ def test_publish_failure_recreates_preexisting_empty_target(
     assert not list(target.parent.glob("*.gam-migration-*"))
 
 
+def test_conflict_after_confirmation_does_not_overwrite_the_target(
+    coordinator: StorageMigrationCoordinator,
+    source_project: Path,
+    tmp_path: Path,
+    commits: list[dict],
+):
+    target = tmp_path / "new" / "project"
+    target.mkdir(parents=True)
+    report = coordinator.precheck(
+        [LocationMigration(PROJECT_LOCATION, source_project, target)],
+        {"project_dir": str(target)},
+    )
+    (target / "mage").mkdir()
+    (target / "mage" / "user-file.txt").write_text("keep me", encoding="utf-8")
+
+    with pytest.raises(MigrationError, match="conflicting path: mage") as caught:
+        coordinator.execute(report.token)
+
+    assert caught.value.stage == "publish"
+    assert (target / "mage" / "user-file.txt").read_text(encoding="utf-8") == "keep me"
+    assert not list(target.parent.glob("*.gam-migration-*"))
+    assert (source_project / "mage" / "walk" / "output" / "frame.png").is_file()
+    assert commits == []
+
+
+def test_second_publish_failure_rolls_back_only_new_entries_from_existing_target(
+    coordinator: StorageMigrationCoordinator,
+    source_project: Path,
+    source_cache: Path,
+    tmp_path: Path,
+    commits: list[dict],
+    monkeypatch: pytest.MonkeyPatch,
+):
+    project_target = tmp_path / "new" / "project"
+    cache_target = tmp_path / "new" / "cache"
+    project_target.mkdir(parents=True)
+    cache_target.mkdir(parents=True)
+    (project_target / "project-note.txt").write_text("keep project", encoding="utf-8")
+    (cache_target / "cache-note.txt").write_text("keep cache", encoding="utf-8")
+    original_publish = coordinator._publish
+
+    def fail_cache_publish(migration: LocationMigration, staging: Path):
+        if migration.kind == AI_CACHE_LOCATION:
+            raise MigrationError("publish", "simulated cache publish failure")
+        return original_publish(migration, staging)
+
+    monkeypatch.setattr(coordinator, "_publish", fail_cache_publish)
+
+    with pytest.raises(MigrationError, match="simulated cache publish failure") as caught:
+        _run(
+            coordinator,
+            [
+                LocationMigration(PROJECT_LOCATION, source_project, project_target),
+                LocationMigration(AI_CACHE_LOCATION, source_cache, cache_target),
+            ],
+            {"project_dir": str(project_target), "seedance": {"cache_dir": str(cache_target)}},
+        )
+
+    assert caught.value.stage == "publish"
+    assert (project_target / "project-note.txt").read_text(encoding="utf-8") == "keep project"
+    assert (cache_target / "cache-note.txt").read_text(encoding="utf-8") == "keep cache"
+    assert not (project_target / "mage").exists()
+    assert not (cache_target / "ai-pic-cache").exists()
+    assert (source_project / "mage" / "walk" / "output" / "frame.png").is_file()
+    assert (source_cache / "ai-pic-cache" / "batches" / "b1" / "batch.json").is_file()
+    assert commits == []
+
+
 def test_commit_failure_rolls_back_published_targets(source_project: Path, source_cache: Path, tmp_path: Path):
     def broken_commit(draft):
         raise OSError("config disk full")
@@ -482,7 +679,10 @@ def test_commit_failure_rolls_back_published_targets(source_project: Path, sourc
     coordinator = StorageMigrationCoordinator(commit_config=broken_commit)
     project_target = tmp_path / "new" / "project"
     cache_target = tmp_path / "new" / "cache"
-    cache_target.mkdir(parents=True)  # pre-existing empty target must be restored
+    project_target.mkdir(parents=True)
+    cache_target.mkdir(parents=True)
+    (project_target / "project-note.txt").write_text("keep project", encoding="utf-8")
+    (cache_target / "cache-note.txt").write_text("keep cache", encoding="utf-8")
 
     with pytest.raises(MigrationError) as caught:
         _run(
@@ -495,8 +695,10 @@ def test_commit_failure_rolls_back_published_targets(source_project: Path, sourc
         )
 
     assert caught.value.stage == "commit"
-    assert not project_target.exists()
-    assert cache_target.is_dir() and list(cache_target.iterdir()) == []
+    assert (project_target / "project-note.txt").read_text(encoding="utf-8") == "keep project"
+    assert (cache_target / "cache-note.txt").read_text(encoding="utf-8") == "keep cache"
+    assert not (project_target / "mage").exists()
+    assert not (cache_target / "ai-pic-cache").exists()
     assert not list((tmp_path / "new").glob("*.gam-migration-*"))
     assert coordinator.restart_required is False
     assert (source_project / "mage").is_dir()

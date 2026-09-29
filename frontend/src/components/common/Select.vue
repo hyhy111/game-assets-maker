@@ -1,8 +1,19 @@
 <template>
   <Listbox v-model="selectedValue">
     <div class="relative">
+      <!--
+        Consumers wrap this select in a <label>. A label forwards clicks on
+        non-interactive content to its labelable control (the button), which
+        would toggle the listbox a second time: the button click would never
+        open it, and an option click would re-open it right after Headless UI
+        closed it. preventDefault on both click paths suppresses the label's
+        activation behavior while Headless UI's own listeners still run.
+      -->
       <ListboxButton
-        class="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-lg text-sm text-white focus:outline-none focus:border-primary cursor-pointer flex justify-between items-center"
+        class="flex h-[42px] w-full items-center justify-between rounded-lg border border-dark-border bg-dark-bg px-3 text-sm text-white cursor-pointer focus:outline-none focus:border-primary"
+        :aria-label="ariaLabel"
+        :data-test="dataTest"
+        @click.prevent
       >
         <span>{{ displayLabel }}</span>
         <ChevronDown class="w-4 h-4 text-gray-400" />
@@ -18,12 +29,14 @@
       >
         <ListboxOptions
           class="absolute z-50 w-full mt-1 py-1 bg-dark-surface border border-dark-border rounded-lg shadow-lg max-h-60 overflow-auto"
+          @click.prevent
         >
           <ListboxOption
             v-for="option in options"
             :key="option.value"
             v-slot="{ active, selected }"
             :value="option.value"
+            as="template"
           >
             <li
               :class="[
@@ -47,17 +60,20 @@ import { Listbox, ListboxButton, ListboxOptions, ListboxOption } from '@headless
 import { ChevronDown } from 'lucide-vue-next';
 
 interface Option {
-  value: string;
+  value: string | number;
   label: string;
 }
 
 const props = defineProps<{
-  modelValue: string;
+  modelValue: string | number;
   options: Option[];
+  placeholder?: string;
+  ariaLabel?: string;
+  dataTest?: string;
 }>();
 
 const emit = defineEmits<{
-  (e: 'update:modelValue', value: string): void;
+  (e: 'update:modelValue', value: string | number): void;
 }>();
 
 const selectedValue = computed({
@@ -67,6 +83,6 @@ const selectedValue = computed({
 
 const displayLabel = computed(() => {
   const option = props.options.find(o => o.value === props.modelValue);
-  return option?.label || props.modelValue;
+  return option?.label || props.placeholder || String(props.modelValue);
 });
 </script>

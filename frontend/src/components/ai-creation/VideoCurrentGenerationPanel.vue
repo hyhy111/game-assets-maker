@@ -6,6 +6,17 @@
     <header class="flex min-h-14 items-center gap-3 px-4 py-3">
       <h2 class="text-sm font-semibold text-white">{{ t('seedance.tasks.title') }}</h2>
       <SeedanceStatusBadge :task="task" />
+      <button
+        type="button"
+        class="ml-auto grid h-8 w-8 shrink-0 place-items-center rounded-lg text-gray-400 transition-colors hover:bg-white/[0.06] hover:text-white"
+        :aria-label="t('aiCreation.dismissCurrent')"
+        data-test="video-current-close"
+        @click="emit('close')"
+      >
+        <svg class="h-4 w-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+          <path d="M3 3l10 10M13 3L3 13" />
+        </svg>
+      </button>
     </header>
 
     <div class="flex min-h-0 flex-1 flex-col border-t border-white/[0.06] p-4 sm:p-5">
@@ -55,6 +66,7 @@ const emit = defineEmits<{
   cancel: [localId: string];
   'retry-download': [localId: string];
   'open-detail': [localId: string];
+  close: [];
 }>();
 
 const { t } = useI18n();

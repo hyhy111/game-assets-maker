@@ -221,7 +221,8 @@ test('Seedance create screen does not expose task scheduling controls', async ()
 
 test('Never retention disables manual cache cleanup', async () => {
   const settings = await source('views/SeedanceSettings.vue');
-  assert.match(settings, /<option :value="0">/);
+  assert.match(settings, /:options="retentionOptions"/);
+  assert.match(settings, /\{ value: 0, label: t\('seedance\.ui\.never'\) \}/);
   assert.match(settings, /:disabled="retentionDisabled"/);
   assert.match(settings, /retentionDisabled/);
   assert.match(settings, /draft\.retention_days === 0/);
