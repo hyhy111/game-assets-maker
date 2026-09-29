@@ -17,14 +17,14 @@ from backend.api.project_paths import (
     sanitize_segment,
     split_project_id,
 )
-from src.utils.data_paths import projects_root
+from src.utils.app_config import default_projects_root
 
 
 class ProjectAPI:
     """API for project CRUD operations"""
 
-    def __init__(self):
-        self._projects_root = projects_root()
+    def __init__(self, projects_root: Path | None = None):
+        self._projects_root = projects_root if projects_root is not None else default_projects_root()
         self._projects_root.mkdir(parents=True, exist_ok=True)
 
     def _get_project_path(self, project_id: str) -> Path:
@@ -671,26 +671,44 @@ class ProjectAPI:
 
         return {"success": True, "migrated": migrated, "conflicts": []}
 
+    def _resolve_legacy_import_source(self, selected_root: Path) -> tuple[Path, list[Path]] | None:
+        """Resolve the actual legacy project root from the user-selected directory.
+
+        Checks the selected directory first, then its direct ``project/``
+        subdirectory, without recursing any further. Returns the resolved
+        root together with the frozen list of valid legacy projects, or None
+        when no candidate contains valid legacy projects.
+        """
+        for candidate in (selected_root, selected_root / "project"):
+            if not candidate.is_dir():
+                continue
+            projects = sorted(
+                (path for path in candidate.iterdir() if path.is_dir() and is_legacy_import_project_dir(path)),
+                key=lambda path: path.name.casefold(),
+            )
+            if projects:
+                return candidate, projects
+        return None
+
     def import_legacy_project_directory(self, source_directory: str) -> dict[str, Any]:
         """Copy valid projects from a user-selected legacy project directory."""
-        source_root = Path(source_directory).expanduser().resolve()
-        if not source_root.is_dir():
+        selected_root = Path(source_directory).expanduser().resolve()
+        if not selected_root.is_dir():
             raise ValueError("所选旧项目目录不存在")
-        if source_root == self._projects_root.resolve():
-            raise ValueError("所选目录已经是当前项目目录")
 
-        source_projects = sorted(
-            (path for path in source_root.iterdir() if path.is_dir() and is_legacy_import_project_dir(path)),
-            key=lambda path: path.name.casefold(),
-        )
-        if not source_projects:
+        resolved = self._resolve_legacy_import_source(selected_root)
+        if resolved is None:
             return {
                 "success": False,
-                "source": str(source_root),
+                "source": str(selected_root),
                 "imported": [],
                 "skipped": [],
                 "failed": [{"projectId": "", "reason": "所选目录中没有有效的旧项目"}],
             }
+
+        source_root, source_projects = resolved
+        if source_root.resolve() == self._projects_root.resolve():
+            raise ValueError("所选目录已经是当前项目目录")
 
         existing_names = {
             path.name.casefold()

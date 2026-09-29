@@ -8,15 +8,16 @@ from typing import Any
 from PIL import Image
 
 from backend.api.frame_visibility import get_hidden_frame_names, restore_hidden_frames, set_frame_hidden
-from backend.api.project_paths import resolve_project_path
-from src.utils.data_paths import data_root, projects_root
+from backend.api.project_paths import media_url_for_path, resolve_project_path
+from src.utils.app_config import default_projects_root
+from src.utils.data_paths import data_root
 
 
 class FrameAPI:
     """API for frame operations"""
 
-    def __init__(self, assets_base_url: str = "http://localhost:8080"):
-        self._projects_root = projects_root()
+    def __init__(self, assets_base_url: str = "http://localhost:8080", *, projects_root: Path | None = None):
+        self._projects_root = projects_root if projects_root is not None else default_projects_root()
         self._project_root = data_root()
         self.assets_base_url = assets_base_url.rstrip("/")
 
@@ -26,14 +27,12 @@ class FrameAPI:
     def get_frame_url(self, frame_path: str) -> str:
         """Convert local frame path to HTTP URL for efficient loading"""
         try:
-            path = Path(frame_path)
-            try:
-                relative_path = path.relative_to(self._project_root)
-                mtime = int(path.stat().st_mtime) if path.exists() else 0
-                return f"{self.assets_base_url}/{relative_path.as_posix()}?t={mtime}"
-            except ValueError:
-                # Path is not under project root, return as-is
-                return frame_path
+            return media_url_for_path(
+                Path(frame_path),
+                projects_root=self._projects_root,
+                data_root=self._project_root,
+                base_url=self.assets_base_url,
+            )
         except Exception as e:
             print(f"Error converting frame path: {e}")
             return frame_path

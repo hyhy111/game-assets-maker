@@ -50,6 +50,27 @@ def resolve_project_path(projects_root: Path, project_id: str) -> Path:
     return projects_root / action
 
 
+def media_url_for_path(path: Path, *, projects_root: Path, data_root: Path, base_url: str) -> str:
+    """Build the assets-server URL for a local media file.
+
+    Paths under the project root use the restricted ``/project-media/``
+    mapping so custom roots outside the data root stay servable; other
+    data-root paths keep the legacy static scheme; anything else is returned
+    as a plain local path.
+    """
+    mtime = int(path.stat().st_mtime) if path.exists() else 0
+    try:
+        relative = path.relative_to(projects_root)
+        return f"{base_url}/project-media/{relative.as_posix()}?t={mtime}"
+    except ValueError:
+        pass
+    try:
+        relative = path.relative_to(data_root)
+        return f"{base_url}/{relative.as_posix()}?t={mtime}"
+    except ValueError:
+        return str(path)
+
+
 def find_project_path(projects_root: Path, project_id: str) -> Path | None:
     path = resolve_project_path(projects_root, project_id)
     if path.exists():

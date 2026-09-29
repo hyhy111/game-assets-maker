@@ -7,7 +7,9 @@ per-user data root so projects, generation history, and models survive
 installer replacement and never depend on the launch directory, which may be
 read-only. Every consumer of writable app data (projects, frame/audio media,
 processing, batch trim, AI generation caches, models) must resolve through
-this module instead of the process working directory.
+this module instead of the process working directory. Project and AI cache
+roots additionally honor the configured storage locations; resolve those via
+``src.utils.storage_locations``.
 
 Overrides for tests and automation:
 - ``GAM_DATA_MODE``: force ``dev`` or ``installed``.
@@ -44,11 +46,6 @@ def data_root() -> Path:
     if data_mode() == INSTALLED_MODE:
         return Path.home() / DATA_DIR_NAME
     return Path.cwd()
-
-
-def projects_root() -> Path:
-    """Root directory holding all video-processing projects."""
-    return data_root() / "project"
 
 
 def models_root() -> Path:

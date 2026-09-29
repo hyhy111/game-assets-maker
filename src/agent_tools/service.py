@@ -15,6 +15,7 @@ from src.agent_tools.explain import explain_step
 from src.agent_tools.schemas import AgentErrorCode, error_response, redact_secret, success_response
 from src.agent_tools.ui_client import AgentUIClient
 from src.utils.data_paths import data_root
+from src.utils.storage_locations import StorageLocations, storage_locations_from_config
 
 if TYPE_CHECKING:
     from backend.api.batch_trim_api import BatchTrimAPI
@@ -68,6 +69,13 @@ class AgentWorkflowService:
     def __init__(self, root: str | Path | None = None):
         self.root = Path(root).resolve() if root is not None else data_root().resolve()
         self.root.mkdir(parents=True, exist_ok=True)
+        # Freeze the storage resolution once, like the app composition root:
+        # config is read under the service root, and every consumer shares it.
+        from src.utils.app_config import load_app_config
+
+        with _cwd(self.root):
+            config = load_app_config()
+        self._storage_locations: StorageLocations = storage_locations_from_config(config, data_root=self.root)
         self._project_api: ProjectAPI | None = None
         self._process_api: ProcessAPI | None = None
         self._batch_trim_api: BatchTrimAPI | None = None
@@ -80,7 +88,7 @@ class AgentWorkflowService:
 
         if self._project_api is None:
             with _cwd(self.root):
-                self._project_api = ProjectAPI()
+                self._project_api = ProjectAPI(projects_root=self._storage_locations.projects_root)
         return self._project_api
 
     @property
@@ -89,7 +97,7 @@ class AgentWorkflowService:
 
         if self._process_api is None:
             with _cwd(self.root):
-                self._process_api = ProcessAPI(window=None)
+                self._process_api = ProcessAPI(window=None, projects_root=self._storage_locations.projects_root)
         return self._process_api
 
     @property
@@ -98,7 +106,7 @@ class AgentWorkflowService:
 
         if self._batch_trim_api is None:
             with _cwd(self.root):
-                self._batch_trim_api = BatchTrimAPI()
+                self._batch_trim_api = BatchTrimAPI(projects_root=self._storage_locations.projects_root)
         return self._batch_trim_api
 
     @property
@@ -110,14 +118,12 @@ class AgentWorkflowService:
             from backend.seedance.downloader import ResultDownloader
             from backend.seedance.manager import SeedanceTaskManager
             from backend.seedance.repository import TaskRepository
-            from src.utils.ai_cache_paths import ai_video_cache_root
             from src.utils.app_config import load_app_config, save_app_config
 
             with _cwd(self.root):
                 config = load_app_config()
                 seedance = config["seedance"]
-                cache_root = ai_video_cache_root(seedance.get("cache_dir"), base_dir=self.root)
-                cache_root = cache_root.resolve()
+                cache_root = self._storage_locations.ai_video_cache_root.resolve()
                 repository = TaskRepository(cache_root)
                 self._seedance_manager = SeedanceTaskManager(
                     ArkClient(seedance["api_key"]),

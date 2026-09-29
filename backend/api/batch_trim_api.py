@@ -18,7 +18,7 @@ from backend.api.project_paths import (
     sanitize_segment,
     split_project_id,
 )
-from src.utils.data_paths import projects_root
+from src.utils.app_config import default_projects_root
 
 
 def _imread_unicode(path: Path) -> Any:
@@ -41,8 +41,8 @@ def _imwrite_unicode(path: Path, image: Any) -> bool:
 class BatchTrimAPI:
     """Batch trimming API."""
 
-    def __init__(self):
-        self._projects_root = projects_root()
+    def __init__(self, projects_root: Path | None = None):
+        self._projects_root = projects_root if projects_root is not None else default_projects_root()
         self._output_root = self._projects_root / "global-output"
 
     def _get_project_info(self, project_id: str) -> tuple[str, str, Path]:

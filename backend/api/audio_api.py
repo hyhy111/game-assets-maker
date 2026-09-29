@@ -12,8 +12,9 @@ from typing import Any
 import cv2
 import imageio_ffmpeg
 
-from backend.api.project_paths import resolve_project_path
-from src.utils.data_paths import data_root, projects_root
+from backend.api.project_paths import media_url_for_path, resolve_project_path
+from src.utils.app_config import default_projects_root
+from src.utils.data_paths import data_root
 
 # wav 采样率与声道数（前端 Web Audio 解码用）
 _WAV_SAMPLE_RATE = 44100
@@ -23,8 +24,8 @@ _WAV_CHANNELS = 1
 class AudioAPI:
     """API for source audio extraction and serving."""
 
-    def __init__(self, assets_base_url: str = "http://localhost:8080"):
-        self._projects_root = projects_root()
+    def __init__(self, assets_base_url: str = "http://localhost:8080", *, projects_root: Path | None = None):
+        self._projects_root = projects_root if projects_root is not None else default_projects_root()
         self._project_root = data_root()
         self.assets_base_url = assets_base_url.rstrip("/")
 
@@ -223,9 +224,9 @@ class AudioAPI:
 
     def _wav_url(self, wav_path: Path) -> str:
         """把 wav 本地路径转为 assets server 的 HTTP URL（与 FrameAPI 同模式）。"""
-        try:
-            relative = wav_path.relative_to(self._project_root)
-            mtime = int(wav_path.stat().st_mtime) if wav_path.exists() else 0
-            return f"{self.assets_base_url}/{relative.as_posix()}?t={mtime}"
-        except ValueError:
-            return str(wav_path)
+        return media_url_for_path(
+            wav_path,
+            projects_root=self._projects_root,
+            data_root=self._project_root,
+            base_url=self.assets_base_url,
+        )
