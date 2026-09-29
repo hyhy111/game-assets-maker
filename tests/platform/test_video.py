@@ -54,11 +54,13 @@ def test_create_task_maps_job_id_and_quote():
     assert mapped["quote"] == 500
 
 
-def test_get_task_success_exposes_platform_artifact_url():
-    transport = FakeTransport(lambda m, u, h, b: describe("SUCCEEDED", downloadUrl="/app/artifact/9001/download"))
+def test_get_task_success_without_direct_link_keeps_pseudo_placeholder():
+    """v1：服务端不再下发 downloadUrl；无新鲜直链时 video_url 退化伪地址占位。"""
+    transport = FakeTransport(lambda m, u, h, b: describe("SUCCEEDED"))
     mapped = make_video_client(transport).get_task("9001")
     assert mapped["status"] == "succeeded"
     assert mapped["content"]["video_url"] == artifact_url("9001")
+    assert "upstream_url" not in mapped["content"]
 
 
 def test_get_task_running_has_no_content():
@@ -97,14 +99,17 @@ def test_parse_error_json_variants():
     assert parse_error_json("plain failure") == {"code": "PLATFORM_ERROR", "message": "plain failure"}
 
 
-def test_image_client_success_maps_platform_artifact():
+def test_image_client_success_maps_upstream_url():
+    """v1：url 即上游地址本身（唯一交付载体），不再是平台伪地址。"""
     transport = FakeTransport(
         lambda m, u, h, b: ajax_ok({"jobId": "42", "status": "SUCCEEDED", "quote": 30,
-                                    "images": [{"url": "/app/artifact/42/download"}], "error": None})
+                                    "images": [{"url": "https://upstream.example/i.png",
+                                                "upstreamUrl": "https://upstream.example/i.png",
+                                                "upstreamExpiresAt": 9999999999999}], "error": None})
     )
     mapped = make_image_client(transport).generate_image({"idemKey": "gam-i"})
     assert mapped["platform_status"] == "SUCCEEDED"
-    assert mapped["data"][0]["url"] == artifact_url("42")
+    assert mapped["data"][0]["url"] == "https://upstream.example/i.png"
 
 
 def test_image_client_failed_carries_error():

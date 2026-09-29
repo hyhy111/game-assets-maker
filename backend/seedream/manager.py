@@ -146,10 +146,10 @@ class SeedreamBatchManager:
     def _download_platform_image(
         self, batch_id: str, attempt_index: int, response: dict[str, Any], fallback_url: str
     ) -> str:
-        """平台图片取回：新鲜直链优先，失败自动回退平台伪地址（不算下载失败）。
+        """平台图片取回：v1 仅新鲜上游直链一个候选（无平台副本回退）。
 
-        重试路径（retry_download）只走平台地址——直链只在生成当场用一次，
-        不重复消耗上游 ~100 次的下载额度。
+        候选为空（直链过期/缺失）时异常冒泡，任务落 download_failed，
+        由 `_is_url_expired` 给出去"链接已过期"的明确语义。
         """
         data = response.get("data")
         entry = data[0] if isinstance(data, list) and data and isinstance(data[0], dict) else {}
@@ -413,7 +413,18 @@ class SeedreamBatchManager:
                 )
                 self._emit(batch_id)
                 image_url = self._extract_image_url(response)
-                local_path = self._download_platform_image(batch_id, attempt_index, response, image_url)
+                try:
+                    local_path = self._download_platform_image(batch_id, attempt_index, response, image_url)
+                except Exception as error:  # noqa: BLE001 - 下载失败可重试，不是生成失败
+                    # v1：平台已确认生成成功，仅取回失败 → download_failed，
+                    # retry_download 在直链新鲜期内可重试（落 unknown 会被判"未确定结果"而 stranded）
+                    self._finish_platform_attempt(
+                        batch_id,
+                        attempt_index,
+                        "download_failed",
+                        {"code": "DOWNLOAD_FAILED", "message": str(error) or "成品下载失败"},
+                    )
+                    return
                 self._update_attempt(
                     batch_id,
                     attempt_index,

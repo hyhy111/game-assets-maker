@@ -10,10 +10,13 @@ import pytest
 from PIL import Image
 
 from backend.platform.client import PlatformError, PlatformUnauthorizedError
-from backend.platform.video import artifact_url
 from backend.seedream.manager import PLATFORM_SOURCE, SeedreamBatchManager
 from backend.seedream.models import SeedreamRequest
 from backend.seedream.repository import BatchRepository
+
+# v1 契约（artifact-backup-service）：平台只下发新鲜上游直链，url 即上游地址本身
+UPSTREAM_IMAGE = "https://upstream.example/i.png"
+FUTURE_MS = int(time.time() * 1000) + 3_600_000
 
 
 class FakePlatformImages:
@@ -24,7 +27,8 @@ class FakePlatformImages:
             "jobId": "img-1",
             "platform_status": "SUCCEEDED",
             "quote": 30,
-            "data": [{"url": artifact_url("img-1")}],
+            "data": [{"url": UPSTREAM_IMAGE, "upstream_url": UPSTREAM_IMAGE,
+                      "upstream_expires_at": FUTURE_MS}],
         }
         self.image_bytes = b""
 
@@ -46,7 +50,7 @@ class FakeDownloader:
 
     def download_image(self, batch_id: str, attempt_index: int, url: str) -> str:
         self.downloaded_urls.append(url)
-        assert url.startswith("platform://artifact/")
+        assert url == UPSTREAM_IMAGE, "v1：唯一下载来源是新鲜上游直链"
         relative = f"images/{attempt_index}.jpg"
         destination = self._repo.resolve_asset(batch_id, relative)
         destination.parent.mkdir(parents=True, exist_ok=True)
@@ -140,13 +144,13 @@ def test_platform_attempt_failed_sets_error(manager, repository, platform):
 
 def test_platform_attempt_submission_unknown_stays_unknown(manager, repository, platform):
     platform.result = {"jobId": "img-3", "platform_status": "SUBMISSION_UNKNOWN", "quote": 30,
-                       "error": {"code": "ARTIFACT_TRANSFER_FAILED", "message": "upstream accepted but artifact transfer failed"}}
+                       "error": {"code": "SUBMISSION_UNKNOWN", "message": "上游未返回确定结果"}}
     batch = manager.create_batch(_platform_request(Path(".")))
     _wait_terminal(repository, batch["local_id"])
 
     persisted = repository.get(batch["local_id"])
     assert all(attempt.status == "unknown" for attempt in persisted.attempts)
-    assert persisted.attempts[0].error["code"] == "ARTIFACT_TRANSFER_FAILED"
+    assert persisted.attempts[0].error["code"] == "SUBMISSION_UNKNOWN"
 
 
 def test_platform_attempt_unauthorized_maps_code(manager, repository, platform):
@@ -184,7 +188,7 @@ def test_platform_partial_failure_aggregates_partially_complete(manager, reposit
     assert persisted.attempts[0].status == "succeeded"
 
 
-def test_download_failed_can_retry_platform_artifact(manager, repository, platform, png_bytes):
+def test_download_failed_can_retry_upstream_url(manager, repository, platform, png_bytes):
     platform.image_bytes = png_bytes
     batch = manager.create_batch(_platform_request(Path(".")))
     _wait_terminal(repository, batch["local_id"])
@@ -196,4 +200,5 @@ def test_download_failed_can_retry_platform_artifact(manager, repository, platfo
     retried = manager.retry_download(local_id, 0)
     attempt = next(a for a in retried["attempts"] if a["index"] == 0)
     assert attempt["status"] == "succeeded"
-    assert attempt["url_expired"] is False  # platform artifacts do not follow the 24h rule
+    # 刚生成的任务：上游直链仍在 24h 新鲜期内，不算过期
+    assert attempt["url_expired"] is False

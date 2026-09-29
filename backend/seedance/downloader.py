@@ -9,7 +9,7 @@ from typing import Protocol
 import cv2
 from PIL import Image
 
-from backend.platform.downloads import direct_link_candidates
+from backend.platform.downloads import direct_link_candidates, fresh_upstream_link
 from backend.seedance.models import SeedanceTask
 from backend.seedance.repository import TaskRepository
 
@@ -42,7 +42,10 @@ class ResultDownloader:
 
             video_path = self._repository.resolve_asset(current.local_id, "output/video.mp4")
             candidates = direct_link_candidates(content, content["video_url"])
-            attempted_direct = len(candidates) > 1
+            if not candidates:
+                # v1：平台不再提供副本，新鲜期外没有任何下载来源
+                raise ValueError("URL_EXPIRED")
+            attempted_direct = fresh_upstream_link(content) is not None
             self._download_first_available(candidates, video_path, self._validate_video)
             downloaded_paths["video"] = "output/video.mp4"
 
@@ -123,8 +126,12 @@ class ResultDownloader:
     def _download_first_available(
         self, candidates: list[str], destination: Path, validate: Callable[[Path], None]
     ) -> None:
-        """Try each candidate in order; a direct-link failure falls back to the
-        platform artifact URL instead of marking the download failed."""
+        """Try each candidate in order; raise the last error if all fail.
+
+        v1: candidates come from direct_link_candidates — a platform entry has at
+        most the fresh upstream link (no platform copy to fall back to), so a
+        failure here means the link itself broke, not a fallback situation.
+        """
         last_error: Exception | None = None
         for url in candidates:
             try:

@@ -95,12 +95,15 @@ class PlatformVideoClient:
             "quote": job.get("quote"),
         }
         if mapped["status"] == "succeeded":
-            content: dict[str, Any] = {"video_url": artifact_url(job_id)}
-            # 新鲜期内平台额外下发上游直链（省平台出口带宽）；客户端优先用
-            # 它下载，失败/过期回退 platform:// 伪地址。判定见 downloads.py。
+            # v1 契约（artifact-backup-service）：平台只下发新鲜期内的上游直链，
+            # 无平台副本回退——直链存在即新鲜（新鲜判定在服务端 ArtifactDirectLink）。
+            # video_url 仅在无直链时保留 platform:// 伪地址作占位标识，
+            # 下载器对伪地址候选为空即报"链接已过期"。
             upstream = job.get("upstreamUrl")
-            if isinstance(upstream, str) and upstream:
-                content["upstream_url"] = upstream
+            fresh_upstream = upstream if isinstance(upstream, str) and upstream else None
+            content: dict[str, Any] = {"video_url": fresh_upstream or artifact_url(job_id)}
+            if fresh_upstream is not None:
+                content["upstream_url"] = fresh_upstream
                 expires = job.get("upstreamExpiresAt")
                 if expires is not None:
                     content["upstream_expires_at"] = expires

@@ -1,9 +1,9 @@
-"""Fresh upstream direct-link delivery (gen-artifact-direct-link client side).
+"""Upstream-only artifact delivery (artifact-backup-service client side).
 
-The platform hands out the upstream URL only while it is fresh (24 h). The
-client must prefer it (saves the server's egress bandwidth), fall back to the
-platform ``platform://artifact/<jobId>`` pseudo-URL on any direct failure,
-and never re-attempt a link it already consumed.
+v1 contract: the platform hands out ONLY the upstream URL, and only while it
+is fresh (24 h). There is no platform copy to fall back to — an expired or
+missing direct link means "no download source" (链接已过期). Direct API-key
+mode is unaffected: its plain URL remains the sole candidate.
 """
 
 from __future__ import annotations
@@ -67,13 +67,19 @@ def test_iso8601_expiry_string_is_accepted():
     assert fresh_upstream_link(entry) == UPSTREAM_VIDEO
 
 
-def test_candidates_prefer_direct_link_then_platform_url():
+def test_candidates_upstream_only_no_platform_fallback():
+    """v1：平台无副本——过期/缺失即无下载来源；直连(api-key)模式不受影响。"""
     platform_url = artifact_url("9001")
     fresh = {"upstream_url": UPSTREAM_VIDEO, "upstream_expires_at": FUTURE_MS}
-    assert direct_link_candidates(fresh, platform_url) == [UPSTREAM_VIDEO, platform_url]
+    assert direct_link_candidates(fresh, platform_url) == [UPSTREAM_VIDEO]
     expired = {"upstream_url": UPSTREAM_VIDEO, "upstream_expires_at": PAST_MS}
-    assert direct_link_candidates(expired, platform_url) == [platform_url]
-    assert direct_link_candidates({}, platform_url) == [platform_url]
+    assert direct_link_candidates(expired, platform_url) == []
+    assert direct_link_candidates({}, platform_url) == []
+    # 非平台 fallback（直连模式的真实 URL）仍是唯一候选
+    assert direct_link_candidates({}, UPSTREAM_VIDEO) == [UPSTREAM_VIDEO]
+    # 图片入口：url 本身就是上游地址，去重后仍只有一个候选
+    image_entry = {"url": UPSTREAM_VIDEO, "upstream_url": UPSTREAM_VIDEO, "upstream_expires_at": FUTURE_MS}
+    assert direct_link_candidates(image_entry, UPSTREAM_VIDEO) == [UPSTREAM_VIDEO]
 
 
 # ---- mapping: platform responses carry the link into task remote (2.1 / 2.3) ----
@@ -83,26 +89,27 @@ def test_video_mapping_carries_fresh_direct_link_into_content():
     transport = FakeTransport(
         lambda m, u, h, b: describe(
             "SUCCEEDED",
-            downloadUrl="/app/artifact/9001/download",
             upstreamUrl=UPSTREAM_VIDEO,
             upstreamExpiresAt=FUTURE_MS,
         )
     )
     mapped = make_video_client(transport).get_task("9001")
-    assert mapped["content"]["video_url"] == artifact_url("9001")
+    # v1：直链就是唯一交付载体（video_url 直接是上游地址）
+    assert mapped["content"]["video_url"] == UPSTREAM_VIDEO
     assert mapped["content"]["upstream_url"] == UPSTREAM_VIDEO
     assert mapped["content"]["upstream_expires_at"] == FUTURE_MS
 
 
-def test_video_mapping_without_direct_link_has_no_upstream_keys():
-    transport = FakeTransport(lambda m, u, h, b: describe("SUCCEEDED", downloadUrl="/app/artifact/9001/download"))
+def test_video_mapping_without_direct_link_keeps_pseudo_placeholder():
+    transport = FakeTransport(lambda m, u, h, b: describe("SUCCEEDED"))
     mapped = make_video_client(transport).get_task("9001")
+    # 无直链：video_url 退化为伪地址占位标识（下载候选为空 → 链接已过期）
     assert mapped["content"]["video_url"] == artifact_url("9001")
     assert "upstream_url" not in mapped["content"]
     assert "upstream_expires_at" not in mapped["content"]
 
 
-def test_image_mapping_carries_direct_link_into_first_data_entry():
+def test_image_mapping_delivers_upstream_url_as_the_url():
     transport = FakeTransport(
         lambda m, u, h, b: ajax_ok(
             {
@@ -111,7 +118,7 @@ def test_image_mapping_carries_direct_link_into_first_data_entry():
                 "quote": 30,
                 "images": [
                     {
-                        "url": "/app/artifact/42/download",
+                        "url": "https://upstream.example/image.png",
                         "upstreamUrl": "https://upstream.example/image.png",
                         "upstreamExpiresAt": FUTURE_MS,
                     }
@@ -121,7 +128,8 @@ def test_image_mapping_carries_direct_link_into_first_data_entry():
         )
     )
     mapped = make_image_client(transport).generate_image({"idemKey": "gam-i"})
-    assert mapped["data"][0]["url"] == artifact_url("42")
+    # v1：url 即上游地址本身（唯一交付载体），不再是平台伪地址
+    assert mapped["data"][0]["url"] == "https://upstream.example/image.png"
     assert mapped["data"][0]["upstream_url"] == "https://upstream.example/image.png"
     assert mapped["data"][0]["upstream_expires_at"] == FUTURE_MS
 
@@ -130,7 +138,7 @@ def test_image_mapping_without_direct_link_has_no_upstream_keys():
     transport = FakeTransport(
         lambda m, u, h, b: ajax_ok(
             {"jobId": "42", "status": "SUCCEEDED", "quote": 30,
-             "images": [{"url": "/app/artifact/42/download"}], "error": None}
+             "images": [{"url": "https://upstream.example/image.png"}], "error": None}
         )
     )
     mapped = make_image_client(transport).generate_image({"idemKey": "gam-i"})
@@ -195,44 +203,46 @@ def test_download_uses_fresh_direct_link_and_consumes_it(repository, tmp_path):
     assert "upstream_expires_at" not in repository.get(task.local_id).remote["content"]
 
 
-def test_download_falls_back_to_platform_url_when_direct_fails(repository, tmp_path):
+def test_download_direct_failure_marks_failed_no_platform_fallback(repository, tmp_path):
+    """v1：直链失败即下载失败——平台副本回退已不存在。"""
     task = _succeeded_with_direct(repository, _draft(repository, tmp_path), expires_at=FUTURE_MS)
-    video = make_video_bytes(tmp_path / "remote.mp4")
-    transport = ScriptedTransport({UPSTREAM_VIDEO: OSError("upstream 403"), artifact_url("9001"): video})
+    transport = ScriptedTransport({UPSTREAM_VIDEO: OSError("upstream 403")})
 
-    downloaded = ResultDownloader(repository, transport).download_task(task)
+    with pytest.raises(OSError):
+        ResultDownloader(repository, transport).download_task(task)
 
-    assert downloaded.download_status == "downloaded"  # 回退成功不算下载失败
-    assert transport.urls == [UPSTREAM_VIDEO, artifact_url("9001")]
-    # 平台兜底成功后同样消耗直链：重下不再浪费上游下载额度
-    assert "upstream_url" not in repository.get(task.local_id).remote["content"]
+    assert repository.get(task.local_id).download_status == "failed"
+    assert transport.urls == [UPSTREAM_VIDEO]
+    # 失败不得消耗直链（远端记录保持原样，重试仍可用——若仍新鲜）
+    assert repository.get(task.local_id).remote["content"]["upstream_url"] == UPSTREAM_VIDEO
 
 
-def test_expired_direct_link_is_skipped_without_touching_upstream(repository, tmp_path):
+def test_expired_direct_link_has_no_download_source(repository, tmp_path):
+    """v1：过期即"链接已过期"，不触碰任何 URL。"""
     task = _succeeded_with_direct(repository, _draft(repository, tmp_path), expires_at=PAST_MS)
-    video = make_video_bytes(tmp_path / "remote.mp4")
-    transport = ScriptedTransport({artifact_url("9001"): video})
+    transport = ScriptedTransport({})
 
-    downloaded = ResultDownloader(repository, transport).download_task(task)
+    with pytest.raises(ValueError, match="URL_EXPIRED"):
+        ResultDownloader(repository, transport).download_task(task)
 
-    assert downloaded.download_status == "downloaded"
-    assert transport.urls == [artifact_url("9001")]
+    assert repository.get(task.local_id).download_status == "failed"
+    assert transport.urls == []
 
 
-def test_redownload_after_cache_clear_uses_platform_url_only(repository, tmp_path):
-    """2.4：已成功取回过的任务，重新下载（缓存被清理）一律走平台地址。"""
+def test_redownload_after_cache_clear_reports_expired(repository, tmp_path):
+    """v1：已成功取回过的任务，重下时直链已被消费 → 明确报链接已过期。"""
     task = _succeeded_with_direct(repository, _draft(repository, tmp_path), expires_at=FUTURE_MS)
     video = make_video_bytes(tmp_path / "remote.mp4")
-    transport = ScriptedTransport({UPSTREAM_VIDEO: video, artifact_url("9001"): video})
+    transport = ScriptedTransport({UPSTREAM_VIDEO: video})
     downloader = ResultDownloader(repository, transport)
 
     downloader.download_task(task)
     repository.update(task.local_id, lambda current: setattr(current, "download_status", "pending"))
 
-    again = downloader.download_task(repository.get(task.local_id))
+    with pytest.raises(ValueError, match="URL_EXPIRED"):
+        downloader.download_task(repository.get(task.local_id))
 
-    assert again.download_status == "downloaded"
-    assert transport.urls == [UPSTREAM_VIDEO, artifact_url("9001")]
+    assert transport.urls == [UPSTREAM_VIDEO]
 
 
 # ---- seedream manager: direct link preferred, fallback without failure (2.3) ----
@@ -293,7 +303,7 @@ def _run_platform_batch(tmp_path: Path, data_entry: dict, image_bytes: bytes, fa
 
 
 def test_platform_image_download_prefers_fresh_direct_link(tmp_path, png_bytes):
-    entry = {"url": artifact_url("img-1"), "upstream_url": "https://upstream.example/i.png",
+    entry = {"url": "https://upstream.example/i.png", "upstream_url": "https://upstream.example/i.png",
              "upstream_expires_at": FUTURE_MS}
     batch, downloader = _run_platform_batch(tmp_path, entry, png_bytes)
 
@@ -301,10 +311,11 @@ def test_platform_image_download_prefers_fresh_direct_link(tmp_path, png_bytes):
     assert downloader.urls == ["https://upstream.example/i.png"]
 
 
-def test_platform_image_download_falls_back_to_platform_url(tmp_path, png_bytes):
+def test_platform_image_download_direct_failure_is_download_failed(tmp_path, png_bytes):
+    """v1：直链失败即 download_failed（无平台副本回退）。"""
     direct = "https://upstream.example/i.png"
-    entry = {"url": artifact_url("img-1"), "upstream_url": direct, "upstream_expires_at": FUTURE_MS}
+    entry = {"url": direct, "upstream_url": direct, "upstream_expires_at": FUTURE_MS}
     batch, downloader = _run_platform_batch(tmp_path, entry, png_bytes, failures={direct})
 
-    assert all(attempt.status == "succeeded" for attempt in batch.attempts)
-    assert downloader.urls == [direct, artifact_url("img-1")]
+    assert all(attempt.status == "download_failed" for attempt in batch.attempts)
+    assert downloader.urls == [direct]

@@ -60,11 +60,21 @@ def fresh_upstream_link(entry: dict[str, Any], *, now_ms: int | None = None) -> 
 
 
 def direct_link_candidates(entry: dict[str, Any], fallback_url: str) -> list[str]:
-    """Download order: fresh upstream direct link first, platform URL always last."""
+    """Download candidates for one mapped entry.
+
+    v1 contract (artifact-backup-service): the platform no longer offers its own
+    copy, so a platform entry carries ONLY the fresh upstream direct link — when
+    the link is missing/expired there is no download source and the result is
+    empty ("链接已过期"). Non-platform fallbacks (direct API-key mode) are still
+    the sole URL and always usable.
+    """
     direct = fresh_upstream_link(entry)
-    if direct is not None and direct != fallback_url:
-        return [direct, fallback_url]
-    return [fallback_url]
+    candidates: list[str] = []
+    if direct is not None:
+        candidates.append(direct)
+    if fallback_url and not fallback_url.startswith(ARTIFACT_URL_PREFIX) and fallback_url not in candidates:
+        candidates.append(fallback_url)
+    return candidates
 
 
 class UrllibFallbackTransport:

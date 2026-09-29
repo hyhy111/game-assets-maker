@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from backend.platform.client import PlatformClient, PlatformResponseError
-from backend.platform.video import artifact_url, parse_error_json
+from backend.platform.video import parse_error_json
 
 
 class PlatformImageClient:
@@ -41,9 +41,9 @@ class PlatformImageClient:
             "data": [],
         }
         if status == "SUCCEEDED" and first_url:
-            # The platform delivers its own authenticated artifact path; the
-            # artifact transport rewrites any platform path to the pseudo-URL.
-            entry: dict[str, Any] = {"url": artifact_url(job_id)}
+            # v1 契约（artifact-backup-service）：url 即上游地址本身（唯一交付载体），
+            # 附新鲜期过期时间；平台不再提供制品副本地址。
+            entry: dict[str, Any] = {"url": first_url}
             first_image = images[0]
             upstream = first_image.get("upstreamUrl") if isinstance(first_image, dict) else None
             if isinstance(upstream, str) and upstream:
