@@ -661,6 +661,7 @@ export default {
       rateLimitHint: '此请求被限流，未开始生成，不会产生模型推理费用。但失败请求仍可能占用限流配额。',
       downloadFailed: '下载失败',
       retryDownload: '重试下载',
+      retryAllDownloads: '批量重试下载',
       urlExpired: '图片链接已失效（超过 24 小时），无法重新下载。可通过"再次生成"创建新的付费批次。',
       regenerate: '再次生成',
       delete: '删除任务',

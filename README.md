@@ -50,6 +50,14 @@ python scripts/download_models.py u2net  # 仅默认模型
 
 详见 [MODELS.md](MODELS.md)。
 
+### 自定义 Key 调用日志
+
+使用自定义 Ark API Key 生成图片或视频时，应用会在数据目录的 `logs/ark-custom-key.jsonl` 记录调用过程。开发模式默认为当前工作区的 `logs/`，安装版默认为 `~/.gam/logs/`；`GAM_DATA_ROOT` 会改变数据目录。该日志独立于设置中的“启用错误日志”。
+
+同一 `call_id` 对应一次 Ark 调用。`intent` 表示客户端准备发起请求，`http_response` 表示收到 HTTP 响应，`parsed_response` 表示响应已解析，`response_persisted` 或 `task_persisted` 表示可恢复信息已保存。`elapsed_ms` 是截至该事件的毫秒数。视频的 `video.get` 是任务状态查询；图片的 `download_*` 表示本地下载阶段。日志只记录模型、时间、HTTP 状态、可用的请求 ID、用量和 URL 是否存在，不包含 Key、提示词原文、图片数据或下载 URL。
+
+如果日志只有 `intent` 而没有响应事件，远端是否收到请求、是否生成或计费仍无法由客户端确定，需要以火山控制台记录为准。登录账号使用的云端生成逻辑不写入这份自定义 Key 日志。日志按大小轮转，最多保留 5 个归档文件；旧任务不会被追溯补记。
+
 ### 测试
 
 ```bash
@@ -110,6 +118,10 @@ uv run python dev_start.py
 cd frontend && npm run build && cd ..
 uv run python -m backend.main
 ```
+
+### Custom-key Ark audit log
+
+Image and video calls made with a user-supplied Ark API key are recorded in `logs/ark-custom-key.jsonl` under the application data root (the workspace in development, `~/.gam` when installed, or `GAM_DATA_ROOT` when set). This audit is independent of the optional error logger. Events sharing a `call_id` describe one provider call: `intent` precedes transport, `http_response` records receipt, `parsed_response` records a usable payload, and `response_persisted` / `task_persisted` records local recovery data. The log contains safe timing, status, usage, and URL-presence metadata, never keys, prompt text, media bytes, or signed URLs. An `intent` without a response does not prove provider acceptance or billing; check the Ark console for that. Account-backed generation is separate. The file rotates by size with up to five archives.
 
 ### Models
 

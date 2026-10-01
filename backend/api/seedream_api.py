@@ -7,17 +7,18 @@ import binascii
 import json
 import os
 import shutil
-from io import BytesIO
-from statistics import median
 from collections.abc import Callable
 from copy import deepcopy
+from io import BytesIO
 from pathlib import Path
+from statistics import median
 from typing import Any
 from urllib.parse import quote
 
 import webview
 from PIL import Image, ImageOps
 
+from backend.ark_audit import ArkAudit
 from backend.image_layout import (
     delete_edit_source,
     delete_generation_layout,
@@ -30,8 +31,8 @@ from backend.seedream.manager import SeedreamBatchManager
 from backend.seedream.media import SeedreamMediaResolver
 from backend.seedream.models import MODEL_CAPABILITIES, SeedreamRequest
 from backend.seedream.repository import BatchRepository
+from backend.seedream.validation import _ALLOWED_RATIOS, ValidationError, validate_request
 from src.utils.ai_cache_paths import ai_pic_cache_root
-from backend.seedream.validation import ValidationError, _ALLOWED_RATIOS, validate_request
 from src.utils.app_config import load_app_config, save_app_config
 from src.utils.storage_locations import StorageLocations
 
@@ -83,6 +84,9 @@ class SeedreamAPI:
         self._window = window
         manager = self._ensure_manager()
         if not self._started:
+            audit = getattr(manager, "_audit", None)
+            if audit:
+                audit.reconcile()
             # Recover leftover active attempts from an unclean shutdown before any
             # event sink is attached, so the frontend sees terminal states.
             manager.reclassify_interrupted_attempts()
@@ -168,7 +172,9 @@ class SeedreamAPI:
                 image = ImageOps.exif_transpose(opened).copy()
 
             width, height = image.size
-            if not all(isinstance(value, int) and not isinstance(value, bool) for value in (top, bottom, target_height)):
+            if not all(
+                isinstance(value, int) and not isinstance(value, bool) for value in (top, bottom, target_height)
+            ):
                 raise ValueError("Character bounds and target height must be integer pixels")
             if top < 0 or bottom > height or top >= bottom:
                 raise ValueError("Character bounds must be inside the image")
@@ -470,6 +476,26 @@ class SeedreamAPI:
         except Exception as error:
             return self._error_response(error)
 
+    def refresh_client(self) -> None:
+        """Point future batches at the currently saved shared API key.
+
+        The Ark key lives under the Seedance settings section and is saved
+        through the Seedance API, which only rebuilds its own manager. The
+        composition root calls this after such a save so image generation
+        picks up the new key without an app restart. In-flight attempts keep
+        the client they started with (see SeedreamBatchManager.update_client).
+        """
+        if self._manager is None or self._external_manager:
+            # No manager yet: the next _ensure_manager reads the fresh config.
+            return
+        config = load_app_config()["seedance"]
+        self._manager.update_client(self._new_client(config["api_key"]))
+
+    def _new_client(self, api_key: str) -> ArkClient:
+        if self._client_factory is ArkClient:
+            return ArkClient(api_key, audit=ArkAudit())
+        return self._client_factory(api_key)
+
     def _ensure_manager(self) -> SeedreamBatchManager:
         if self._manager is None:
             config = load_app_config()["seedance"]
@@ -481,7 +507,7 @@ class SeedreamAPI:
             )
             repository = BatchRepository(cache_root)
             self._manager = SeedreamBatchManager(
-                self._client_factory(config["api_key"]),
+                self._new_client(config["api_key"]),
                 repository,
                 ImageDownloader(repository),
             )

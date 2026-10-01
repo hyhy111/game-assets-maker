@@ -913,7 +913,18 @@ class API:
         return self._seedance_api.get_settings()
 
     def seedance_save_settings(self, settings: dict[str, Any]) -> dict[str, Any]:
-        return self._seedance_api.save_settings(settings)
+        result = self._seedance_api.save_settings(settings)
+        # The shared Ark key also backs image generation, but the Seedance
+        # save only rebuilds the video manager. Swap the Seedream client
+        # too so new batches use the new key without an app restart.
+        if (
+            result.get("success")
+            and isinstance(settings, dict)
+            and "api_key" in settings
+            and self._seedream_api_instance is not None
+        ):
+            self._seedream_api_instance.refresh_client()
+        return result
 
     def seedance_test_connection(self, api_key: str | None = None) -> dict[str, Any]:
         return self._seedance_api.test_connection(api_key)
@@ -1019,6 +1030,10 @@ class MainApp:
         self.api = API(restart_handler=self._handle_restart_request, close_handler=self._handle_close_request)
         self.assets_port = 0
         self.stop_event = threading.Event()
+        # Signaled by on_window_closed once all shutdown steps were attempted;
+        # run() waits for it before the hard process exit.
+        self._closed_cleanup_done = threading.Event()
+        self._closed_cleanup_failed = False
         self.assets_thread = None
         self.window = None
         self.agent_control_server = None
@@ -1072,6 +1087,8 @@ class MainApp:
     def _restart_in_place(self) -> None:
         """Replace this process with a fresh app instance via os.execv.
 
+        Replacing the process image (rather than spawning a second instance)
+        avoids two instances sharing the WebView profile, config, and caches.
         os.execv inherits the current environment. A failure must not raise:
         migrated data and configuration were already committed, so the user
         can start the app manually and the new configuration takes effect on
@@ -1091,16 +1108,54 @@ class MainApp:
     def on_window_closed(self):
         """Handle window closed event"""
         print("Window closed, shutting down...")
-        # Signal the HTTP server to stop
-        self.stop_event.set()
-        if self.agent_control_server is not None:
-            self.agent_control_server.stop()
-        # Cancel any running tasks
-        self.api._process_api.shutdown()
-        if self.api._seedance_api_instance is not None:
-            self.api._seedance_api_instance.shutdown()
-        if self.api._seedream_api_instance is not None:
-            self.api._seedream_api_instance.shutdown()
+        try:
+            self.stop_event.set()
+            shutdown_steps = (
+                (
+                    "agent control server",
+                    lambda: self.agent_control_server.stop() if self.agent_control_server else None,
+                ),
+                ("process API", lambda: self.api._process_api.shutdown()),
+                (
+                    "Seedance API",
+                    lambda: self.api._seedance_api_instance.shutdown() if self.api._seedance_api_instance else None,
+                ),
+                (
+                    "Seedream API",
+                    lambda: self.api._seedream_api_instance.shutdown() if self.api._seedream_api_instance else None,
+                ),
+            )
+            for name, shutdown in shutdown_steps:
+                try:
+                    shutdown()
+                except Exception as error:
+                    self._closed_cleanup_failed = True
+                    print(f"Failed to shut down {name}: {error!r}", file=sys.stderr)
+        finally:
+            # The closed event has finished attempting every cleanup step.
+            self._closed_cleanup_done.set()
+
+    def _exit_after_cleanup(self, cleanup_timeout: float = 30.0) -> None:
+        """Finish the process after webview.start() has returned.
+
+        pywebview 6.1/Cocoa runs every JS-bridge call on a non-daemon thread
+        and delivers its result through ``evaluate_js``, which blocks until
+        the Cocoa main thread evaluates it. A bridge call in flight when the
+        window closes — the confirm-exit call that destroys the window, or a
+        frontend poll racing the close — is never evaluated once the run loop
+        stops, so that thread waits forever and interpreter finalization hangs
+        joining it. Exit without interpreter finalization after cleanup ends.
+        """
+        cleanup_finished = self._closed_cleanup_done.wait(timeout=cleanup_timeout)
+        if not cleanup_finished:
+            print("Timed out waiting for shutdown cleanup; exiting with failure", file=sys.stderr)
+        elif self._closed_cleanup_failed:
+            print("Shutdown cleanup failed; exiting with failure", file=sys.stderr)
+        if self.restart_requested and cleanup_finished and not self._closed_cleanup_failed:
+            self._restart_in_place()
+        sys.stdout.flush()
+        sys.stderr.flush()
+        os._exit(0 if cleanup_finished and not self._closed_cleanup_failed else 1)
 
     def on_window_closing(self):
         """Intercept window close while image-generation attempts are active.
@@ -1130,15 +1185,26 @@ class MainApp:
                 count = raw_count
         if count <= 0 or self.window is None:
             return None
-        # Ask the frontend to show the warning dialog; cancel this close attempt.
+        # Cocoa calls this handler on its main thread. evaluate_js waits for that
+        # thread, so dispatch the warning only after this callback can return.
         payload = json.dumps({"count": count})
+        window = self.window
+        threading.Thread(
+            target=self._dispatch_seedream_close_warning,
+            args=(window, payload),
+            name="seedream-close-warning",
+            daemon=True,
+        ).start()
+        return False
+
+    @staticmethod
+    def _dispatch_seedream_close_warning(window, payload: str) -> None:
         try:
-            self.window.evaluate_js(
+            window.evaluate_js(
                 "window.dispatchEvent(new CustomEvent('seedream-close-requested', { detail: " + payload + " }));"
             )
         except Exception as error:
             print(f"Failed to dispatch seedream close warning: {error}")
-        return False
 
     def configure_macos_window_controls(self):
         """Schedule native macOS window control changes on Cocoa's main thread."""
@@ -1211,14 +1277,11 @@ class MainApp:
             storage_path=str(data_root() / "webview_profile"),
         )
 
-        # webview.start() returns only after the window was destroyed and the
-        # closed-event cleanup (asset server, agent server, managers) has run,
-        # so an in-place restart requested via the bridge always happens after
-        # that cleanup. Replacing the process image (rather than spawning a
-        # second instance) avoids two instances sharing the WebView profile,
-        # config, and caches.
-        if self.restart_requested:
-            self._restart_in_place()
+        # webview.start() returns once the window is destroyed; the epilogue
+        # waits for the closed-event cleanup, restarts in place when the
+        # bridge requested it, and exits without interpreter finalization
+        # (see _exit_after_cleanup for why finalization can hang).
+        self._exit_after_cleanup()
 
 
 def main():

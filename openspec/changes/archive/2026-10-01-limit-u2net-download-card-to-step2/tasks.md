@@ -15,4 +15,6 @@
 ## 3. 集成验证
 
 - [x] 3.1 从 `frontend/` 运行受影响测试、`npm run lint`、`npm run typecheck` 与 `npm run build`，记录通过、产品失败和环境失败。
-- [ ] 3.2 检查最终 diff 仅涉及步骤 1、步骤 2 与模型状态测试，运行 `git diff --check`；如 Jev 可用，以最小 diff、完成声明和实际测试证据运行最终 gate。（`git diff --check` 已通过；工作区含既有改动，且 Jev gate 未获外部数据传输授权。）
+- [x] 3.2 检查最终 diff 仅涉及步骤 1、步骤 2、模型状态卡与相关测试，运行 `git diff --check`；如 Jev 可用，以最小 diff、完成声明和实际测试证据运行最终 gate。
+
+验收记录（2026-10-01）：按步骤 1、步骤 2、模型状态卡与相关测试路径审查提交 `53a698e`，并核对当前实现。前端 347 passed，typecheck、build 与 `git diff --check` 通过。全量 lint 被既有 `frontend/src/select-repro.ts:5` 的保留组件名错误阻挡。Jev gate 未运行：自动审批拒绝向 TypeSafe 传输实现 diff 和证据，本地审查已完成。详见 `verification.md`。

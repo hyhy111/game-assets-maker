@@ -119,6 +119,42 @@ def test_manager_creates_batch_with_one_queued_attempt_before_remote_call(tmp_pa
     _wait_for_terminal(manager, batch["local_id"])
 
 
+def test_in_flight_attempt_keeps_original_client_after_update(tmp_path):
+    """A credential swap must not change the key an already-running attempt uses."""
+    from backend.seedream.client import ArkClient
+
+    block = threading.Event()
+    started = threading.Event()
+
+    class BlockingTransport:
+        def __init__(self):
+            self.calls = []
+
+        def request(self, method, url, headers, body, timeout):
+            self.calls.append(headers)
+            started.set()
+            block.wait(timeout=30.0)
+            return _ok_response()
+
+    old_transport = BlockingTransport()
+    manager = _make_manager(tmp_path, old_transport)
+
+    batch = manager.create_batch(SeedreamRequest(prompt="hero", model="pro", resolution="1K", ratio="16:9", count=1))
+    assert started.wait(timeout=5.0)
+
+    new_transport = FakeTransport(_ok_response())
+    manager.update_client(ArkClient("new-key", transport=new_transport, timeout=1500.0))
+    block.set()
+    _wait_for_terminal(manager, batch["local_id"])
+
+    # The attempt that started before the swap kept the original credentials.
+    assert old_transport.calls[0]["Authorization"] == "Bearer test-key"
+
+    second = manager.create_batch(SeedreamRequest(prompt="hero", model="pro", resolution="1K", ratio="16:9", count=1))
+    _wait_for_terminal(manager, second["local_id"])
+    assert new_transport.calls[0][2]["Authorization"] == "Bearer new-key"
+
+
 def test_manager_success_persists_response_then_downloads_then_succeeds(tmp_path):
     transport = FakeTransport(_ok_response())
     manager = _make_manager(tmp_path, transport)

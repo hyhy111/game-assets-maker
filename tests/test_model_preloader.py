@@ -169,7 +169,44 @@ def test_process_api_exposes_status_and_emits_shared_model_status_event(tmp_path
             time.sleep(0.01)
 
         assert api.get_model_status("u2net")["phase"] == "ready"
-        assert any("model-status" in script and '"phase": "ready"' in script for script in window.scripts)
+        # JS events are delivered asynchronously by the dispatcher thread.
+        deadline = time.monotonic() + 1
+        while not any("model-status" in s and '"phase": "ready"' in s for s in window.scripts):
+            assert time.monotonic() < deadline
+            time.sleep(0.01)
+    finally:
+        api.shutdown()
+
+
+def test_js_events_do_not_block_workers_or_shutdown_when_window_is_dead(tmp_path, monkeypatch) -> None:
+    """A Cocoa evaluate_js blocked on a dead main run loop must not hang workers or shutdown."""
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "project").mkdir()
+
+    class DeadWindow:
+        def __init__(self) -> None:
+            self.entered = threading.Event()
+
+        def evaluate_js(self, _script: str) -> None:
+            self.entered.set()
+            threading.Event().wait()  # never returns, like a destroyed window
+
+    window = DeadWindow()
+    api = ProcessAPI(window=window, model_loader=FakeModelLoader(available=True))
+    try:
+        start = time.monotonic()
+        api._emit_progress("t1", 0, 0, 1)
+        api._emit_complete("t1")
+        assert time.monotonic() - start < 1
+
+        deadline = time.monotonic() + 2
+        while not window.entered.is_set() and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert window.entered.is_set()  # the dispatcher reached the dead window
+
+        start = time.monotonic()
+        api.shutdown()
+        assert time.monotonic() - start < 1
     finally:
         api.shutdown()
 

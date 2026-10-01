@@ -3,7 +3,9 @@
 import datetime
 import json
 import os
+import queue
 import sys
+import threading
 import time
 import traceback
 import uuid
@@ -71,45 +73,65 @@ class ProcessAPI:
         self._projects_root = projects_root if projects_root is not None else default_projects_root()
         self._window = window  # PyWebView window instance
         self._model_preloader = ModelPreloader(model_loader or RembgModelLoader(), self._emit_model_status)
+        # JS events are dispatched by one daemon thread: Cocoa's evaluate_js
+        # blocks on a semaphore until the main run loop services it, which
+        # never happens once the window is destroyed. Executor workers must
+        # never call it directly, or they hang and the interpreter join of
+        # executor threads keeps the dead process alive forever.
+        self._js_events: queue.SimpleQueue[str | None] = queue.SimpleQueue()
+        self._js_dispatcher = threading.Thread(
+            target=self._js_dispatch_loop,
+            name="process-api-event-dispatcher",
+            daemon=True,
+        )
+        self._js_dispatcher.start()
+
+    def _queue_js_event(self, js_code: str) -> None:
+        self._js_events.put(js_code)
+
+    def _js_dispatch_loop(self) -> None:
+        while True:
+            js_code = self._js_events.get()
+            if js_code is None:
+                return
+            window = self._window
+            if window is None:
+                continue
+            try:
+                window.evaluate_js(js_code)
+            except Exception as error:
+                print(f"Failed to emit JS event: {error}")
 
     def _emit_progress(self, task_id: str, progress: int, current: int, total: int, status: str = "running"):
         """Emit progress to frontend via evaluate_js"""
-        if self._window:
-            js_code = f"""
-                window.dispatchEvent(new CustomEvent('task-progress', {{
-                    detail: {{
-                        taskId: '{task_id}',
-                        progress: {progress},
-                        current: {current},
-                        total: {total},
-                        status: '{status}'
-                    }}
-                }}));
-            """
-            try:
-                self._window.evaluate_js(js_code)
-            except Exception as e:
-                print(f"Failed to emit progress: {e}")
+        js_code = f"""
+            window.dispatchEvent(new CustomEvent('task-progress', {{
+                detail: {{
+                    taskId: '{task_id}',
+                    progress: {progress},
+                    current: {current},
+                    total: {total},
+                    status: '{status}'
+                }}
+            }}));
+        """
+        self._queue_js_event(js_code)
 
     def _emit_complete(self, task_id: str, success: bool = True, error: str = None, processing_time: float = 0):
         """Emit task completion to frontend via evaluate_js"""
-        if self._window:
-            error_str = f"'{error}'" if error else "null"
-            time_str = f"{processing_time}" if processing_time > 0 else "null"
-            js_code = f"""
-                window.dispatchEvent(new CustomEvent('task-complete', {{
-                    detail: {{
-                        taskId: '{task_id}',
-                        success: {str(success).lower()},
-                        error: {error_str},
-                        processing_time: {time_str}
-                    }}
-                }}));
-            """
-            try:
-                self._window.evaluate_js(js_code)
-            except Exception as e:
-                print(f"Failed to emit completion: {e}")
+        error_str = f"'{error}'" if error else "null"
+        time_str = f"{processing_time}" if processing_time > 0 else "null"
+        js_code = f"""
+            window.dispatchEvent(new CustomEvent('task-complete', {{
+                detail: {{
+                    taskId: '{task_id}',
+                    success: {str(success).lower()},
+                    error: {error_str},
+                    processing_time: {time_str}
+                }}
+            }}));
+        """
+        self._queue_js_event(js_code)
 
     def start_processing(self, project_id: str, step: int, params: dict[str, Any]) -> str:
         """Start a processing task"""
@@ -500,6 +522,10 @@ class ProcessAPI:
         # Shutdown executor
         self.executor.shutdown(wait=False)
 
+        # Drop events still queued for the dead window and stop the dispatcher.
+        self._window = None
+        self._js_events.put(None)
+
     # Default parameters for each step
     DEFAULT_STEP_PARAMS = {
         1: {"frame_interval": 1, "start_frame": 0, "end_frame": -1, "fps": 30, "processed": False},
@@ -668,14 +694,9 @@ class ProcessAPI:
         return self._model_preloader.retry(model, source=source)
 
     def _emit_model_status(self, status: ModelStatus) -> None:
-        if self._window is None:
-            return
         js_code = (
             "window.dispatchEvent(new CustomEvent('model-status', { detail: "
             + json.dumps(status, ensure_ascii=False)
             + " }));"
         )
-        try:
-            self._window.evaluate_js(js_code)
-        except Exception as error:
-            print(f"Failed to emit model status: {error}")
+        self._queue_js_event(js_code)

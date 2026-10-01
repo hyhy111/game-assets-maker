@@ -664,6 +664,7 @@ export default {
       rateLimitHint: 'This request was rate-limited. Generation did not start and no model inference charges apply. However, failed requests may still consume rate-limit quota.',
       downloadFailed: 'Download Failed',
       retryDownload: 'Retry Download',
+      retryAllDownloads: 'Retry Image Downloads',
       urlExpired: 'The image URL has expired (over 24 hours) and cannot be re-downloaded. Use "Regenerate" to create a new paid batch.',
       regenerate: 'Regenerate',
       delete: 'Delete Task',

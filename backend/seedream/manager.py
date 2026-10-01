@@ -13,6 +13,7 @@ from urllib.parse import quote
 
 from PIL import Image
 
+from backend.ark_audit import audit_context
 from backend.image_layout import read_generation_layout
 from backend.seedream.client import ArkAPIError, ArkClient, ArkResponseError, SubmissionUnknownError
 from backend.seedream.downloader import ImageDownloader
@@ -42,6 +43,10 @@ class SeedreamBatchManager:
         now: Callable[[], datetime] | None = None,
     ) -> None:
         self._client = client
+        self._audit = getattr(client, "audit", None)
+        # Guards client swaps: update_client replaces the client for future
+        # attempts while _run_attempt captures it once at attempt start.
+        self._client_lock = threading.Lock()
         self._repository = repository
         self._downloader = downloader
         self._now = now or (lambda: datetime.now(UTC))
@@ -53,6 +58,12 @@ class SeedreamBatchManager:
     def set_event_sink(self, sink: EventSink | None) -> None:
         with self._event_lock:
             self._event_sink = sink
+
+    def update_client(self, client: ArkClient) -> None:
+        """Swap the Ark client for future attempts; in-flight attempts keep theirs."""
+        with self._client_lock:
+            self._client = client
+            self._audit = getattr(client, "audit", None)
 
     def create_batch(self, request: SeedreamRequest) -> dict[str, Any]:
         """Persist the batch with N attempt placeholders before any paid request."""
@@ -222,6 +233,13 @@ class SeedreamBatchManager:
             ),
         )
         self._emit(batch_id)
+        if self._audit:
+            self._audit.record(
+                "image.create",
+                "recovered",
+                ids={"batch_id": batch_id, "attempt_index": attempt_index},
+                fields={"recovered_status": status},
+            )
 
     @staticmethod
     def _recovery_error(status: str) -> dict[str, Any]:
@@ -348,9 +366,14 @@ class SeedreamBatchManager:
 
     def _run_attempt(self, batch_id: str, attempt_index: int) -> None:
         response_persisted = False
+        # Capture the client once: a credential swap mid-attempt must not
+        # change the key this attempt already started with.
+        with self._client_lock:
+            client = self._client
+        audit = getattr(client, "audit", None)
+        call_ids = {"batch_id": batch_id, "attempt_index": attempt_index}
         try:
             batch = self._repository.get(batch_id)
-            attempt = batch.attempts[attempt_index]
             request = SeedreamRequest.from_dict(batch.request)
             if request.reference_image:
                 # The persisted request stores the reference image as a path
@@ -362,7 +385,8 @@ class SeedreamBatchManager:
             self._emit(batch_id)
 
             payload = build_api_payload(request)
-            response = self._client.generate_image(payload)
+            with audit_context(**call_ids, ratio=request.ratio) as call_ids:
+                response = client.generate_image(payload)
 
             # Persist response BEFORE downloading the image.
             self._update_attempt(
@@ -374,9 +398,13 @@ class SeedreamBatchManager:
                 ),
             )
             response_persisted = True
+            if audit:
+                audit.record("image.create", "response_persisted", ids=call_ids, fields={"persisted": True})
             self._emit(batch_id)
 
             image_url = self._extract_image_url(response)
+            if audit:
+                audit.record("image.create", "download_started", ids=call_ids)
             local_path = self._downloader.download_image(batch_id, attempt_index, image_url)
 
             self._update_attempt(
@@ -389,6 +417,8 @@ class SeedreamBatchManager:
                 ),
             )
             self._emit(batch_id)
+            if audit:
+                audit.record("image.create", "download_succeeded", ids=call_ids, fields={"downloaded": True})
 
         except SubmissionUnknownError as error:
             self._update_attempt(
@@ -401,6 +431,8 @@ class SeedreamBatchManager:
                 ),
             )
             self._emit(batch_id)
+            if audit:
+                audit.record("image.create", "local_unknown", ids=call_ids)
         except ArkAPIError as error:
             self._update_attempt(
                 batch_id,
@@ -412,6 +444,8 @@ class SeedreamBatchManager:
                 ),
             )
             self._emit(batch_id)
+            if audit:
+                audit.record("image.create", "local_failed", ids=call_ids, fields={"error_code": error.code})
         except Exception as error:
             status = "download_failed" if response_persisted else "failed"
             self._update_attempt(
@@ -424,6 +458,13 @@ class SeedreamBatchManager:
                 ),
             )
             self._emit(batch_id)
+            if audit:
+                audit.record(
+                    "image.create",
+                    "download_failed" if response_persisted else "local_failed",
+                    ids=call_ids,
+                    fields={"error_type": type(error).__name__},
+                )
         finally:
             with self._active_lock:
                 indices = self._active_attempts.get(batch_id)

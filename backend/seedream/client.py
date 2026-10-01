@@ -6,6 +6,8 @@ import urllib.request
 from dataclasses import dataclass
 from typing import Any, Protocol
 
+from backend.ark_audit import ArkAudit, provider_request_id, response_fields
+
 _IMAGES_URL = "https://ark.cn-beijing.volces.com/api/v3/images/generations"
 _DEFAULT_TIMEOUT_SECONDS = 1500.0  # 25 minutes
 _MAX_WAIT_TIMEOUT_MS = "300000"  # 5 minutes server-side queue
@@ -57,22 +59,47 @@ class ArkResponseError(ValueError):
 
 class ArkClient:
     def __init__(
-        self, api_key: str, *, transport: HttpTransport | None = None, timeout: float = _DEFAULT_TIMEOUT_SECONDS
+        self,
+        api_key: str,
+        *,
+        transport: HttpTransport | None = None,
+        timeout: float = _DEFAULT_TIMEOUT_SECONDS,
+        audit: ArkAudit | None = None,
     ) -> None:
         self._api_key = api_key
         self._transport = transport or UrllibTransport()
         self._timeout = timeout
+        self.audit = audit
 
     def generate_image(self, payload: dict[str, Any]) -> dict[str, Any]:
         body = self._json_body(payload)
+        call = self.audit.begin("image.create", payload=payload, paid=True) if self.audit else None
         try:
             response = self._transport.request("POST", _IMAGES_URL, self._headers(), body, self._timeout)
         except OSError as error:
+            if call:
+                call.event("failure", error_type=type(error).__name__, errno=error.errno)
             raise SubmissionUnknownError("Ark image generation outcome is unknown") from error
+        if call:
+            call.event(
+                "http_response",
+                http_status=response.status,
+                request_id=provider_request_id(response.headers, response.body, self._api_key),
+                response_bytes=len(response.body),
+            )
         try:
-            return self._parse_response(response)
+            parsed = self._parse_response(response)
         except ArkResponseError as error:
+            if call:
+                call.event("failure", error_type=type(error).__name__, http_status=response.status)
             raise SubmissionUnknownError("Ark image generation outcome is unknown") from error
+        except ArkAPIError as error:
+            if call:
+                call.event("failure", http_status=error.status, error_code=error.code)
+            raise
+        if call:
+            call.event("parsed_response", **response_fields("image.create", parsed))
+        return parsed
 
     def _parse_response(self, response: HttpResponse) -> dict[str, Any]:
         if not 200 <= response.status < 300:
@@ -115,9 +142,8 @@ class ArkClient:
     def _extract_request_id(response: HttpResponse) -> str | None:
         """Extract Request ID from response headers or error body, if provided."""
         for key, value in response.headers.items():
-            if key.lower() in ("x-request-id", "request-id"):
-                if isinstance(value, str) and value:
-                    return value
+            if key.lower() in ("x-request-id", "request-id") and isinstance(value, str) and value:
+                return value
         try:
             data = json.loads(response.body.decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError):

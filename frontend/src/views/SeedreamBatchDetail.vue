@@ -49,9 +49,18 @@
             {{ t('seedream.detail.download') }}
           </Button>
           <Button
+            v-if="retryingDownloads || retryableAttempts.length > 1"
+            variant="secondary"
+            :loading="retryingDownloads"
+            data-test="seedream-retry-all-downloads"
+            @click="retryAllDownloads"
+          >
+            {{ t('seedream.detail.retryAllDownloads') }}
+          </Button>
+          <Button
             variant="danger"
             class="ml-auto"
-            :disabled="!canDelete"
+            :disabled="!canDelete || retryingDownloads"
             data-test="seedream-delete"
             @click="openDeleteConfirmation"
           >
@@ -169,7 +178,7 @@
               <div v-if="attempt.url_expired" class="mt-2" data-test="seedream-url-expired">
                 <p class="text-xs text-gray-500">{{ t('seedream.detail.urlExpired') }}</p>
               </div>
-              <div v-else class="mt-2">
+              <div v-else-if="retryableAttempts.length === 1 && !retryingDownloads" class="mt-2">
                 <Button variant="secondary" size="sm" :data-test="`seedream-retry-download-${attempt.index}`" @click="retryDownload(attempt.index)">
                   {{ t('seedream.detail.retryDownload') }}
                 </Button>
@@ -321,6 +330,7 @@ const deleteError = ref('');
 const deleteModalRoot = ref<HTMLElement | null>(null);
 let deleteTrigger: HTMLElement | null = null;
 const copied = ref(false);
+const retryingDownloads = ref(false);
 const imageRevisions = ref<Record<number, number>>({});
 const editorFeedback = ref<Record<number, string>>({});
 const restorableAttempts = ref<Record<number, boolean>>({});
@@ -387,6 +397,9 @@ const selectedSucceededAttempt = computed(() => (
 ));
 const nonSucceededAttempts = computed(() => batch.value?.attempts.filter((attempt) => (
   attempt.status !== 'succeeded' || !attemptImageUrl(attempt)
+)) ?? []);
+const retryableAttempts = computed(() => batch.value?.attempts.filter((attempt) => (
+  attempt.status === 'download_failed' && !attempt.url_expired
 )) ?? []);
 
 function isAttemptActive(attempt: SeedreamAttempt): boolean {
@@ -493,6 +506,21 @@ async function download(attemptIndex: number) {
 async function retryDownload(attemptIndex: number) {
   if (!batchId.value) return;
   await store.retryDownload(batchId.value, attemptIndex);
+}
+
+async function retryAllDownloads() {
+  if (!batchId.value || retryingDownloads.value || retryableAttempts.value.length < 2) return;
+  const localId = batchId.value;
+  const indices = retryableAttempts.value.map((attempt) => attempt.index);
+  retryingDownloads.value = true;
+  try {
+    for (const index of indices) {
+      await store.retryDownload(localId, index);
+    }
+    await store.loadBatch(localId);
+  } finally {
+    retryingDownloads.value = false;
+  }
 }
 
 function createVideo(attemptIndex: number) {

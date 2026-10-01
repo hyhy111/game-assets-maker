@@ -702,10 +702,15 @@ async function selectStorageDirectory(field: 'project_dir' | 'cache_dir') {
 
 async function testConnection() {
   connectionLoading.value = true;
-  connectionResult.value = await store.testConnection(apiKey.value)
-    ? t('seedance.ui.connectionOk')
-    : t('seedance.ui.connectionFailed');
-  connectionLoading.value = false;
+  try {
+    const result = await store.testConnection(apiKey.value);
+    if (!result) return;
+    connectionResult.value = result.success
+      ? t('seedance.ui.connectionOk')
+      : `${result.error.code}: ${result.error.message}`;
+  } finally {
+    connectionLoading.value = false;
+  }
 }
 
 async function openClearConfirmation() {

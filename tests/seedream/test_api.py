@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import json
+import threading
 from io import BytesIO
 from pathlib import Path
 
@@ -736,10 +737,12 @@ def test_seedream_set_window_reclassifies_once_before_attaching_sink(runtime_con
 class _FakeCloseWindow:
     def __init__(self) -> None:
         self.scripts: list[str] = []
+        self.warning_dispatched = threading.Event()
         self.destroyed = 0
 
     def evaluate_js(self, script: str) -> None:
         self.scripts.append(script)
+        self.warning_dispatched.set()
 
     def destroy(self) -> None:
         self.destroyed += 1
@@ -776,6 +779,7 @@ def test_window_close_with_active_attempts_cancels_and_warns(runtime_config_path
     result = app.on_window_closing()
 
     assert result is False
+    assert window.warning_dispatched.wait(timeout=1)
     assert len(window.scripts) == 1
     assert "seedream-close-requested" in window.scripts[0]
     assert '"count": 3' in window.scripts[0]
@@ -1056,3 +1060,54 @@ def test_seedream_select_image_file_returns_dialog_choice(tmp_path):
     cancelled = Window(None)
     cancelled_api = SeedreamAPI(FakeManager(), window_getter=lambda: cancelled, media_resolver=MissingResolver())
     assert cancelled_api.select_image_file() is None
+
+
+def test_seedream_refresh_client_swaps_key_without_replacing_manager(tmp_path, runtime_config_path):
+    from backend.api.seedream_api import SeedreamAPI
+    from backend.seedream.client import ArkClient
+
+    save_app_config({"seedance": {"api_key": "old-key", "cache_dir": str(tmp_path / "cache")}})
+    created: list[str] = []
+
+    def factory(key: str) -> ArkClient:
+        created.append(key)
+        return ArkClient(key)
+
+    api = SeedreamAPI(client_factory=factory)
+    api._ensure_manager()
+    manager = api._manager
+    assert created == ["old-key"]
+
+    save_app_config({"seedance": {"api_key": "new-key"}})
+    api.refresh_client()
+
+    assert created == ["old-key", "new-key"]
+    assert api._manager is manager
+    assert manager._client._api_key == "new-key"
+
+
+def test_seedream_refresh_client_is_noop_without_manager(runtime_config_path):
+    from backend.api.seedream_api import SeedreamAPI
+
+    save_app_config({"seedance": {"api_key": "secret-key"}})
+    created: list[str] = []
+    api = SeedreamAPI(client_factory=lambda key: created.append(key))
+
+    api.refresh_client()
+
+    # No manager was built just to swap its client; the first real use reads
+    # the fresh config instead.
+    assert api._manager is None
+    assert created == []
+
+
+def test_seedream_refresh_client_skips_external_manager(runtime_config_path):
+    from backend.api.seedream_api import SeedreamAPI
+
+    save_app_config({"seedance": {"api_key": "secret-key"}})
+    manager = FakeManager()
+    api = SeedreamAPI(manager, media_resolver=MissingResolver())
+
+    # Injected managers are owned by the caller; refresh must not touch them.
+    api.refresh_client()
+    assert api._manager is manager

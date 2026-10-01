@@ -88,6 +88,9 @@ class _AppHarness:
 
         monkeypatch.setattr("backend.agent_control.server.AgentControlServer", FakeAgentControlServer)
         monkeypatch.setattr(os, "execv", lambda *args: harness.timeline.append(("execv",) + args))
+        # run() ends the process with os._exit after cleanup; record it instead
+        # of killing the pytest process.
+        monkeypatch.setattr(os, "_exit", lambda code: harness.timeline.append(("exit", code)))
 
     def _start(self):
         if self.on_start is not None:

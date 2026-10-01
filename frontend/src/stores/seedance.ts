@@ -347,14 +347,15 @@ export const useSeedanceStore = defineStore('seedance', () => {
     }
   }
 
-  async function testConnection(apiKey?: string): Promise<boolean> {
+  async function testConnection(apiKey?: string): Promise<SeedanceDataResult<{ configured: true }> | null> {
     const ticket = beginOperation('connection');
     try {
       const result = await api.seedance.testConnection(apiKey);
-      if (!asyncGuard.isResourceCurrent(ticket)) return false;
-      return result.success && result.data.configured === true;
-    } catch {
-      return false;
+      if (!asyncGuard.isResourceCurrent(ticket)) return null;
+      return result;
+    } catch (caught) {
+      if (!asyncGuard.isResourceCurrent(ticket)) return null;
+      return { success: false, error: normalizeError(caught) };
     } finally {
       endLoading();
     }

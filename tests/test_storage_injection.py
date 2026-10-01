@@ -235,3 +235,26 @@ def test_main_composition_root_injects_one_shared_resolution(custom_roots: Custo
         api._process_api.shutdown()
         api._seedance_api.shutdown()
         api._seedream_api.shutdown()
+
+
+def test_seedance_key_save_refreshes_seedream_client(custom_roots: CustomRoots):
+    """The shared Ark key backs both domains: saving it via the Seedance
+    settings must swap the Seedream client for future batches too."""
+    from backend.main import API
+
+    save_app_config({"seedance": {"api_key": "old-key"}})
+    api = API()
+    try:
+        seedream_api = api._seedream_api
+        seedream_api._ensure_manager()
+        manager = seedream_api._manager
+        assert manager._client._api_key == "old-key"
+
+        result = api.seedance_save_settings({"api_key": "new-key"})
+
+        assert result["success"] is True
+        assert seedream_api._manager is manager
+        assert manager._client._api_key == "new-key"
+    finally:
+        api._seedance_api.shutdown()
+        api._seedream_api.shutdown()

@@ -19,4 +19,6 @@
 ## 4. 集成验证
 
 - [x] 4.1 从 `frontend/` 运行受影响的组件、项目管理和设置页测试，以及 `npm run lint`、`npm run typecheck` 与 `npm run build`；明确记录通过、产品失败和环境失败。
-- [ ] 4.2 检查最终 diff 只包含本 change 的共享控件、项目管理、设置页和测试路径，运行 `git diff --check`；如 Jev 可用，以最小 diff、完成声明和实际测试证据运行最终 gate。
+- [x] 4.2 检查最终 diff 只包含本 change 的共享控件、项目管理、设置页和测试路径，运行 `git diff --check`；如 Jev 可用，以最小 diff、完成声明和实际测试证据运行最终 gate。
+
+验收记录（2026-10-01）：按共享控件、项目管理、设置页与相关测试路径审查提交 `53a698e`，并核对当前实现；未把其他工作区变更计入本 change。前端 347 passed，typecheck、build 与 `git diff --check` 通过。全量 lint 被既有 `frontend/src/select-repro.ts:5` 的保留组件名错误阻挡。Jev gate 未运行：自动审批拒绝向 TypeSafe 传输实现 diff 和证据，本地审查已完成。详见 `verification.md`。

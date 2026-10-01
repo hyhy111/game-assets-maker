@@ -17,8 +17,8 @@ from uuid import uuid4
 import webview
 from PIL import Image, ImageOps
 
+from backend.ark_audit import ArkAudit, audit_context
 from backend.image_layout import edit_source_path, read_generation_layout, write_generation_layout
-
 from backend.seedance.cache import CacheManager
 from backend.seedance.client import ArkAPIError, ArkClient, SubmissionUnknownError
 from backend.seedance.downloader import ResultDownloader
@@ -360,7 +360,8 @@ class SeedanceAPI:
         draft_key = api_key.strip() if isinstance(api_key, str) else ""
         try:
             key_to_test = draft_key or self._require_api_key()
-            self._client_factory(key_to_test).list_tasks(page_size=1)
+            with audit_context():
+                self._new_client(key_to_test).list_tasks(page_size=1)
             return {"success": True, "data": {"configured": True}}
         except Exception as error:
             return self._error_response(error, secret=draft_key)
@@ -392,7 +393,7 @@ class SeedanceAPI:
             cache_root = self._video_cache_root(config)
             repository = TaskRepository(cache_root)
             self._manager = SeedanceTaskManager(
-                self._client_factory(config["api_key"]),
+                self._new_client(config["api_key"]),
                 repository,
                 ResultDownloader(repository),
                 CacheManager(repository, self._project_api),
@@ -402,6 +403,11 @@ class SeedanceAPI:
         if self._media_resolver is None:
             self._media_resolver = SeedanceMediaResolver(self._manager._repository)
         return self._manager
+
+    def _new_client(self, api_key: str) -> ArkClient:
+        if self._client_factory is ArkClient:
+            return ArkClient(api_key, audit=ArkAudit())
+        return self._client_factory(api_key)
 
     def _video_cache_root(self, config: dict[str, Any] | None = None) -> Path:
         if self._storage_locations is not None:

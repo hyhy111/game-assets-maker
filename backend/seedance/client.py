@@ -7,6 +7,8 @@ import urllib.request
 from dataclasses import dataclass
 from typing import Any, Protocol
 
+from backend.ark_audit import ArkAudit, provider_request_id, response_fields
+
 _TASKS_URL = "https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks"
 _DEFAULT_TIMEOUT_SECONDS = 30.0
 
@@ -56,40 +58,82 @@ class ArkResponseError(ValueError):
 
 class ArkClient:
     def __init__(
-        self, api_key: str, *, transport: HttpTransport | None = None, timeout: float = _DEFAULT_TIMEOUT_SECONDS
+        self,
+        api_key: str,
+        *,
+        transport: HttpTransport | None = None,
+        timeout: float = _DEFAULT_TIMEOUT_SECONDS,
+        audit: ArkAudit | None = None,
     ) -> None:
         self._api_key = api_key
         self._transport = transport or UrllibTransport()
         self._timeout = timeout
+        self.audit = audit
 
     def create_task(self, payload: dict[str, Any]) -> dict[str, Any]:
         body = self._json_body(payload)
         try:
-            response = self._transport.request("POST", _TASKS_URL, self._headers(), body, self._timeout)
+            result = self._call("POST", _TASKS_URL, "video.create", body=body, payload=payload, paid=True)
         except OSError as error:
             raise SubmissionUnknownError("Ark task submission outcome is unknown") from error
-        try:
-            return self._json_response(response)
         except ArkResponseError as error:
             raise SubmissionUnknownError("Ark task submission outcome is unknown") from error
+        assert isinstance(result, dict)
+        return result
 
     def get_task(self, remote_id: str) -> dict[str, Any]:
-        return self._json_response(self._request("GET", self._task_url(remote_id)))
+        result = self._call("GET", self._task_url(remote_id), "video.get")
+        assert isinstance(result, dict)
+        return result
 
     def list_tasks(self, page_size: int = 1) -> dict[str, Any]:
         query = urllib.parse.urlencode({"page_size": page_size})
-        return self._json_response(self._request("GET", f"{_TASKS_URL}?{query}"))
+        result = self._call("GET", f"{_TASKS_URL}?{query}", "video.list")
+        assert isinstance(result, dict)
+        return result
 
     def delete_task(self, remote_id: str) -> dict[str, Any] | None:
-        response = self._request("DELETE", self._task_url(remote_id))
-        if not 200 <= response.status < 300:
-            return self._json_response(response)
-        if not response.body:
-            return None
-        return self._json_response(response)
+        return self._call("DELETE", self._task_url(remote_id), "video.delete")
 
-    def _request(self, method: str, url: str) -> HttpResponse:
-        return self._transport.request(method, url, self._headers(), None, self._timeout)
+    def _call(
+        self,
+        method: str,
+        url: str,
+        operation: str,
+        *,
+        body: bytes | None = None,
+        payload: dict[str, Any] | None = None,
+        paid: bool = False,
+    ) -> dict[str, Any] | None:
+        call = self.audit.begin(operation, payload=payload, paid=paid) if self.audit else None
+        try:
+            response = self._transport.request(method, url, self._headers(), body, self._timeout)
+        except OSError as error:
+            if call:
+                call.event("failure", error_type=type(error).__name__, errno=error.errno)
+            raise
+        if call:
+            call.event(
+                "http_response",
+                http_status=response.status,
+                request_id=provider_request_id(response.headers, response.body, self._api_key),
+                response_bytes=len(response.body),
+            )
+        try:
+            if operation == "video.delete" and 200 <= response.status < 300 and not response.body:
+                parsed = None
+            else:
+                parsed = self._json_response(response)
+        except (ArkResponseError, ArkAPIError) as error:
+            if call:
+                fields = {"http_status": response.status, "error_type": type(error).__name__}
+                if isinstance(error, ArkAPIError):
+                    fields["error_code"] = error.code
+                call.event("failure", **fields)
+            raise
+        if call:
+            call.event("parsed_response", **response_fields(operation, parsed or {}))
+        return parsed
 
     def _json_response(self, response: HttpResponse) -> dict[str, Any]:
         if not 200 <= response.status < 300:

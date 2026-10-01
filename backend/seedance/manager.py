@@ -11,6 +11,7 @@ from copy import deepcopy
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from backend.ark_audit import AuditStorageError, audit_context
 from backend.seedance.cache import CacheManager
 from backend.seedance.client import ArkAPIError, ArkClient, ArkResponseError, SubmissionUnknownError
 from backend.seedance.downloader import ResultDownloader
@@ -55,6 +56,7 @@ class SeedanceTaskManager:
         config_saver: ConfigSaver | None = None,
     ) -> None:
         self._client = client
+        self._audit = getattr(client, "audit", None)
         self._repository = repository
         self._downloader = downloader
         self._cache_manager = cache_manager
@@ -85,6 +87,8 @@ class SeedanceTaskManager:
         with self._scheduler_lock:
             if self._worker is not None and self._worker.is_alive():
                 return
+            if self._audit:
+                self._audit.reconcile()
             self._run_due_cleanup()
             self._recover_tasks()
             self._stop_event.clear()
@@ -113,8 +117,10 @@ class SeedanceTaskManager:
         if retry_of is not None:
             task = self._repository.update(task.local_id, lambda current: setattr(current, "retry_of", retry_of))
         payload = build_api_payload(self._request_from_task(task))
+        call_ids = {"task_id": task.local_id}
         try:
-            remote = self._client.create_task(payload)
+            with audit_context(**call_ids) as call_ids:
+                remote = self._client.create_task(payload)
             remote_id = remote.get("id")
             if not isinstance(remote_id, str) or not remote_id:
                 raise SubmissionUnknownError("Ark accepted the request without a task ID")
@@ -123,16 +129,42 @@ class SeedanceTaskManager:
             task = self._repository.update(
                 task.local_id, lambda current, caught=unknown: self._mark_submission_unknown(current, caught)
             )
+            if self._audit:
+                self._audit.record("video.create", "local_unknown", ids=call_ids)
+        except AuditStorageError as error:
+            task = self._repository.update(
+                task.local_id, lambda current, caught=error: self._mark_create_error(current, caught)
+            )
+            if self._audit:
+                self._audit.record(
+                    "video.create", "local_failed", ids=call_ids, fields={"error_type": "AuditStorageError"}
+                )
         except (SubmissionUnknownError, OSError, TimeoutError) as error:
             task = self._repository.update(
                 task.local_id, lambda current, caught=error: self._mark_submission_unknown(current, caught)
             )
+            if self._audit:
+                self._audit.record("video.create", "local_unknown", ids=call_ids)
         except ArkAPIError as error:
             task = self._repository.update(
                 task.local_id, lambda current, caught=error: self._mark_create_error(current, caught)
             )
+            if self._audit:
+                self._audit.record("video.create", "local_failed", ids=call_ids, fields={"error_code": error.code})
         else:
             task = self._repository.update(task.local_id, lambda current: self._mark_created(current, remote))
+            if self._audit:
+                self._audit.record(
+                    "video.create",
+                    "task_persisted",
+                    ids=call_ids,
+                    fields={
+                        "persisted": True,
+                        "remote_id": task.remote_id,
+                        "remote_status": task.remote_status,
+                        "video_url_present": bool(task.download_url_received_at),
+                    },
+                )
             if task.remote_status == "succeeded":
                 task = self._download_succeeded(task)
             elif task.remote_status in _ACTIVE_STATUSES:
@@ -194,7 +226,8 @@ class SeedanceTaskManager:
             current.sync_status = {"state": "ok", "last_synced_at": self._iso_now()}
 
         try:
-            self._client.delete_task(task.remote_id)
+            with audit_context(task_id=local_id, remote_id=task.remote_id):
+                self._client.delete_task(task.remote_id)
         except Exception as error:
             def restore(current: SeedanceTask, caught: Exception = error) -> None:
                 if current.remote_status != _CANCELLING_STATUS:
@@ -253,7 +286,23 @@ class SeedanceTaskManager:
         if task.remote_status != "succeeded":
             raise ValueError("Only succeeded Seedance tasks can retry downloads")
         self._require_output_urls(task)
-        downloaded = self._downloader.download_task(task)
+        if self._audit:
+            self._audit.record("video.get", "download_started", ids={"task_id": local_id, "remote_id": task.remote_id})
+        try:
+            downloaded = self._downloader.download_task(task)
+        except Exception:
+            if self._audit:
+                self._audit.record(
+                    "video.get", "download_failed", ids={"task_id": local_id, "remote_id": task.remote_id}
+                )
+            raise
+        if self._audit:
+            self._audit.record(
+                "video.get",
+                "download_succeeded",
+                ids={"task_id": local_id, "remote_id": task.remote_id},
+                fields={"downloaded": True},
+            )
         self._emit("seedance-task-updated", downloaded)
         return self.public_task(downloaded)
 
@@ -426,7 +475,8 @@ class SeedanceTaskManager:
             if task.remote_status == _CANCELLING_STATUS and local_id in self._cancelling_inflight:
                 return task, True
         try:
-            response = self._client.get_task(task.remote_id)
+            with audit_context(task_id=local_id, remote_id=task.remote_id) as call_ids:
+                response = self._client.get_task(task.remote_id)
         except ArkAPIError as error:
             if error.status == 404 and task.remote_status == _CANCELLING_STATUS:
                 updated = self._repository.update(local_id, self._mark_cancelled_after_recovery)
@@ -451,6 +501,17 @@ class SeedanceTaskManager:
             return updated, False
 
         updated = self._repository.update(local_id, lambda current: self._apply_remote(current, response))
+        if self._audit:
+            self._audit.record(
+                "video.get",
+                "task_persisted",
+                ids=call_ids,
+                fields={
+                    "persisted": True,
+                    "remote_status": updated.remote_status,
+                    "video_url_present": bool(updated.download_url_received_at),
+                },
+            )
         if updated.remote_status == "succeeded":
             updated = self._download_succeeded(updated)
         self._emit("seedance-task-updated", updated)
@@ -466,9 +527,16 @@ class SeedanceTaskManager:
                     ),
                 )
                 self._emit("seedance-task-updated", task)
-            elif task.remote_status in _POLLABLE_STATUSES and task.remote_id is not None:
-                self._schedule(task.local_id, 0)
-            elif task.remote_status == "succeeded" and task.cache_status == "complete":
+                if self._audit:
+                    self._audit.record(
+                        "video.create",
+                        "recovered",
+                        ids={"task_id": task.local_id},
+                        fields={"recovered_status": "submission_unknown"},
+                    )
+            elif (task.remote_status in _POLLABLE_STATUSES and task.remote_id is not None) or (
+                task.remote_status == "succeeded" and task.cache_status == "complete"
+            ):
                 self._schedule(task.local_id, 0)
 
     def _recover_succeeded_download(self, task: SeedanceTask) -> SeedanceTask:
@@ -597,10 +665,18 @@ class SeedanceTaskManager:
         task.sync_status = {"state": "ok", "last_synced_at": self._iso_now()}
 
     def _download_succeeded(self, task: SeedanceTask) -> SeedanceTask:
+        ids = {"task_id": task.local_id, "remote_id": task.remote_id}
+        if self._audit:
+            self._audit.record("video.get", "download_started", ids=ids)
         try:
-            return self._downloader.download_task(task)
+            downloaded = self._downloader.download_task(task)
         except Exception:
+            if self._audit:
+                self._audit.record("video.get", "download_failed", ids=ids)
             return self._repository.get(task.local_id)
+        if self._audit:
+            self._audit.record("video.get", "download_succeeded", ids=ids, fields={"downloaded": True})
+        return downloaded
 
     def _apply_remote(self, task: SeedanceTask, response: dict[str, Any]) -> None:
         task.remote = self._mapped_remote(response)

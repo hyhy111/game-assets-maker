@@ -21,4 +21,6 @@
 ## 4. 集成验证与交付检查
 
 - [x] 4.1 运行对应后端聚焦测试、`cd frontend && npm test -- settings-storage-migration.test.mjs`、`npm run lint` 与 `npm run typecheck`，记录通过、产品失败与环境失败。
-- [ ] 4.2 检查最终变更仅覆盖本 change 的产品/测试路径，运行 `git diff --check`；如 Jev 可用，以最小 diff、完成声明和实际测试证据运行最终 gate。
+- [x] 4.2 检查最终变更仅覆盖本 change 的产品/测试路径，运行 `git diff --check`；如 Jev 可用，以最小 diff、完成声明和实际测试证据运行最终 gate。
+
+验收记录（2026-10-01）：已审查提交 `53a698e` 中本 change 的存储迁移、设置布局和测试变更，并与当前工作区实现核对；`git diff --check` 通过。后端回归 659 passed / 2 skipped，前端 347 passed，typecheck 与 build 通过。全量前端 lint 被既有 `frontend/src/select-repro.ts:5` 的保留组件名错误阻挡；详见 `verification.md`。Jev gate 未运行：自动审批拒绝向 TypeSafe 传输实现 diff 和证据，本地审查已完成。
