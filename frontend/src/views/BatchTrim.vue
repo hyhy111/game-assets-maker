@@ -246,7 +246,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import { useI18n } from 'vue-i18n';
@@ -262,6 +262,7 @@ import {
   XCircle,
   HelpCircle
 } from 'lucide-vue-next';
+import { useAgentBatchTrimStore } from '@/stores/agentBatchTrim';
 import { useProjectStore } from '@/stores/project';
 import { api } from '@/api';
 import type { Project, BatchTrimResult } from '@/types';
@@ -281,6 +282,14 @@ const searchQuery = ref('');
 const trimMode = ref<'global' | 'individual'>('global');
 const processing = ref(false);
 const trimResults = ref<BatchTrimResult[]>([]);
+const agentTrim = useAgentBatchTrimStore();
+function applyAgentResult() {
+  if (!agentTrim.result) return;
+  selectedProjects.value = [...agentTrim.result.project_ids];
+  trimMode.value = agentTrim.result.mode;
+  trimResults.value = [...agentTrim.result.raw_results];
+}
+watch(() => agentTrim.result, applyAgentResult, { immediate: true });
 
 onMounted(async () => {
   await loadProjects();
@@ -291,6 +300,7 @@ onMounted(async () => {
   selectedProjects.value = requestedProjectIds
     .filter((projectId): projectId is string => typeof projectId === 'string')
     .filter(projectId => availableProjectIds.has(projectId));
+  applyAgentResult();
 });
 
 type ProjectGroup = { role: string; projects: Project[] };

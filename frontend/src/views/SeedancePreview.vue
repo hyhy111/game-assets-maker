@@ -76,6 +76,10 @@
             <Download :size="16" aria-hidden="true" />
             {{ t('seedance.preview.saveVideo') }}
           </Button>
+          <Button variant="secondary" :disabled="!task.output_urls.video || task.cache_status !== 'complete' || task.can_open_directory === false" data-test="seedance-open-directory" @click="openDirectory">
+            <FolderOpen :size="16" aria-hidden="true" />
+            {{ t('aiCreation.openDirectory') }}
+          </Button>
           <Button
             class="ml-auto"
             variant="danger"
@@ -89,6 +93,7 @@
           {{ t('seedance.ui.downloadUrlMayBeExpired') }}
         </p>
 
+        <p v-if="directoryError" class="mb-3 text-sm text-danger" role="alert">{{ directoryError }}</p>
         <div class="relative">
           <SeedanceVideoStage
             :phase="phase"
@@ -178,7 +183,8 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
-import { ArrowLeft, Download } from 'lucide-vue-next';
+import { ArrowLeft, Download, FolderOpen } from 'lucide-vue-next';
+import { api } from '@/api';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 import Button from '@/components/common/Button.vue';
@@ -211,6 +217,16 @@ const phase = computed(() => task.value ? seedanceTaskPhase(task.value) : 'submi
 const handoffResult = ref('');
 const handoffCreating = ref(false);
 const savingVideo = ref(false);
+const directoryError = ref('');
+
+async function openDirectory() {
+  if (!task.value) return;
+  directoryError.value = '';
+  try {
+    const result = await api.seedance.openVideoDirectory(task.value.local_id);
+    if (!result.success) directoryError.value = result.error?.message || t('aiCreation.imageUnavailable');
+  } catch (error) { directoryError.value = error instanceof Error ? error.message : t('aiCreation.imageUnavailable'); }
+}
 const confirmProtected = ref(false);
 const pendingPaidAction = ref<PaidGenerationAction | null>(null);
 const confirmingPaidAction = ref(false);

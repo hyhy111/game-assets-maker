@@ -76,6 +76,14 @@ export default {
   settings: {
     title: '设置',
     enableLogging: '启用日志',
+    arkAuditEnabled: '记录 API 调用详情',
+    cliGenerationEnabled: '允许 CLI 提交 AI 生成任务',
+    cliGenerationHint: '默认关闭。开启后 Agent 可直接提交图片和视频生成；本地处理和草稿准备始终可用。',
+    cliGenerationConfirmTitle: '开启 CLI 生成权限？',
+    cliGenerationConfirmBody: '开启后，CLI 可以直接提交 AI 图片和视频生成任务，可能消耗费用或额度。Agent 在当前对话首次提交前仍需取得你的明确确认，确认后本对话后续任务可直接提交。你可以随时关闭此开关阻止新的 CLI 提交。',
+    cliGenerationSaveFailed: '无法保存 CLI 生成权限，请重试。',
+    arkAuditHint: '仅开发模式可用，立即生效。关闭会保留已有日志。',
+    arkAuditSaveFailed: '无法保存 API 调用日志设置，请重试。',
     paidGenerationConfirmation: '生成请求前确认弹窗',
   },
   storage: {
@@ -98,6 +106,10 @@ export default {
     closeApp: '关闭应用',
   },
   aiCreation: {
+    openDirectory: '打开目录',
+    dropSingleImage: '一次仅支持一张图片',
+    dropInvalidImage: '请拖入本地图片文件或应用内生成图片',
+    imageUnavailable: '图片不可用，请重新选择',
     generationAccessTitle: '选择生成方式',
     generationAccessDescription: '开始生成前，请登录账户或配置自己的 API Key。',
     apiKeyRequiredTitle: '配置 API Key',
@@ -141,7 +153,7 @@ export default {
       stackSamePrompts: '叠放提示词相同卡片',
       favoriteMedia: '收藏当前图片或视频',
       unfavoriteMedia: '取消收藏',
-      dragImageToVideoFrame: '拖到视频生成的首帧或尾帧',
+      dragImageToVideoFrame: '长按拖拽',
     },
   },
   steps: {
@@ -608,6 +620,7 @@ export default {
       createBatch: '创建任务',
       referenceImage: '参考图',
       referenceImageShort: '参考图',
+      dropAsReference: '拖入作为参考图',
       optionalShort: '（可选）',
       referenceImageHelp: '可选。选择一张本地图片作为参考，模型将基于它生成或编辑。',
       selectReferenceImage: '选择参考图',
@@ -618,7 +631,6 @@ export default {
     models: {
       pro: 'Seedream 5.0 Pro',
       flash: 'Seedream 5.0 Flash',
-      lite: 'Seedream 5.0 Lite',
     },
     ui: {
       characters: '字符',
@@ -657,6 +669,8 @@ export default {
       tokensUnavailable: 'API 未返回',
       elapsed: '耗时',
       download: '另存图片',
+      saveImage: '另存为图片',
+      useAsReference: '作为参考图生图',
       createVideo: '创建视频',
       rateLimitHint: '此请求被限流，未开始生成，不会产生模型推理费用。但失败请求仍可能占用限流配额。',
       downloadFailed: '下载失败',

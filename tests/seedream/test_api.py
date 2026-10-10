@@ -152,15 +152,18 @@ def test_seedream_create_delegates_to_manager(runtime_config_path):
     assert manager.calls[0][0] == "create"
 
 
-def test_seedream_rejects_unsupported_model_resolution_combo(runtime_config_path):
+def test_seedream_rejects_retired_lite_model(runtime_config_path):
     from backend.api.seedream_api import SeedreamAPI
 
     save_app_config({"seedance": {"api_key": "secret-key"}})
-    api = SeedreamAPI(FakeManager(), media_resolver=MissingResolver())
+    manager = FakeManager()
+    api = SeedreamAPI(manager, media_resolver=MissingResolver())
 
-    result = api.create_batch({"prompt": "hero", "model": "lite", "resolution": "1K", "ratio": "16:9"})
+    result = api.create_batch({"prompt": "hero", "model": "lite", "resolution": "2K", "ratio": "16:9"})
     assert result["success"] is False
-    assert result["error"]["code"] == "UNSUPPORTED_RESOLUTION"
+    assert result["error"]["code"] == "UNSUPPORTED_MODEL"
+
+    assert manager.calls == []
 
 
 def test_seedream_rejects_custom_ratio(runtime_config_path):
@@ -1111,3 +1114,19 @@ def test_seedream_refresh_client_skips_external_manager(runtime_config_path):
     # Injected managers are owned by the caller; refresh must not touch them.
     api.refresh_client()
     assert api._manager is manager
+
+
+def test_seedream_retired_default_falls_back_without_rewriting_config(runtime_config_path):
+    from backend.api.seedream_api import SeedreamAPI
+
+    runtime_config_path.parent.mkdir(parents=True, exist_ok=True)
+    runtime_config_path.write_text(json.dumps({"seedream": {"default_model": "lite", "default_resolution": "2K"}}))
+    before = runtime_config_path.read_bytes()
+    api = SeedreamAPI(FakeManager(), media_resolver=MissingResolver())
+    settings = api.get_settings()["settings"]
+    assert settings["default_model"] == "pro"
+    assert settings["default_resolution"] == "1K"
+    assert runtime_config_path.read_bytes() == before
+    result = api.save_settings({"default_model": "lite", "default_resolution": "2K"})
+    assert result["error"]["code"] == "UNSUPPORTED_MODEL"
+    assert runtime_config_path.read_bytes() == before

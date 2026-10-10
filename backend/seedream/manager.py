@@ -83,7 +83,7 @@ class SeedreamBatchManager:
         return public
 
     def get_regeneration_draft(self, local_id: str) -> dict[str, Any]:
-        """Return the original request as an editable draft without paid generation.
+        """Return an editable draft, replacing the retired Lite model with Pro.
 
         Restoring a regeneration draft never calls ImageGenerations or any other
         paid endpoint. The user must explicitly confirm a new paid generation to
@@ -95,7 +95,7 @@ class SeedreamBatchManager:
         return {
             "request": {
                 "prompt": request.get("prompt", ""),
-                "model": request.get("model", "pro"),
+                "model": "pro" if request.get("model") == "lite" else request.get("model", "pro"),
                 "resolution": request.get("resolution", "1K"),
                 "ratio": request.get("ratio", "16:9"),
                 "count": request.get("count", 2),

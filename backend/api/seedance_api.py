@@ -30,10 +30,9 @@ from backend.seedance.validation import ValidationError, build_api_payload, vali
 from src.utils.ai_cache_paths import ai_cache_root, ai_video_cache_root
 from src.utils.app_config import load_app_config, public_app_config, save_app_config
 from src.utils.storage_locations import StorageLocations
+from src.utils.system_paths import open_directory
 
-_IMAGE_FILE_TYPES = (
-    "Image files (*.jpg;*.jpeg;*.png;*.webp;*.bmp;*.tif;*.tiff;*.gif;*.heic;*.heif)",
-)
+_IMAGE_FILE_TYPES = ("Image files (*.jpg;*.jpeg;*.png;*.webp;*.bmp;*.tif;*.tiff;*.gif;*.heic;*.heif)",)
 
 
 class SeedanceAPI:
@@ -123,9 +122,7 @@ class SeedanceAPI:
                     "edit_source_data_url": f"data:image/png;base64,{edit_source_encoded}",
                     "width": image.width,
                     "height": image.height,
-                    "generation_layout": read_generation_layout(
-                        source, width=image.width, height=image.height
-                    ),
+                    "generation_layout": read_generation_layout(source, width=image.width, height=image.height),
                 },
             }
         except Exception as error:
@@ -150,7 +147,7 @@ class SeedanceAPI:
                 raise ValueError("Edit source must be a PNG data URL")
 
             def decode_data_url(value: str, label: str) -> bytes:
-                encoded = value[len(prefix):]
+                encoded = value[len(prefix) :]
                 if len(encoded) > 64 * 1024 * 1024:
                     raise ValueError(f"{label} is too large")
                 try:
@@ -231,6 +228,16 @@ class SeedanceAPI:
         except Exception as error:
             return self._error_response(error)
 
+    def open_video_directory(self, local_id: str) -> dict[str, Any]:
+        try:
+            source = self.media_resolver.resolve(local_id, "video")
+            if not source.is_file():
+                raise FileNotFoundError("Seedance video is not available")
+            open_directory(source.parent)
+            return {"success": True}
+        except Exception as error:
+            return self._error_response(error)
+
     def validate_request(self, request_data: dict[str, Any]) -> dict[str, Any]:
         """Validate the exact compact Base64 request without creating a local or remote task."""
         try:
@@ -268,9 +275,7 @@ class SeedanceAPI:
                 "last_frame": input_paths.get("last_frame"),
             }
             preview_urls = {
-                key: self._media_url(local_id, key)
-                for key in ("first_frame", "last_frame")
-                if key in input_paths
+                key: self._media_url(local_id, key) for key in ("first_frame", "last_frame") if key in input_paths
             }
             return {"success": True, "data": {"request": request, "preview_urls": preview_urls}}
         except Exception as error:
@@ -443,6 +448,7 @@ class SeedanceAPI:
             if self._asset_available(local_id, asset_key):
                 output_urls[asset_key] = self._media_url(local_id, asset_key)
         decorated["input_urls"] = input_urls
+        decorated["can_open_directory"] = "video" in output_urls
         decorated["output_urls"] = output_urls
         return decorated
 

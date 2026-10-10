@@ -71,7 +71,7 @@ def test_seedance_summary_stdout_is_json_only_and_recursively_redacts_key(
     assert result.stderr == ""
 
 
-def test_seedance_create_missing_key_returns_structured_error_before_network(
+def test_seedance_create_requires_running_permitted_application(
     isolated_workspace: Path, repo_root: Path
 ):
     config = isolated_workspace / "runtime-config.json"
@@ -91,7 +91,7 @@ def test_seedance_create_missing_key_returns_structured_error_before_network(
     assert result.returncode == 1
     payload = json.loads(result.stdout)
     assert payload["operation"] == "seedance.create"
-    assert payload["error"]["code"] == "API_KEY_NOT_CONFIGURED"
+    assert payload["error"]["code"] in {"UI_NOT_RUNNING", "CONTROL_UNAVAILABLE", "CLI_GENERATION_DISABLED"}
 
 
 def test_seedance_wait_timeout_is_non_success_and_never_cancels(tmp_path: Path):

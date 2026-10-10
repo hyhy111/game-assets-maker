@@ -2,7 +2,9 @@
 
 import json
 import os
+import sys
 import tempfile
+import threading
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
@@ -11,6 +13,7 @@ from src.utils.data_paths import DATA_DIR_NAME, DATA_ROOT_ENV_VAR, INSTALLED_MOD
 from src.utils.storage_locations import DEFAULT_PROJECT_DIR, StorageLocations, storage_locations_from_config
 
 CONFIG_ENV_VAR = "GAM_CONFIG"
+_CONFIG_WRITE_LOCK = threading.Lock()
 
 # Source development keeps a dedicated workspace config so it never reads or
 # writes the installed release's per-user configuration.
@@ -20,6 +23,8 @@ DEFAULT_APP_CONFIG: dict[str, Any] = {
     "language": "zh",
     "theme": "dark",
     "logger_enabled": False,
+    "ark_audit_enabled": False,
+    "cli_generation_enabled": False,
     "paid_generation_confirmation_enabled": True,
     "project_dir": DEFAULT_PROJECT_DIR,
     "logger_config": {
@@ -144,23 +149,63 @@ def _seed_dev_config(config_path: Path) -> dict[str, Any] | None:
 
 def save_app_config(update: dict[str, Any]) -> dict[str, Any]:
     """Merge and atomically save a partial runtime config update."""
-    config_path = get_app_config_path()
-    current = load_app_config()
-    _merge_known_keys(current, update)
+    # WebView calls run concurrently; serialize read-merge-write to keep an
+    # independent audit toggle from being lost to another settings save.
+    with _CONFIG_WRITE_LOCK:
+        config_path = get_app_config_path()
+        current = load_app_config()
+        _merge_known_keys(current, update)
 
-    if update.get("seedance", {}).get("api_key", object()) is None:
-        current["seedance"]["api_key"] = ""
+        if update.get("seedance", {}).get("api_key", object()) is None:
+            current["seedance"]["api_key"] = ""
 
-    _write_config(config_path, current)
-    return current
+        _write_config(config_path, current)
+        return current
 
 
 def public_app_config(config: dict[str, Any]) -> dict[str, Any]:
     """Return configuration that is safe to expose outside the backend."""
     public = deepcopy(config)
+    public["ark_audit_available"] = ark_audit_available()
+    public["ark_audit_enabled"] = public.get("ark_audit_enabled") is True
+    public["cli_generation_enabled"] = public.get("cli_generation_enabled") is True
     seedance = public.setdefault("seedance", {})
     seedance["api_key_configured"] = bool(seedance.pop("api_key", ""))
     return public
+
+
+def ark_audit_available() -> bool:
+    """Only the explicit source-development entrypoint permits audit logging."""
+    return os.environ.get("DEV_MODE") == "1" and not getattr(sys, "frozen", False) and data_mode() != INSTALLED_MODE
+
+
+def ark_audit_enabled() -> bool:
+    """Read the live setting at each event boundary, without caching a call's state."""
+    return ark_audit_available() and load_app_config().get("ark_audit_enabled") is True
+
+
+def save_ark_audit_enabled(enabled: bool) -> dict[str, Any]:
+    """Persist only the immediate audit setting, independently of settings drafts."""
+    if type(enabled) is not bool:
+        raise ValueError("Ark audit setting must be a boolean")
+    if not ark_audit_available():
+        raise ValueError("Ark audit logging is available only in development")
+    return public_app_config(save_app_config({"ark_audit_enabled": enabled}))
+
+
+def cli_generation_enabled() -> bool:
+    """Check permission at the submission boundary, with a closed failure default."""
+    try:
+        return load_app_config().get("cli_generation_enabled") is True
+    except (OSError, ValueError):
+        return False
+
+
+def save_cli_generation_enabled(enabled: bool, confirmed: bool = False) -> dict[str, Any]:
+    """Persist only this immediate setting after explicit GUI confirmation."""
+    if type(enabled) is not bool or (enabled and confirmed is not True):
+        raise ValueError("Enabling CLI generation requires confirmation")
+    return public_app_config(save_app_config({"cli_generation_enabled": enabled}))
 
 
 def current_storage_locations() -> StorageLocations:
@@ -183,6 +228,9 @@ def merge_config_update(current: dict[str, Any], update: dict[str, Any]) -> dict
 def _merge_known_keys(target: dict[str, Any], update: dict[str, Any]) -> None:
     for key, value in update.items():
         if key not in target:
+            continue
+        if key == "ark_audit_enabled":
+            target[key] = value is True
             continue
         if isinstance(value, dict) and isinstance(target[key], dict):
             _merge_known_keys(target[key], value)

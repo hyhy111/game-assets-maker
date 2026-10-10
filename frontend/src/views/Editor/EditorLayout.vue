@@ -91,7 +91,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRouter, useRoute } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import { useI18n } from 'vue-i18n';
 import { EyeOff, Film, Undo2 } from 'lucide-vue-next';
@@ -109,6 +109,7 @@ import Step2Background from './Step2Background.vue';
 import Step3PostProcess from './Step3PostProcess.vue';
 
 const router = useRouter();
+const route = useRoute();
 const projectStore = useProjectStore();
 const processStore = useProcessStore();
 const playerStore = usePlayerStore();
@@ -143,12 +144,20 @@ const frameVisibilityEnabled = computed(() => (
 // Load frames when step changes or project data changes
 watch([currentStep, currentProject], async ([step]) => {
   if (!currentProject.value) return;
-  await loadFramesForStep(step);
+  const projectId = currentProject.value.id;
+  const loaded = await loadFramesForStep(step);
+  if (loaded && paramsLoaded.value && currentProject.value?.id === projectId && currentStep.value === step) signalEditorReady();
 }, { immediate: true, deep: true });
+
+function signalEditorReady() {
+  window.dispatchEvent(new CustomEvent('agent-editor-ready', { detail: {
+    project_id: currentProject.value?.id, step: currentStep.value,
+  } }));
+}
 
 async function loadFramesForStep(step: number) {
   const project = currentProject.value;
-  if (!project) return;
+  if (!project) return false;
 
   const requestId = ++frameLoadRequestId;
   const isCurrentRequest = () => (
@@ -163,7 +172,7 @@ async function loadFramesForStep(step: number) {
   const nextHiddenFrames = step > 1
     ? await api.frame.getHiddenFrames(project.id)
     : [];
-  if (!isCurrentRequest()) return;
+  if (!isCurrentRequest()) return false;
   hiddenFrames.value = nextHiddenFrames;
 
   // Determine which step's frames to show
@@ -187,7 +196,7 @@ async function loadFramesForStep(step: number) {
       !(step === 2 && sourceStep === 1) // Disable cache only if previewing Step 1 results in Step 2
     );
 
-    if (!isCurrentRequest()) return;
+    if (!isCurrentRequest()) return false;
     if (response.success) {
       playerStore.loadFrames(response.frames);
       timelineFrameCount.value = response.timeline_total ?? response.total;
@@ -210,13 +219,15 @@ async function loadFramesForStep(step: number) {
         // Response frames are already sequential from output dir
         playerStore.setPlaybackRange(0, response.frames.length - 1, 1);
       }
+      return isCurrentRequest();
     }
   } catch (e) {
-    if (!isCurrentRequest()) return;
+    if (!isCurrentRequest()) return false;
     console.error('Failed to load frames:', e);
     playerStore.loadFrames([]);
     timelineFrameCount.value = 0;
   }
+  return false;
 }
 
 async function hideCurrentFrame() {
@@ -273,8 +284,10 @@ onMounted(async () => {
     return;
   }
 
-  // A Pinia store survives project navigation, but each newly opened action starts at Step 1.
-  processStore.goToStep(1);
+  // Normal project navigation starts at Step 1; agent navigation keeps its validated target.
+  const requestedStep = Number(route.query.agent_step);
+  if ([1, 2, 3].includes(requestedStep)) processStore.goToStep(requestedStep);
+  else processStore.goToStep(1);
 
   // Refresh project status from backend (important for steps state)
   await projectStore.loadProject(currentProject.value.id);
@@ -293,6 +306,7 @@ onMounted(async () => {
   paramsLoaded.value = true;
 
   // The initial watcher can run before Step 1 parameters arrive.
-  await loadFramesForStep(currentStep.value);
+  const loaded = await loadFramesForStep(currentStep.value);
+  if (loaded) signalEditorReady();
 });
 </script>

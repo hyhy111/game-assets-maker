@@ -10,12 +10,12 @@ import type {
 export const MODEL_RESOLUTIONS: Record<SeedreamModel, SeedreamResolution[]> = {
   pro: ['1K', '1.5K', '2K'],
   flash: ['1K', '1.5K', '2K'],
-  lite: ['2K'],
 };
 
 export const ALLOWED_RATIOS: SeedreamRatio[] = ['1:1', '16:9', '9:16', '4:3', '3:4'];
 
-export const MODEL_LABELS: Record<SeedreamModel, string> = {
+// Retain retired model names for historical batches only.
+export const MODEL_LABELS: Record<string, string> = {
   pro: 'Seedream 5.0 Pro',
   flash: 'Seedream 5.0 Flash',
   lite: 'Seedream 5.0 Lite',

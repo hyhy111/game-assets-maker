@@ -154,8 +154,7 @@ test('Seedream eraser provides background fill, adjustable brush, and local undo
   const canApplyResize = source.slice(source.indexOf('const canApplyResize'), source.indexOf('onMounted(() =>'));
   assert.match(canApplyResize, /sourceResizeTop\.value !== \(currentGenerationLayout\.value\?\.measured_top/);
   assert.match(canApplyResize, /sourceResizeBottom\.value !== \(currentGenerationLayout\.value\?\.measured_bottom/);
-  assert.match(source, /resizeTargetRatio\.value = saved\.character_height_ratio \* 100/);
-  assert.match(source, /resizeBottomMarginRatio\.value = saved\.bottom_margin_ratio \* 100/);
+  assert.match(source, /normalizeResizeRatios\(saved\.character_height_ratio \* 100, saved\.bottom_margin_ratio \* 100\)/);
   assert.match(source, /const estimatedVideoHeights = computed/);
   assert.match(source, /v-if="targetHeightPixels > 0"/);
   assert.match(source, /\[480, 720, 1080\]/);
@@ -182,8 +181,7 @@ test('saving an edited image keeps its layout available for the next editor open
   assert.match(applyHandler, /imageEditorAttemptIndex\.value = null/);
   const editorSource = await import('node:fs/promises').then(({ readFile }) =>
     readFile(new URL('../src/components/seedream/SeedreamImageEraser.vue', import.meta.url), 'utf8'));
-  assert.match(editorSource, /resizeTargetRatio\.value = saved\.character_height_ratio \* 100/);
-  assert.match(editorSource, /resizeBottomMarginRatio\.value = saved\.bottom_margin_ratio \* 100/);
+  assert.match(editorSource, /normalizeResizeRatios\(saved\.character_height_ratio \* 100, saved\.bottom_margin_ratio \* 100\)/);
   assert.match(editorSource, /resizeTop\.value = height - saved\.bottom_distance - saved\.target_height/);
   assert.match(editorSource, /resizeBottom\.value = height - saved\.bottom_distance/);
 });

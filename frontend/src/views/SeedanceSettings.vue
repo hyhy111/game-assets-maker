@@ -79,6 +79,37 @@
           <div>
             <Switch v-model="appDraft.logger_enabled" :label="t('settings.enableLogging')" />
           </div>
+          <div
+            v-if="configStore.config?.ark_audit_available"
+            data-test="ark-audit-setting"
+          >
+            <Switch
+              :model-value="configStore.config.ark_audit_enabled === true"
+              :disabled="auditSaving || saving || executingMigration"
+              :label="t('settings.arkAuditEnabled')"
+              @update:model-value="setArkAuditEnabled"
+            />
+            <p class="mt-2 text-xs text-[var(--seedance-muted)]">
+              {{ t('settings.arkAuditHint') }}
+            </p>
+            <p
+              v-if="auditError"
+              class="mt-2 text-sm text-danger"
+              role="alert"
+            >
+              {{ auditError }}
+            </p>
+          </div>
+          <div data-test="cli-generation-setting">
+            <Switch
+              :model-value="configStore.config?.cli_generation_enabled === true"
+              :disabled="cliGenerationSaving || saving || executingMigration"
+              :label="t('settings.cliGenerationEnabled')"
+              @update:model-value="requestCliGenerationEnabled"
+            />
+            <p class="mt-2 text-xs text-[var(--seedance-muted)]">{{ t('settings.cliGenerationHint') }}</p>
+            <p v-if="cliGenerationError" role="alert" class="mt-2 text-sm text-danger">{{ cliGenerationError }}</p>
+          </div>
           <div class="[&_span]:!text-danger">
             <Switch
               v-model="appDraft.paid_generation_confirmation_enabled"
@@ -281,6 +312,20 @@
       </form>
     </main>
 
+    <div v-if="cliGenerationConfirm" ref="cliGenerationModalRoot"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+      role="dialog" aria-modal="true" aria-labelledby="cli-generation-title" aria-describedby="cli-generation-description"
+      data-test="cli-generation-confirm" @keydown="onCliGenerationKeydown" @click.self="cancelCliGeneration">
+      <div class="max-w-md rounded-xl border border-dark-border bg-dark-surface p-6">
+        <h2 id="cli-generation-title" class="text-lg font-semibold text-white">{{ t('settings.cliGenerationConfirmTitle') }}</h2>
+        <p id="cli-generation-description" class="mt-3 text-gray-300">{{ t('settings.cliGenerationConfirmBody') }}</p>
+        <div class="mt-5 flex justify-end gap-2">
+          <Button type="button" variant="secondary" :disabled="cliGenerationSaving" @click="cancelCliGeneration">{{ t('common.cancel') }}</Button>
+          <Button type="button" :loading="cliGenerationSaving" :disabled="cliGenerationSaving" @click="saveCliGeneration(true)">{{ t('common.confirm') }}</Button>
+        </div>
+      </div>
+    </div>
+
     <div
       v-if="confirmCacheClean"
       ref="cacheCleanModalRoot"
@@ -469,6 +514,13 @@ const savedSnapshot = ref('');
 const pendingRoute = ref('');
 const connectionLoading = ref(false);
 const saving = ref(false);
+const auditSaving = ref(false);
+const auditError = ref('');
+const cliGenerationConfirm = ref(false);
+const cliGenerationSaving = ref(false);
+const cliGenerationError = ref('');
+const cliGenerationModalRoot = ref<HTMLElement | null>(null);
+let cliGenerationTrigger: HTMLElement | null = null;
 const initialLoadComplete = ref(false);
 const seedanceSettingsLoaded = ref(Boolean(store.settings));
 const cleaning = ref(false);
@@ -538,7 +590,6 @@ const seedreamSupportedResolutions = computed(() => SEEDREAM_MODEL_RESOLUTIONS[s
 const seedreamModelOptions = computed(() => [
   { value: 'pro', label: t('seedream.models.pro') },
   { value: 'flash', label: t('seedream.models.flash') },
-  { value: 'lite', label: t('seedream.models.lite') },
 ]);
 const seedreamResolutionOptions = computed(() => seedreamSupportedResolutions.value.map(value => ({ value, label: value })));
 const seedreamRatioOptions = computed(() => seedreamAllowedRatios.map(value => ({ value, label: value })));
@@ -778,6 +829,53 @@ async function save() {
     await savePlain();
   }
   saving.value = false;
+}
+
+async function requestCliGenerationEnabled(enabled: boolean) {
+  if (cliGenerationSaving.value || saving.value || executingMigration.value) return;
+  cliGenerationError.value = '';
+  if (!enabled) return saveCliGeneration(false);
+  cliGenerationTrigger = document.activeElement as HTMLElement;
+  cliGenerationConfirm.value = true;
+  await nextTick();
+  cliGenerationModalRoot.value?.querySelector<HTMLElement>('button')?.focus();
+}
+
+function cancelCliGeneration() {
+  if (cliGenerationSaving.value) return;
+  cliGenerationConfirm.value = false;
+  cliGenerationTrigger?.focus();
+}
+
+function onCliGenerationKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    cancelCliGeneration();
+  } else if (cliGenerationModalRoot.value) trapModalTab(event, cliGenerationModalRoot.value);
+}
+
+async function saveCliGeneration(enabled: boolean) {
+  if (cliGenerationSaving.value || (enabled && !cliGenerationConfirm.value)) return;
+  cliGenerationSaving.value = true;
+  const saved = await configStore.setCliGenerationEnabled(enabled, enabled);
+  cliGenerationSaving.value = false;
+  if (!saved) cliGenerationError.value = t('settings.cliGenerationSaveFailed');
+  else {
+    cliGenerationConfirm.value = false;
+    cliGenerationTrigger?.focus();
+  }
+}
+
+async function setArkAuditEnabled(enabled: boolean) {
+  if (auditSaving.value || !configStore.config?.ark_audit_available) return;
+  auditSaving.value = true;
+  auditError.value = '';
+  try {
+    const saved = await configStore.setArkAuditEnabled(enabled);
+    if (!saved) auditError.value = t('settings.arkAuditSaveFailed');
+  } finally {
+    auditSaving.value = false;
+  }
 }
 
 async function savePlain() {

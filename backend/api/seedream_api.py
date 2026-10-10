@@ -7,6 +7,7 @@ import binascii
 import json
 import os
 import shutil
+import tempfile
 from collections.abc import Callable
 from copy import deepcopy
 from io import BytesIO
@@ -19,6 +20,7 @@ import webview
 from PIL import Image, ImageOps
 
 from backend.ark_audit import ArkAudit
+from backend.image_input import MAX_IMAGE_BYTES, ImageInputError, read_image_metadata
 from backend.image_layout import (
     delete_edit_source,
     delete_generation_layout,
@@ -35,6 +37,7 @@ from backend.seedream.validation import _ALLOWED_RATIOS, ValidationError, valida
 from src.utils.ai_cache_paths import ai_pic_cache_root
 from src.utils.app_config import load_app_config, save_app_config
 from src.utils.storage_locations import StorageLocations
+from src.utils.system_paths import open_directory
 
 _DEFAULT_MODEL = "pro"
 _DEFAULT_RESOLUTION = "1K"
@@ -42,9 +45,7 @@ _DEFAULT_RATIO = "16:9"
 _DEFAULT_COUNT = 2
 
 _IMAGE_FILE_TYPES = ("JPEG image (*.jpg;*.jpeg)",)
-_REFERENCE_FILE_TYPES = (
-    "Image files (*.jpg;*.jpeg;*.png;*.webp;*.bmp;*.tif;*.tiff;*.gif;*.heic;*.heif)",
-)
+_REFERENCE_FILE_TYPES = ("Image files (*.jpg;*.jpeg;*.png;*.webp;*.bmp;*.tif;*.tiff;*.gif;*.heic;*.heif)",)
 
 
 class SeedreamAPI:
@@ -123,6 +124,46 @@ class SeedreamAPI:
         except Exception as error:
             return self._error_response(error)
 
+    def import_reference_image(self, image_data_url: str, filename: str = "") -> dict[str, Any]:
+        """Persist one dropped local image without trusting its original file path."""
+        temporary_path = None
+        try:
+            if not isinstance(image_data_url, str) or len(image_data_url) > 4 * ((MAX_IMAGE_BYTES + 2) // 3) + 256:
+                raise ValidationError("reference_image", "IMAGE_TOO_LARGE", "Each image must be smaller than 30 MiB")
+            header, separator, encoded = image_data_url.partition(",")
+            if not separator or not header.startswith("data:") or not header.endswith(";base64"):
+                raise ValidationError("reference_image", "INVALID_IMAGE", "A local image file is required")
+            try:
+                content = base64.b64decode(encoded, validate=True)
+            except (binascii.Error, ValueError) as error:
+                raise ValidationError("reference_image", "INVALID_IMAGE", "Image data is invalid") from error
+            if len(content) >= MAX_IMAGE_BYTES:
+                raise ValidationError("reference_image", "IMAGE_TOO_LARGE", "Each image must be smaller than 30 MiB")
+            config = load_app_config()["seedance"]
+            root = (
+                self._storage_locations.ai_pic_cache_root
+                if self._storage_locations
+                else ai_pic_cache_root(config.get("cache_dir"))
+            )
+            directory = root / "reference-inputs"
+            directory.mkdir(parents=True, exist_ok=True)
+            with tempfile.NamedTemporaryFile(dir=directory, suffix=".image", delete=False) as target:
+                temporary_path = Path(target.name)
+                target.write(content)
+            image_format, _, _ = read_image_metadata(temporary_path)
+            suffix = {"JPEG": ".jpg", "TIFF": ".tiff"}.get(image_format, f".{image_format.lower()}")
+            destination = temporary_path.with_suffix(suffix)
+            temporary_path.replace(destination)
+            temporary_path = None
+            return {"success": True, "path": str(destination.resolve())}
+        except ImageInputError as error:
+            return self._error_response(ValidationError("reference_image", error.code, error.message))
+        except Exception as error:
+            return self._error_response(error)
+        finally:
+            if temporary_path is not None:
+                temporary_path.unlink(missing_ok=True)
+
     def get_batch(self, local_id: str) -> dict[str, Any]:
         try:
             return {"success": True, "batch": self._decorate_batch(self._ensure_manager().get_batch(local_id))}
@@ -152,6 +193,16 @@ class SeedreamAPI:
             destination = Path(result[0])
             shutil.copy2(source, destination)
             return {"success": True, "data": {"saved": True, "path": str(destination)}}
+        except Exception as error:
+            return self._error_response(error)
+
+    def open_image_directory(self, local_id: str, attempt_index: int = 0) -> dict[str, Any]:
+        try:
+            source = self.media_resolver.resolve(local_id, "image", attempt_index)
+            if not source.is_file():
+                raise FileNotFoundError("Seedream image is not available")
+            open_directory(source.parent)
+            return {"success": True}
         except Exception as error:
             return self._error_response(error)
 
@@ -211,18 +262,23 @@ class SeedreamAPI:
             canvas.save(temporary, format=image_format, **save_options)
             os.replace(temporary, source)
 
-            generation_layout = write_generation_layout(source, {
-                "source_width": width,
-                "source_height": height,
-                "measured_top": top,
-                "measured_bottom": bottom,
-                "measured_height": measured_height,
-                "target_height": target_height,
-                "character_height_ratio": target_height / height,
-                "bottom_distance": bottom_distance,
-                "bottom_margin_ratio": bottom_distance / height,
-                "scale": scale,
-            }, width=width, height=height)
+            generation_layout = write_generation_layout(
+                source,
+                {
+                    "source_width": width,
+                    "source_height": height,
+                    "measured_top": top,
+                    "measured_bottom": bottom,
+                    "measured_height": measured_height,
+                    "target_height": target_height,
+                    "character_height_ratio": target_height / height,
+                    "bottom_distance": bottom_distance,
+                    "bottom_margin_ratio": bottom_distance / height,
+                    "scale": scale,
+                },
+                width=width,
+                height=height,
+            )
 
             return {
                 "success": True,
@@ -275,7 +331,7 @@ class SeedreamAPI:
                 raise ValueError("Edit source must be a PNG data URL")
 
             def decode_data_url(value: str, label: str) -> bytes:
-                encoded = value[len(prefix):]
+                encoded = value[len(prefix) :]
                 if len(encoded) > 64 * 1024 * 1024:
                     raise ValueError(f"{label} is too large")
                 try:
@@ -381,6 +437,10 @@ class SeedreamAPI:
         """
         try:
             draft = self._ensure_manager().get_regeneration_draft(local_id)
+            if draft.get("reference_image_url"):
+                draft["reference_image_url"] = (
+                    f"{self._media_base_url}/seedream-media/{quote(local_id, safe='')}/reference"
+                )
             return {"success": True, "data": draft}
         except Exception as error:
             return self._error_response(error)
@@ -456,14 +516,16 @@ class SeedreamAPI:
             default_ratio = settings.get("default_ratio", _DEFAULT_RATIO)
             if default_ratio not in _ALLOWED_RATIOS:
                 raise ValidationError("default_ratio", "UNSUPPORTED_RATIO", "Unsupported aspect ratio")
-            save_app_config({
-                "seedream": {
-                    "default_count": default_count,
-                    "default_model": default_model,
-                    "default_resolution": default_resolution,
-                    "default_ratio": default_ratio,
+            save_app_config(
+                {
+                    "seedream": {
+                        "default_count": default_count,
+                        "default_model": default_model,
+                        "default_resolution": default_resolution,
+                        "default_ratio": default_ratio,
+                    }
                 }
-            })
+            )
             return {
                 "success": True,
                 "settings": {
@@ -520,13 +582,20 @@ class SeedreamAPI:
         local_id = decorated.get("local_id")
         if not isinstance(local_id, str):
             return decorated
+        if decorated.get("reference_image_url"):
+            decorated["reference_image_url"] = (
+                f"{self._media_base_url}/seedream-media/{quote(local_id, safe='')}/reference"
+            )
         for attempt in decorated.get("attempts", []):
+            if isinstance(attempt, dict):
+                attempt["can_open_directory"] = False
             if isinstance(attempt, dict) and attempt.get("image_url"):
                 index = attempt.get("index", 0)
                 attempt["image_url"] = self._media_url(local_id, index if isinstance(index, int) else 0)
                 try:
                     source = self.media_resolver.resolve(local_id, "image", index if isinstance(index, int) else 0)
                     backup = source.with_name(f"{source.stem}.original{source.suffix}")
+                    attempt["can_open_directory"] = source.is_file()
                     attempt["has_original_backup"] = backup.is_file()
                 except (OSError, TypeError, ValueError):
                     attempt["has_original_backup"] = False

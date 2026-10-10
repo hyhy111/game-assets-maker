@@ -3,6 +3,8 @@
     <form
       class="w-full"
       @submit.prevent="submit"
+      @drop.prevent
+      @dragover.prevent
     >
       <section
         class="seedance-prompt-surface rounded-[24px] border border-[#3b3b3b] bg-[#1f1f1f] p-4 sm:p-5"
@@ -32,6 +34,8 @@
               @edit="openImageEditor('first_frame')"
               @clear="clearFrame('first_frame')"
               @drop-image="dropCandidateFrame('first_frame', $event)"
+              @drop-file="dropLocalFrame('first_frame', $event)"
+              @drop-error="dropError = t($event)"
             />
             <ArrowRight :size="14" class="shrink-0 text-gray-600" stroke-width="1.8" aria-hidden="true" />
             <SeedanceImagePicker
@@ -56,6 +60,8 @@
               @edit="openImageEditor('last_frame')"
               @clear="clearFrame('last_frame')"
               @drop-image="dropCandidateFrame('last_frame', $event)"
+              @drop-file="dropLocalFrame('last_frame', $event)"
+              @drop-error="dropError = t($event)"
             />
           </div>
 
@@ -306,6 +312,7 @@
           </div>
         </div>
       </section>
+      <p v-if="dropError" class="mt-2 text-sm text-danger" role="alert">{{ dropError }}</p>
     </form>
 
     <section v-if="showTaskList" class="mt-10" data-test="seedance-create-task-list">
@@ -458,6 +465,7 @@ const parametersOpen = ref(false);
 const submitting = ref(false);
 const draftLoadFailed = ref(false);
 const handoffLoadFailed = ref(false);
+const dropError = ref('');
 const editingField = ref<'first_frame' | 'last_frame' | null>(null);
 const editorImageUrl = ref('');
 const editorEditSourceUrl = ref('');
@@ -576,9 +584,16 @@ async function dropCandidateFrame(
   field: 'first_frame' | 'last_frame',
   candidate: SeedreamImageDragPayload,
 ) {
+  dropError.value = '';
   if (await workspace.handoffCandidateToVideo(candidate.localId, candidate.attemptIndex, field)) {
     delete errors.value[field];
-  }
+  } else dropError.value = workspace.candidateHandoffError || t('aiCreation.imageUnavailable');
+}
+
+async function dropLocalFrame(field: 'first_frame' | 'last_frame', file: File) {
+  dropError.value = '';
+  if (await workspace.importDroppedImage(file, field)) delete errors.value[field];
+  else dropError.value = workspace.candidateHandoffError || t('aiCreation.imageUnavailable');
 }
 
 function resetDraft() {

@@ -314,7 +314,7 @@ test('Seedance frame cards accept generated image drops for first and last frame
   assert.match(picker, /@dragenter="onDragEnter"/);
   assert.match(picker, /@dragover="onDragOver"/);
   assert.match(picker, /@drop="onDrop"/);
-  assert.match(picker, /emit\('drop-image', payload\)/);
+  assert.match(picker, /emit\('drop-image', result\.candidate\)/);
   assert.match(create, /@drop-image="dropCandidateFrame\('first_frame', \$event\)"/);
   assert.match(create, /@drop-image="dropCandidateFrame\('last_frame', \$event\)"/);
   assert.match(create, /dropAsFirstFrame/);

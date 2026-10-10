@@ -120,6 +120,7 @@ export const useSeedreamStore = defineStore('seedream', () => {
       const path = await api.seedream.selectImageFile();
       if (!path) return null;
       const thumbnail = await api.frame.getFrameThumbnail(path, 320);
+      if (!thumbnail) throw new Error('Image preview unavailable');
       return { path, previewUrl: `data:image/png;base64,${thumbnail}` };
     } catch (caught) {
       setError(caught);

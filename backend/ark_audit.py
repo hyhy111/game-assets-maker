@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+from src.utils.app_config import ark_audit_enabled
 from src.utils.data_paths import data_root
 
 _WRITE_LOCK = threading.Lock()
@@ -200,6 +201,8 @@ class ArkAudit:
         critical: bool = False,
         ids: dict[str, Any] | None = None,
     ) -> None:
+        if not ark_audit_enabled():
+            return
         context = ids if ids is not None else _CONTEXT.get() or {}
         entry = {
             "schema": 1,
@@ -217,6 +220,8 @@ class ArkAudit:
         payload = (json.dumps(entry, ensure_ascii=False, separators=(",", ":")) + "\n").encode("utf-8")
         try:
             with _WRITE_LOCK:
+                if not ark_audit_enabled():
+                    return
                 path = self.path
                 path.parent.mkdir(parents=True, exist_ok=True)
                 self._rotate(path, len(payload))
@@ -264,6 +269,8 @@ class ArkAudit:
 
     def reconcile(self) -> None:
         """Label prior-process calls from journal evidence, never from billing guesses."""
+        if not ark_audit_enabled():
+            return
         path = self.path
         paths = [path.with_name(f"{path.name}.{index}") for index in range(_MAX_ARCHIVES, 0, -1)] + [path]
         calls: dict[str, dict[str, Any]] = {}

@@ -1,13 +1,21 @@
 import json
+import sys
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+
+import pytest
 
 from backend.api.config_api import ConfigAPI
 from src.utils.app_config import (
+    ark_audit_available,
+    ark_audit_enabled,
     get_app_config_path,
     load_app_config,
     merge_app_config,
     public_app_config,
     save_app_config,
+    save_ark_audit_enabled,
 )
 
 
@@ -165,3 +173,77 @@ def test_saved_config_file_contains_the_full_merged_config(runtime_config_path: 
 
 def test_public_config_includes_project_dir(runtime_config_path: Path):
     assert ConfigAPI().get_config()["project_dir"] == "project"
+
+
+@pytest.mark.parametrize("value", [None, 1, "true", [], {}])
+def test_invalid_audit_setting_defaults_off(value):
+    assert merge_app_config({"ark_audit_enabled": value})["ark_audit_enabled"] is False
+    assert merge_app_config()["ark_audit_enabled"] is False
+
+
+def test_audit_runtime_qualification(runtime_config_path, monkeypatch):
+    monkeypatch.setenv("GAM_DATA_MODE", "dev")
+    monkeypatch.delenv("DEV_MODE", raising=False)
+    save_app_config({"ark_audit_enabled": True})
+    assert not ark_audit_available()
+    assert not ark_audit_enabled()
+    monkeypatch.setenv("DEV_MODE", "1")
+    assert ark_audit_available()
+    assert ark_audit_enabled()
+    monkeypatch.setenv("GAM_DATA_MODE", "installed")
+    assert not ark_audit_available()
+    assert not ark_audit_enabled()
+    monkeypatch.setenv("GAM_DATA_MODE", "dev")
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    assert not ark_audit_available()
+    assert not ark_audit_enabled()
+
+
+def test_immediate_audit_save_changes_only_audit_setting(runtime_config_path, monkeypatch):
+    monkeypatch.setenv("DEV_MODE", "1")
+    monkeypatch.setenv("GAM_DATA_MODE", "dev")
+    save_app_config({"language": "en", "logger_enabled": True})
+    saved = save_ark_audit_enabled(True)
+    assert saved["ark_audit_available"] is True
+    assert saved["ark_audit_enabled"] is True
+    assert load_app_config()["language"] == "en"
+    assert load_app_config()["logger_enabled"] is True
+    with pytest.raises(ValueError):
+        save_ark_audit_enabled("true")
+    monkeypatch.delenv("DEV_MODE")
+    with pytest.raises(ValueError):
+        save_ark_audit_enabled(False)
+    assert load_app_config()["ark_audit_enabled"] is True
+
+
+def test_concurrent_settings_save_cannot_lose_immediate_audit_toggle(runtime_config_path, monkeypatch):
+    from src.utils import app_config
+
+    save_app_config({"ark_audit_enabled": False})
+    first_write = threading.Event()
+    release_write = threading.Event()
+    second_write = threading.Event()
+    original_write = app_config._write_config
+
+    def delayed_write(path, config):
+        if config["ark_audit_enabled"]:
+            second_write.set()
+        else:
+            first_write.set()
+            assert release_write.wait(2)
+        original_write(path, config)
+
+    monkeypatch.setattr(app_config, "_write_config", delayed_write)
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        first = executor.submit(save_app_config, {"logger_enabled": True})
+        assert first_write.wait(2)
+        second = executor.submit(save_app_config, {"ark_audit_enabled": True})
+        try:
+            assert not second_write.wait(0.05)
+        finally:
+            release_write.set()
+        first.result(timeout=2)
+        second.result(timeout=2)
+    saved = load_app_config()
+    assert saved["logger_enabled"] is True
+    assert saved["ark_audit_enabled"] is True

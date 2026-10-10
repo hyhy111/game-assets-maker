@@ -41,18 +41,19 @@ uv run python -m backend.main
 
 ### 模型准备
 
-背景移除依赖 rembg 模型（不随仓库分发）。首次使用时会自动下载，也可以提前手动下载：
+背景移除当前仅支持 U2Net（约 176 MB），模型权重不随仓库或发布包分发。安装版在步骤 2 提示下载，由用户选择来源并点击下载；有效模型就绪后可离线处理。源码开发可在仓库根目录提前下载：
 
 ```bash
-python scripts/download_models.py        # 全部模型（约 530MB）
-python scripts/download_models.py u2net  # 仅默认模型
+uv run python scripts/download_models.py u2net
 ```
 
 详见 [MODELS.md](MODELS.md)。
 
 ### 自定义 Key 调用日志
 
-使用自定义 Ark API Key 生成图片或视频时，应用会在数据目录的 `logs/ark-custom-key.jsonl` 记录调用过程。开发模式默认为当前工作区的 `logs/`，安装版默认为 `~/.gam/logs/`；`GAM_DATA_ROOT` 会改变数据目录。该日志独立于设置中的“启用错误日志”。
+仅通过 `dev_start.py` 启动的开发模式可在设置页开启“记录 API 调用详情”，默认关闭。开启后，自定义 Ark API Key 的图片与视频调用过程记录到数据目录的 `logs/ark-custom-key.jsonl`。开发模式默认为当前工作区的 `logs/`；`GAM_DATA_ROOT` 只改变数据目录，不授予日志资格。普通源码运行、安装数据模式与打包应用始终不记录该日志，即使配置残留开启值。该日志独立于设置中的“启用错误日志”和前端请求诊断。
+
+开关独立即时保存，成功后影响后续事件，无需统一保存或重启。关闭保留已有文件，不记录后续事件，也不会在再次开启时补写关闭期间的事件；进行中的调用可能只有部分事件，因此缺少日志不能推断请求失败、未生成或未计费。
 
 同一 `call_id` 对应一次 Ark 调用。`intent` 表示客户端准备发起请求，`http_response` 表示收到 HTTP 响应，`parsed_response` 表示响应已解析，`response_persisted` 或 `task_persisted` 表示可恢复信息已保存。`elapsed_ms` 是截至该事件的毫秒数。视频的 `video.get` 是任务状态查询；图片的 `download_*` 表示本地下载阶段。日志只记录模型、时间、HTTP 状态、可用的请求 ID、用量和 URL 是否存在，不包含 Key、提示词原文、图片数据或下载 URL。
 
@@ -121,15 +122,16 @@ uv run python -m backend.main
 
 ### Custom-key Ark audit log
 
-Image and video calls made with a user-supplied Ark API key are recorded in `logs/ark-custom-key.jsonl` under the application data root (the workspace in development, `~/.gam` when installed, or `GAM_DATA_ROOT` when set). This audit is independent of the optional error logger. Events sharing a `call_id` describe one provider call: `intent` precedes transport, `http_response` records receipt, `parsed_response` records a usable payload, and `response_persisted` / `task_persisted` records local recovery data. The log contains safe timing, status, usage, and URL-presence metadata, never keys, prompt text, media bytes, or signed URLs. An `intent` without a response does not prove provider acceptance or billing; check the Ark console for that. Account-backed generation is separate. The file rotates by size with up to five archives.
+Development launched through `dev_start.py` offers a “Record API call details” setting, disabled by default. When enabled, calls made with a user-supplied Ark API key are recorded in `logs/ark-custom-key.jsonl` under the application data root (the development workspace, or `GAM_DATA_ROOT` when set). Ordinary source launches, installed data mode and packaged applications never record this log, even with a stale enabled setting. A data-root override does not grant logging permission. This audit is independent of the optional error logger and frontend request diagnostics.
+
+The switch saves independently and applies to subsequent events immediately, without saving other settings or restarting. Disabling preserves existing files; re-enabling never backfills disabled events. An in-flight call may have only partial events, so missing events do not prove failure, lack of generation or lack of billing. Events sharing a `call_id` describe one provider call: `intent` precedes transport, `http_response` records receipt, `parsed_response` records a usable payload, and `response_persisted` / `task_persisted` records local recovery data. The log contains safe timing, status, usage, and URL-presence metadata, never keys, prompt text, media bytes, or signed URLs. An `intent` without a response does not prove provider acceptance or billing; check the Ark console for that. Account-backed generation is separate. The file rotates by size with up to five archives.
 
 ### Models
 
-Background removal needs rembg models (not shipped in this repo). They download automatically on first use, or you can fetch them upfront:
+Background removal currently supports only U2Net (~176 MB). Model weights are not included in the repository or release package. In installed builds, step 2 prompts the user to select a source and download the model. Once ready, it supports offline processing. For source development, download it from the repository root:
 
 ```bash
-python scripts/download_models.py        # all models (~530MB)
-python scripts/download_models.py u2net  # default model only
+uv run python scripts/download_models.py u2net
 ```
 
 See [MODELS.md](MODELS.md).

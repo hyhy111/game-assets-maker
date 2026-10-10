@@ -15,6 +15,8 @@
           :src="imageUrl(selectedAttempt.image_url)"
           :alt="`${t('seedream.detail.candidateImage')} ${selectedAttempt.index + 1}`"
           class="h-full w-full object-cover transition duration-300 group-hover/preview:brightness-105"
+          :draggable="selectedAttempt.can_open_directory !== false"
+          @dragstart="startImageDrag($event, selectedAttempt)"
         >
         <span v-else class="grid h-full place-items-center text-sm text-gray-500">{{ statusText }}</span>
         <span class="absolute left-3 top-3 rounded-full px-3 py-1 text-xs font-medium shadow-sm" :class="statusClass">
@@ -34,7 +36,7 @@
           v-for="(attempt, index) in succeededAttempts"
           :key="attempt.local_id"
           type="button"
-          draggable="true"
+          :draggable="attempt.can_open_directory !== false"
           class="h-14 w-14 shrink-0 overflow-hidden rounded-md border-2 bg-black/20 p-0.5 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70"
           :class="selectedAttempt?.index === attempt.index ? 'border-primary' : 'border-transparent hover:border-white/30'"
           :aria-label="`${t('seedream.detail.candidateImage')} ${index + 1}`"
@@ -126,10 +128,11 @@ function imageUrl(url: string): string {
 }
 
 function startImageDrag(event: DragEvent, attempt: SeedreamAttempt) {
+  if (attempt.can_open_directory === false) { event.preventDefault(); return; }
   writeSeedreamImageDrag(event.dataTransfer, {
     localId: props.batch.local_id,
     attemptIndex: attempt.index,
-  });
+  }, event.currentTarget as HTMLElement | null);
 }
 
 function formatDate(iso: string): string {

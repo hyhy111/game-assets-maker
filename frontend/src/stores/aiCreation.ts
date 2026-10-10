@@ -1,6 +1,8 @@
 import { defineStore } from 'pinia';
 import { reactive, ref } from 'vue';
 import { api } from '@/api';
+import type { PyWebViewWindow } from '@/types/api';
+import { readImageFile } from '@/seedream-image-drag';
 import { defaultForm, type CreateForm as SeedreamCreateForm } from '@/seedream-ui';
 import type { CreateForm as SeedanceCreateForm } from '@/seedance-ui';
 
@@ -56,7 +58,9 @@ export const useAICreationStore = defineStore('ai-creation', () => {
   function initializeImageDraft(defaults: SeedreamCreateForm) {
     Object.assign(imageDefaults, defaults);
     if (!imageInitialized.value) {
-      Object.assign(imageDraft, defaults);
+      const factory = defaultForm();
+      const pending = Object.fromEntries(Object.entries(imageDraft).filter(([key, value]) => value !== factory[key as keyof SeedreamCreateForm]));
+      Object.assign(imageDraft, defaults, pending);
       imageInitialized.value = true;
     }
   }
@@ -64,11 +68,46 @@ export const useAICreationStore = defineStore('ai-creation', () => {
   function initializeVideoDraft(defaults: SeedanceCreateForm) {
     Object.assign(videoDefaults, defaults);
     if (!videoInitialized.value) {
-      const pendingFirstFrame = videoDraft.first_frame;
-      Object.assign(videoDraft, defaults);
-      if (pendingFirstFrame) videoDraft.first_frame = pendingFirstFrame;
+      const factory = defaultVideoDraft();
+      const pending = Object.fromEntries(Object.entries(videoDraft).filter(([key, value]) => value !== factory[key as keyof SeedanceCreateForm]));
+      Object.assign(videoDraft, defaults, pending);
       videoInitialized.value = true;
     }
+  }
+
+  async function patchAgentDraft(kind: CreationMode, patch: Record<string, unknown>) {
+    const draft = kind === 'image' ? imageDraft : videoDraft;
+    const snapshot = JSON.stringify(draft);
+    const normalized = { ...patch };
+    if (kind === 'image' && normalized.reference_image === null) normalized.reference_image = '';
+    if (kind === 'video' && normalized.last_frame === '') normalized.last_frame = null;
+    const candidate = { ...draft, ...normalized };
+    const validated = await (window as PyWebViewWindow).pywebview?.api.agent_validate_draft(kind, candidate);
+    if (!validated?.success) throw new Error(validated?.error || 'INPUT_INVALID');
+    const previews: Record<string, string> = {};
+    const imageFields = kind === 'image' ? ['reference_image'] : ['first_frame', 'last_frame'];
+    for (const field of imageFields) {
+      if (!Object.prototype.hasOwnProperty.call(patch, field)) continue;
+      const path = patch[field];
+      if (!path) previews[field] = '';
+      else {
+        const thumbnail = await api.frame.getFrameThumbnail(String(path), 320);
+        if (!thumbnail) throw new Error('Image preview unavailable');
+        previews[field] = `data:image/png;base64,${thumbnail}`;
+      }
+    }
+    if (JSON.stringify(draft) !== snapshot) throw new Error('DRAFT_CHANGED');
+    Object.assign(draft, candidate);
+    if (kind === 'image') {
+      imageInitialized.value = true;
+      if (Object.prototype.hasOwnProperty.call(previews, 'reference_image')) imagePreviewUrls.reference = previews.reference_image;
+    } else {
+      videoInitialized.value = true;
+      if (Object.prototype.hasOwnProperty.call(previews, 'first_frame')) videoPreviewUrls.first_frame = previews.first_frame;
+      if (Object.prototype.hasOwnProperty.call(previews, 'last_frame')) videoPreviewUrls.last_frame = previews.last_frame;
+    }
+    activeMode.value = kind;
+    return { kind, draft: { ...draft } };
   }
 
   function resetImageDraft() {
@@ -136,12 +175,61 @@ export const useAICreationStore = defineStore('ai-creation', () => {
       }
       const localPath = result.data.local_path;
       const thumbnail = await api.frame.getFrameThumbnail(localPath, 320);
+      if (!thumbnail) throw new Error('Image preview unavailable');
       videoDraft[field] = localPath;
       videoPreviewUrls[field] = `data:image/png;base64,${thumbnail}`;
       activeMode.value = 'video';
       return true;
     } catch (error) {
       candidateHandoffError.value = error instanceof Error ? error.message : 'Unable to load candidate image';
+      return false;
+    } finally {
+      candidateHandoffPending.value = false;
+    }
+  }
+
+  async function setImageInput(path: string, field: 'reference' | VideoFrameField): Promise<void> {
+    const thumbnail = await api.frame.getFrameThumbnail(path, 320);
+    if (!thumbnail) throw new Error('Image preview unavailable');
+    const previewUrl = `data:image/png;base64,${thumbnail}`;
+    if (field === 'reference') {
+      imageDraft.reference_image = path;
+      imagePreviewUrls.reference = previewUrl;
+    } else {
+      videoDraft[field] = path;
+      videoPreviewUrls[field] = previewUrl;
+    }
+  }
+
+  async function handoffCandidateToImage(localId: string, attemptIndex: number): Promise<boolean> {
+    if (candidateHandoffPending.value) return false;
+    candidateHandoffPending.value = true;
+    candidateHandoffError.value = '';
+    try {
+      const result = await api.seedream.getHandoffImage(localId, attemptIndex);
+      if (!result.success) throw new Error(result.error.message);
+      await setImageInput(result.data.local_path, 'reference');
+      activeMode.value = 'image';
+      return true;
+    } catch (error) {
+      candidateHandoffError.value = error instanceof Error ? error.message : 'Image unavailable';
+      return false;
+    } finally {
+      candidateHandoffPending.value = false;
+    }
+  }
+
+  async function importDroppedImage(file: File, field: 'reference' | VideoFrameField): Promise<boolean> {
+    if (candidateHandoffPending.value) return false;
+    candidateHandoffPending.value = true;
+    candidateHandoffError.value = '';
+    try {
+      const result = await api.seedream.importReferenceImage(await readImageFile(file), file.name);
+      if (!result.success) throw new Error(result.error.message);
+      await setImageInput(result.path, field);
+      return true;
+    } catch (error) {
+      candidateHandoffError.value = error instanceof Error ? error.message : 'Image unavailable';
       return false;
     } finally {
       candidateHandoffPending.value = false;
@@ -175,5 +263,9 @@ export const useAICreationStore = defineStore('ai-creation', () => {
     resetRecentLoaded,
     rememberWorkspaceScroll,
     handoffCandidateToVideo,
+    handoffCandidateToImage,
+    importDroppedImage,
+    setImageInput,
+    patchAgentDraft,
   };
 });

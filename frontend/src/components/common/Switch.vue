@@ -19,7 +19,7 @@
 </template>
 
 <script setup lang="ts">
-defineProps<{
+const props = defineProps<{
   modelValue: boolean;
   label?: string;
   disabled?: boolean;
@@ -31,6 +31,9 @@ const emit = defineEmits<{
 
 function onChange(event: Event) {
   const target = event.target as HTMLInputElement;
-  emit('update:modelValue', target.checked);
+  const requested = target.checked;
+  // Keep the native input consistent until its owner accepts the new value.
+  target.checked = props.modelValue;
+  emit('update:modelValue', requested);
 }
 </script>

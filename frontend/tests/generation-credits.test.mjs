@@ -8,7 +8,6 @@ after(closeSfcRenderer);
 test('image estimates match the supplied prices and multiply by requested count', () => {
   for (const [model, resolution, credits] of [
     ['pro', '1K', 30], ['pro', '1.5K', 30], ['pro', '2K', 60],
-    ['lite', '2K', 22],
   ]) {
     for (const count of [1, 2, 3, 4]) {
       assert.equal(imageGenerationCredits(model, resolution, count), credits * count);
@@ -38,7 +37,7 @@ test('unpriced combinations are unknown rather than free or extrapolated', () =>
   for (const duration of [-1, 0, 4.5, 7, 15]) {
     assert.equal(videoGenerationCredits('standard', '720p', duration), null);
   }
-  assert.equal(imageGenerationCredits('lite', '1K', 1), null);
+  assert.equal(imageGenerationCredits('lite', '2K', 1), null);
   for (const resolution of ['1K', '1.5K', '2K']) {
     assert.equal(imageGenerationCredits('flash', resolution, 1), null);
   }

@@ -542,6 +542,11 @@ class API:
         self._seedance_api.set_window(window)
         self._seedream_api.set_window(window)
 
+    def agent_acknowledge(self, request_id: str, result: dict[str, Any]) -> bool:
+        """Confirm a completed UI operation from the WebView bridge."""
+        operations = getattr(self, "_agent_operations", None)
+        return operations is not None and operations.acknowledge(request_id, result)
+
     # ==================== Credential Crypto ====================
     #
     # 加密保护级别说明：
@@ -694,6 +699,42 @@ class API:
         """Save application configuration"""
         return self._config_api.save_config(config)
 
+    def save_cli_generation_enabled(self, enabled: bool, confirmed: bool = False) -> dict[str, Any]:
+        """Save the GUI-confirmed immediate CLI generation preference."""
+        from src.utils.app_config import save_cli_generation_enabled
+
+        try:
+            config = save_cli_generation_enabled(enabled, confirmed)
+            return {"success": True, "cli_generation_enabled": config["cli_generation_enabled"]}
+        except (OSError, ValueError):
+            return {"success": False}
+
+    def agent_validate_draft(self, kind: str, values: dict[str, Any]) -> dict[str, Any]:
+        from backend.agent_control.drafts import validate_draft
+
+        try:
+            validate_draft(kind, values)
+            return {"success": True}
+        except (ValueError, TypeError, OSError) as error:
+            return {"success": False, "error": str(error)}
+
+    def agent_submit_generation(self, request_id: str, source: str) -> dict[str, Any]:
+        """Submit a registered CLI request through the live application APIs."""
+        operations = getattr(self, "_agent_operations", None)
+        if operations is None:
+            return {"success": False, "error": {"code": "UI_NOT_RUNNING"}}
+        return operations.submit_generation(request_id, source)
+
+    def save_ark_audit_enabled(self, enabled: bool) -> dict[str, Any]:
+        """Save only the immediate development audit toggle."""
+        from src.utils.app_config import save_ark_audit_enabled
+
+        try:
+            config = save_ark_audit_enabled(enabled)
+            return {"success": True, "ark_audit_enabled": config["ark_audit_enabled"]}
+        except (OSError, ValueError):
+            return {"success": False}
+
     # ==================== Storage Settings & Migration API ====================
 
     def storage_get_settings(self) -> dict[str, Any]:
@@ -736,12 +777,9 @@ class API:
     def open_project_folder(self, project_path: str) -> bool:
         """Open project folder in system file manager"""
         try:
-            if sys.platform == "darwin":
-                os.system(f'open "{project_path}"')
-            elif sys.platform == "win32":
-                os.startfile(project_path)
-            else:
-                os.system(f'xdg-open "{project_path}"')
+            from src.utils.system_paths import open_directory
+
+            open_directory(Path(project_path))
             return True
         except Exception as e:
             print(f"Error opening folder: {e}")
@@ -873,6 +911,9 @@ class API:
     def seedance_save_video(self, local_id: str) -> dict[str, Any]:
         return self._seedance_api.save_video(local_id)
 
+    def seedance_open_video_directory(self, local_id: str) -> dict[str, Any]:
+        return self._seedance_api.open_video_directory(local_id)
+
     def seedance_create_task(self, request: dict[str, Any]) -> dict[str, Any]:
         return self._seedance_api.create_task(request)
 
@@ -940,6 +981,9 @@ class API:
     def seedream_select_image_file(self) -> str | None:
         return self._seedream_api.select_image_file()
 
+    def seedream_import_reference_image(self, image_data_url: str, filename: str = "") -> dict[str, Any]:
+        return self._seedream_api.import_reference_image(image_data_url, filename)
+
     def seedream_create_batch(self, request: dict[str, Any]) -> dict[str, Any]:
         return self._seedream_api.create_batch(request)
 
@@ -951,6 +995,9 @@ class API:
 
     def seedream_save_image(self, local_id: str, attempt_index: int = 0) -> dict[str, Any]:
         return self._seedream_api.save_image(local_id, attempt_index)
+
+    def seedream_open_image_directory(self, local_id: str, attempt_index: int = 0) -> dict[str, Any]:
+        return self._seedream_api.open_image_directory(local_id, attempt_index)
 
     def seedream_resize_character(
         self,
@@ -1256,7 +1303,7 @@ class MainApp:
         self.api.set_window(self.window)
         from backend.agent_control.server import AgentControlServer
 
-        self.agent_control_server = AgentControlServer(self.window)
+        self.agent_control_server = AgentControlServer(self.window, api=self.api)
         self.agent_control_server.start()
 
         if sys.platform == "darwin":

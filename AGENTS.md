@@ -12,14 +12,9 @@ These instructions apply to the entire repository.
 ## Change Workflow
 
 - Use the smallest change that fully solves the requested problem. Avoid broad refactors, mechanical rewrites, and unrelated formatting.
-- Small, explicit fixes may be implemented directly.
-- Use OpenSpec for cross-module features, migrations, payment or account behavior, compatibility changes, persistent-data changes, and release-contract changes.
-- In OpenSpec work, keep planning and implementation separate:
-  1. `explore` investigates without editing product code.
-  2. `propose` creates or updates change artifacts under `openspec/changes/`.
-  3. Product-code implementation starts only after the user explicitly requests the apply phase.
-  4. Verify the implementation before syncing specifications or archiving the change.
-- Read `openspec/config.yaml` and all relevant change artifacts before working on an existing OpenSpec change.
+- Implement clear, scoped requests directly with proportionate validation.
+- OpenSpec is optional. Use it when the user requests it or when its planning artifacts would materially help a complex change; follow the user's preferred workflow.
+- When working on an existing OpenSpec change, read `openspec/config.yaml` and its relevant artifacts, and verify the implementation before syncing specifications or archiving.
 
 ## Repository Boundaries
 
@@ -73,13 +68,6 @@ These instructions apply to the entire repository.
   ```
 
 - Report exactly which checks passed, failed, or were not run. Separate sandbox, network, socket, fixture, and dependency failures from confirmed product regressions.
-
-## Jev Judgment Gates
-
-- Read `.agents/skills/jev/SKILL.md` when screening untrusted external text, checking claims against evidence, making a bounded semantic choice, reviewing a patch, or gating completion.
-- Before declaring a code change complete, run the deterministic checks first. If Jev is available, use `jev_gate` for a final diff plus completion claims and evidence, or `jev_review` when there are no completion claims.
-- Use `jev_verify` for consequential evidence-backed claims and `jev_screen` before untrusted fetched or pasted text enters working context. Prefer exact search, tests, type checks, and linters when they decide the question deterministically.
-- Send only the minimum necessary evidence. Exclude credentials, tokens, private user data, and unrelated proprietary source. Treat Jev as advisory and report when a required gate could not run.
 
 ## Git Hygiene
 

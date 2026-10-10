@@ -76,6 +76,14 @@ export default {
   settings: {
     title: 'Settings',
     enableLogging: 'Enable Logging',
+    arkAuditEnabled: 'Record API call details',
+    cliGenerationEnabled: 'Allow CLI to submit AI generation tasks',
+    cliGenerationHint: 'Off by default. Agents can submit image and video tasks when enabled. Local processing and draft preparation remain available.',
+    cliGenerationConfirmTitle: 'Enable CLI generation?',
+    cliGenerationConfirmBody: 'The CLI will be able to submit AI image and video tasks that may consume credits or incur charges. The agent must obtain your explicit consent before its first submission in each conversation; later tasks in that conversation can proceed directly. Turn this setting off to block new CLI submissions.',
+    cliGenerationSaveFailed: 'Could not save CLI generation permission. Please try again.',
+    arkAuditHint: 'Available in development only. Changes apply immediately; existing logs are preserved.',
+    arkAuditSaveFailed: 'Could not save the API call logging setting. Please try again.',
     paidGenerationConfirmation: 'Confirm before generation requests',
   },
   storage: {
@@ -101,6 +109,10 @@ export default {
     closeApp: 'Close App',
   },
   aiCreation: {
+    openDirectory: 'Open directory',
+    dropSingleImage: 'Only one image can be dropped at a time',
+    dropInvalidImage: 'Drop a local image file or a generated image from this app',
+    imageUnavailable: 'Image unavailable. Please select it again.',
     generationAccessTitle: 'Choose how to generate',
     generationAccessDescription: 'Sign in or configure your own API key before generating.',
     apiKeyRequiredTitle: 'Configure an API key',
@@ -144,7 +156,7 @@ export default {
       stackSamePrompts: 'Stack cards with the same prompt',
       favoriteMedia: 'Favorite this image or video',
       unfavoriteMedia: 'Remove from favorites',
-      dragImageToVideoFrame: 'Drag to the video first or last frame',
+      dragImageToVideoFrame: 'Press and hold to drag',
     },
   },
   steps: {
@@ -611,6 +623,7 @@ export default {
       createBatch: 'Create Task',
       referenceImage: 'Reference Image',
       referenceImageShort: 'Reference',
+      dropAsReference: 'Drop as reference image',
       optionalShort: '(optional)',
       referenceImageHelp: 'Optional. Pick a local image as the reference; the model generates or edits based on it.',
       selectReferenceImage: 'Select reference image',
@@ -621,7 +634,6 @@ export default {
     models: {
       pro: 'Seedream 5.0 Pro',
       flash: 'Seedream 5.0 Flash',
-      lite: 'Seedream 5.0 Lite',
     },
     ui: {
       characters: 'characters',
@@ -660,6 +672,8 @@ export default {
       tokensUnavailable: 'API not returned',
       elapsed: 'Elapsed',
       download: 'Save Image',
+      saveImage: 'Save image as',
+      useAsReference: 'Use as image reference',
       createVideo: 'Create AI Video',
       rateLimitHint: 'This request was rate-limited. Generation did not start and no model inference charges apply. However, failed requests may still consume rate-limit quota.',
       downloadFailed: 'Download Failed',

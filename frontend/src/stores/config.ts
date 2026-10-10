@@ -17,7 +17,13 @@ export const useConfigStore = defineStore('config', () => {
     loading.value = true;
     error.value = null;
     try {
-      config.value = await api.config.getConfig();
+      const loaded = await api.config.getConfig();
+      config.value = {
+        ...loaded,
+        cli_generation_enabled: loaded.cli_generation_enabled === true,
+        ark_audit_enabled: loaded.ark_audit_enabled === true,
+        ark_audit_available: loaded.ark_audit_available === true,
+      };
     } catch (e) {
       console.error('Failed to load config:', e);
       error.value = e instanceof Error ? e.message : 'Failed to load config';
@@ -26,6 +32,9 @@ export const useConfigStore = defineStore('config', () => {
         language: 'zh',
         theme: 'dark',
         logger_enabled: false,
+        cli_generation_enabled: false,
+        ark_audit_enabled: false,
+        ark_audit_available: false,
         paid_generation_confirmation_enabled: true,
         project_dir: 'project',
         logger_config: {
@@ -68,6 +77,27 @@ export const useConfigStore = defineStore('config', () => {
     }
   }
 
+  async function setCliGenerationEnabled(enabled: boolean, confirmed: boolean = false) {
+    try {
+      const success = await api.config.setCliGenerationEnabled(enabled, confirmed);
+      if (success && config.value) config.value.cli_generation_enabled = enabled;
+      return success;
+    } catch {
+      return false;
+    }
+  }
+
+  async function setArkAuditEnabled(enabled: boolean) {
+    try {
+      const success = await api.config.setArkAuditEnabled(enabled);
+      // Keep the config object identity so unrelated settings drafts are not reset.
+      if (success && config.value) config.value.ark_audit_enabled = enabled;
+      return success;
+    } catch {
+      return false;
+    }
+  }
+
   return {
     // State
     config,
@@ -75,6 +105,8 @@ export const useConfigStore = defineStore('config', () => {
     error,
     // Actions
     loadConfig,
-    saveConfig
+    saveConfig,
+    setArkAuditEnabled,
+    setCliGenerationEnabled,
   };
 });

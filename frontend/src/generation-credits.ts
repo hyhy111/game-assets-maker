@@ -5,7 +5,6 @@ import type { SeedanceModel, SeedanceResolution, SeedreamModel, SeedreamResoluti
 const IMAGE_CREDITS: Record<SeedreamModel, Partial<Record<SeedreamResolution, number>>> = {
   pro: { '1K': 30, '1.5K': 30, '2K': 60 },
   flash: {},
-  lite: { '2K': 22 },
 };
 
 const VIDEO_CREDITS: Record<SeedanceModel, Partial<Record<SeedanceResolution, Partial<Record<number, number>>>>> = {

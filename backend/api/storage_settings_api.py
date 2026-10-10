@@ -103,6 +103,9 @@ class StorageSettingsAPI:
     def _sanitize_draft(draft: dict[str, Any]) -> dict[str, Any]:
         """Drop read-only markers and never persist an empty API key field."""
         sanitized = deepcopy(draft)
+        sanitized.pop("ark_audit_enabled", None)
+        sanitized.pop("ark_audit_available", None)
+        sanitized.pop("cli_generation_enabled", None)
         seedance = sanitized.get("seedance")
         if isinstance(seedance, dict):
             seedance.pop("api_key_configured", None)

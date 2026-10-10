@@ -310,7 +310,7 @@ test('image task cards use one main preview with a selectable thumbnail strip', 
   assert.match(html, /data-test="recent-image-thumbnail-1"/);
   assert.match(html, /data-test="recent-image-thumbnail-2"/);
   assert.match(html, /draggable="true"/);
-  assert.match(html, /拖到视频生成的首帧或尾帧/);
+  assert.match(html, /title="长按拖拽"/);
   assert.match(html, /aria-pressed="true"[^>]*data-test="recent-image-thumbnail-0"/);
   assert.doesNotMatch(html, /3\/3/);
   assert.doesNotMatch(html, /gridTemplateRows|thumbnailGridStyle|thumbnailItemClass/);

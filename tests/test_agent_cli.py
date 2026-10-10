@@ -9,6 +9,7 @@ from pathlib import Path
 from src.agent_tools.explain import explain_step
 from src.agent_tools.schemas import AgentErrorCode, error_response, success_response
 from src.agent_tools.service import AgentWorkflowService
+from src.agent_tools.ui_client import AgentUIClient
 
 
 def _run_agent_cli(*args, cwd=None, env=None):
@@ -217,7 +218,7 @@ def test_explain_step_returns_independent_copies():
     first_parameter["parameter"]["recommended"] = "fake recommendation"
 
     second_parameter = explain_step(step=2, parameter="alpha_matting_erode_size")
-    assert second_parameter["parameter"]["recommended"] == "Start at 5."
+    assert second_parameter["parameter"]["recommended"] == "默认值：5"
 
 
 def test_doctor_reports_project_root(tmp_path, monkeypatch):
@@ -227,7 +228,7 @@ def test_doctor_reports_project_root(tmp_path, monkeypatch):
     (tmp_path / "backend").mkdir()
     (tmp_path / "project").mkdir()
 
-    service = AgentWorkflowService(root=tmp_path)
+    service = AgentWorkflowService(root=tmp_path, ui_client=AgentUIClient(port=1))
     response = service.doctor()
 
     assert response["ok"] is True
@@ -243,7 +244,7 @@ def test_doctor_does_not_create_missing_project_dir(tmp_path, monkeypatch):
     (tmp_path / "frontend").mkdir()
     (tmp_path / "backend").mkdir()
 
-    service = AgentWorkflowService(root=tmp_path)
+    service = AgentWorkflowService(root=tmp_path, ui_client=AgentUIClient(port=1))
     response = service.doctor()
 
     assert response["data"]["checks"]["project_dir"] is False
@@ -263,7 +264,7 @@ def test_doctor_reads_installed_model_from_gam_user_data(tmp_path, monkeypatch):
     monkeypatch.setenv("GAM_DATA_MODE", "installed")
     monkeypatch.setenv("GAM_DATA_ROOT", str(gam_root))
 
-    response = AgentWorkflowService(root=workspace).doctor()
+    response = AgentWorkflowService(root=workspace, ui_client=AgentUIClient(port=1)).doctor()
 
     assert response["data"]["checks"]["u2net_model"] is True
 
@@ -273,7 +274,8 @@ def test_doctor_import_has_no_workspace_side_effects(tmp_path):
 import json
 from pathlib import Path
 from src.agent_tools.service import AgentWorkflowService
-AgentWorkflowService(root=Path.cwd()).doctor()
+from src.agent_tools.ui_client import AgentUIClient
+AgentWorkflowService(root=Path.cwd(), ui_client=AgentUIClient(port=1)).doctor()
 print(json.dumps({name: Path(name).exists() for name in ["project", "models", "logs"]}))
 """
     result = subprocess.run(
@@ -292,7 +294,7 @@ def test_project_create_returns_json_summary(api, test_assets, asset_catalog):
     sample = asset_catalog[0]
     video = test_assets / "videos" / sample["role"] / f"{sample['actions'][0]}.mp4"
 
-    service = AgentWorkflowService(root=Path.cwd())
+    service = AgentWorkflowService(root=Path.cwd(), ui_client=AgentUIClient(port=1))
     response = service.create_project(role="agent", action="idle", video_path=video, frame_interval=1)
 
     assert response["ok"] is True
@@ -307,7 +309,7 @@ def test_project_create_preserves_step1_unprocessed_state(api, test_assets, asse
     sample = asset_catalog[0]
     video = test_assets / "videos" / sample["role"] / f"{sample['actions'][0]}.mp4"
 
-    service = AgentWorkflowService(root=Path.cwd())
+    service = AgentWorkflowService(root=Path.cwd(), ui_client=AgentUIClient(port=1))
     response = service.create_project(role="agent", action="fresh", video_path=video, frame_interval=1)
 
     project_path = Path(response["data"]["project_path"])
@@ -325,7 +327,7 @@ def test_project_create_preserves_step1_unprocessed_state(api, test_assets, asse
 def test_service_run_step1_completes_project(api, test_assets, asset_catalog):
     sample = asset_catalog[0]
     video = test_assets / "videos" / sample["role"] / f"{sample['actions'][0]}.mp4"
-    service = AgentWorkflowService(root=Path.cwd())
+    service = AgentWorkflowService(root=Path.cwd(), ui_client=AgentUIClient(port=1))
     created = service.create_project("agent", "step1", video)
 
     response = service.run_step(created["data"]["project_id"], 1, {"end_frame": 3, "fps": 6})
@@ -343,6 +345,19 @@ def test_service_run_step_timeout_cancels_task(tmp_path):
             return {"id": project_id, "video_path": str(tmp_path / "input.mp4")}
 
     class FakeProcessAPI:
+        def parameter_transaction(self, project_id):
+            from contextlib import nullcontext
+
+            return nullcontext()
+
+        def save_step_params(self, project_id, step, params):
+            return True
+
+        def get_step_params(self, project_id, step):
+            from backend.api.process_api import ProcessAPI
+
+            return ProcessAPI.DEFAULT_STEP_PARAMS[step].copy()
+
         def __init__(self):
             self.cancelled_task_id = None
 
@@ -357,7 +372,7 @@ def test_service_run_step_timeout_cancels_task(tmp_path):
             return True
 
     process_api = FakeProcessAPI()
-    service = AgentWorkflowService(root=tmp_path)
+    service = AgentWorkflowService(root=tmp_path, ui_client=AgentUIClient(port=1))
     service._project_api = FakeProjectAPI()
     service._process_api = process_api
 
@@ -379,6 +394,19 @@ def test_service_run_step_unknown_task_status_fails_without_looping(tmp_path):
             return {"id": project_id, "video_path": str(tmp_path / "input.mp4")}
 
     class FakeProcessAPI:
+        def parameter_transaction(self, project_id):
+            from contextlib import nullcontext
+
+            return nullcontext()
+
+        def save_step_params(self, project_id, step, params):
+            return True
+
+        def get_step_params(self, project_id, step):
+            from backend.api.process_api import ProcessAPI
+
+            return ProcessAPI.DEFAULT_STEP_PARAMS[step].copy()
+
         def __init__(self):
             self.cancelled_task_id = None
             self.status_calls = 0
@@ -395,7 +423,7 @@ def test_service_run_step_unknown_task_status_fails_without_looping(tmp_path):
             return True
 
     process_api = FakeProcessAPI()
-    service = AgentWorkflowService(root=tmp_path)
+    service = AgentWorkflowService(root=tmp_path, ui_client=AgentUIClient(port=1))
     service._project_api = FakeProjectAPI()
     service._process_api = process_api
 
@@ -418,6 +446,19 @@ def test_service_run_step_unexpected_task_status_fails_without_looping(tmp_path)
             return {"id": project_id, "video_path": str(tmp_path / "input.mp4")}
 
     class FakeProcessAPI:
+        def parameter_transaction(self, project_id):
+            from contextlib import nullcontext
+
+            return nullcontext()
+
+        def save_step_params(self, project_id, step, params):
+            return True
+
+        def get_step_params(self, project_id, step):
+            from backend.api.process_api import ProcessAPI
+
+            return ProcessAPI.DEFAULT_STEP_PARAMS[step].copy()
+
         def __init__(self):
             self.cancelled_task_id = None
             self.status_calls = 0
@@ -434,7 +475,7 @@ def test_service_run_step_unexpected_task_status_fails_without_looping(tmp_path)
             return True
 
     process_api = FakeProcessAPI()
-    service = AgentWorkflowService(root=tmp_path)
+    service = AgentWorkflowService(root=tmp_path, ui_client=AgentUIClient(port=1))
     service._project_api = FakeProjectAPI()
     service._process_api = process_api
 
@@ -454,7 +495,7 @@ def test_service_run_step_unexpected_task_status_fails_without_looping(tmp_path)
 def test_service_batch_trim_global_returns_final_output(api, test_assets, asset_catalog):
     sample = asset_catalog[0]
     video = test_assets / "videos" / sample["role"] / f"{sample['actions'][0]}.mp4"
-    service = AgentWorkflowService(root=Path.cwd())
+    service = AgentWorkflowService(root=Path.cwd(), ui_client=AgentUIClient(port=1))
     created = service.create_project("agent", "trim", video)
     project_id = created["data"]["project_id"]
     _copy_trim_source(test_assets, sample["role"], sample["actions"][0], project_id)
@@ -471,7 +512,7 @@ def test_service_batch_trim_global_returns_final_output(api, test_assets, asset_
 def test_service_batch_trim_mixed_sources_keeps_valid_result(api, test_assets, asset_catalog):
     sample = asset_catalog[0]
     video = test_assets / "videos" / sample["role"] / f"{sample['actions'][0]}.mp4"
-    service = AgentWorkflowService(root=Path.cwd())
+    service = AgentWorkflowService(root=Path.cwd(), ui_client=AgentUIClient(port=1))
     created = service.create_project("agent", "trim-valid", video)
     valid_project_id = created["data"]["project_id"]
     missing_project_id = "agent/trim-missing"
@@ -479,16 +520,17 @@ def test_service_batch_trim_mixed_sources_keeps_valid_result(api, test_assets, a
 
     response = service.batch_trim([valid_project_id, missing_project_id], mode="global")
 
-    assert response["ok"] is True
-    results = {result["project_id"]: result for result in response["data"]["results"]}
+    assert response["ok"] is False
+    assert response["error"]["code"] == "BATCH_TRIM_PARTIAL"
+    results = {result["project_id"]: result for result in response["error"]["details"]["results"]}
     assert results[valid_project_id]["status"] == "success"
     assert results[valid_project_id]["frame_count"] > 0
-    assert results[missing_project_id]["status"] == "error"
+    assert results[missing_project_id]["status"] == "failed"
 
 
 def test_project_create_missing_video_returns_structured_error(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    service = AgentWorkflowService(root=tmp_path)
+    service = AgentWorkflowService(root=tmp_path, ui_client=AgentUIClient(port=1))
 
     response = service.create_project(role="agent", action="idle", video_path=tmp_path / "missing.mp4")
 

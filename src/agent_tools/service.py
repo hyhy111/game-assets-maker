@@ -66,7 +66,7 @@ def _cwd(path: Path) -> Iterator[None]:
 class AgentWorkflowService:
     """High-level workflow facade used by the Agent CLI."""
 
-    def __init__(self, root: str | Path | None = None):
+    def __init__(self, root: str | Path | None = None, *, ui_client: AgentUIClient | None = None):
         self.root = Path(root).resolve() if root is not None else data_root().resolve()
         self.root.mkdir(parents=True, exist_ok=True)
         # Freeze the storage resolution once, like the app composition root:
@@ -80,7 +80,7 @@ class AgentWorkflowService:
         self._process_api: ProcessAPI | None = None
         self._batch_trim_api: BatchTrimAPI | None = None
         self._seedance_manager: SeedanceTaskManager | None = None
-        self.ui_client = AgentUIClient()
+        self.ui_client = ui_client or AgentUIClient()
 
     @property
     def project_api(self) -> ProjectAPI:
@@ -139,6 +139,8 @@ class AgentWorkflowService:
         """Join any Seedance helper threads before the short-lived CLI exits."""
         if self._seedance_manager is not None:
             self._seedance_manager.shutdown()
+        if self._process_api is not None:
+            self._process_api.shutdown()
 
     def _seedance_config(self) -> dict[str, Any]:
         from src.utils.app_config import load_app_config
@@ -224,16 +226,12 @@ class AgentWorkflowService:
         sync_status = task.get("sync_status")
         if isinstance(sync_status, dict):
             safe_sync = {
-                key: sync_status[key]
-                for key in ("state", "last_synced_at")
-                if isinstance(sync_status.get(key), str)
+                key: sync_status[key] for key in ("state", "last_synced_at") if isinstance(sync_status.get(key), str)
             }
             sync_error = sync_status.get("error")
             if isinstance(sync_error, dict):
                 safe_error = {
-                    key: sync_error[key]
-                    for key in ("code", "status")
-                    if isinstance(sync_error.get(key), (str, int))
+                    key: sync_error[key] for key in ("code", "status") if isinstance(sync_error.get(key), (str, int))
                 }
                 if safe_error:
                     safe_sync["error"] = safe_error
@@ -243,9 +241,7 @@ class AgentWorkflowService:
         task_error = task.get("error")
         if isinstance(task_error, dict):
             safe_error = {
-                key: task_error[key]
-                for key in ("code", "status")
-                if isinstance(task_error.get(key), (str, int))
+                key: task_error[key] for key in ("code", "status") if isinstance(task_error.get(key), (str, int))
             }
             if safe_error:
                 projected["error"] = safe_error
@@ -282,35 +278,140 @@ class AgentWorkflowService:
         priority: int | None,
         expires_after: int | None,
     ) -> dict[str, Any]:
-        from backend.seedance.models import SeedanceRequest
-        from backend.seedance.validation import validate_request
-
         config = self._seedance_config()
-        request = SeedanceRequest(
-            first_frame=self._seedance_path(first_frame),
-            last_frame=self._seedance_path(last_frame) if last_frame else None,
-            prompt=prompt or "",
-            model=model or config["default_model"],
-            resolution=resolution or config["default_resolution"],
-            ratio=ratio or config["default_ratio"],
-            duration=duration if duration is not None else config["default_duration"],
-            generate_audio=audio or config["default_generate_audio"],
-            return_last_frame=return_last_frame or config["default_return_last_frame"],
-            priority=priority if priority is not None else config["default_priority"],
-            execution_expires_after=expires_after if expires_after is not None else config["default_expires_after"],
+        request = {
+            "first_frame": str(self._seedance_path(first_frame)),
+            "last_frame": str(self._seedance_path(last_frame)) if last_frame else None,
+            "prompt": prompt or "",
+            "model": model or config["default_model"],
+            "resolution": resolution or config["default_resolution"],
+            "ratio": ratio or config["default_ratio"],
+            "duration": duration if duration is not None else config["default_duration"],
+            "generate_audio": audio or config["default_generate_audio"],
+            "return_last_frame": return_last_frame or config["default_return_last_frame"],
+            "priority": priority if priority is not None else config["default_priority"],
+            "execution_expires_after": expires_after if expires_after is not None else config["default_expires_after"],
+        }
+        response = self.generation_submit("video", request)
+        response["operation"] = "seedance.create"
+        return response
+
+    def selection_operation(self, operation: str, payload: dict[str, Any]) -> dict[str, Any]:
+        from uuid import uuid4
+
+        if self.ui_client.status().get("connected"):
+            return AgentUIClient(host=self.ui_client.host, port=self.ui_client.port, timeout=15).operation(
+                {
+                    "request_id": str(uuid4()),
+                    "operation": operation,
+                    "projects_root": str(self._storage_locations.projects_root),
+                    "payload": payload,
+                }
+            )
+        if operation == "roles.list":
+            return success_response(operation, {"roles": self.project_api.get_roles()})
+        projects = self.project_api.get_projects()
+        return success_response(
+            operation,
+            {
+                "animations": [
+                    item for item in projects if payload.get("role") is None or item.get("role") == payload["role"]
+                ]
+            },
         )
+
+    def artifact_operation(self, operation: str, payload: dict[str, Any]) -> dict[str, Any]:
+        from uuid import uuid4
+
+        if self.ui_client.status().get("connected"):
+            return self.ui_client.operation(
+                {
+                    "request_id": str(uuid4()),
+                    "operation": operation,
+                    "projects_root": str(self._storage_locations.projects_root),
+                    "payload": payload,
+                }
+            )
+        from backend.agent_control.artifacts import LocalArtifacts
+
         try:
-            validate_request(request)
-            if not self._seedance_api_key():
-                return error_response(
-                    operation="seedance.create",
-                    code=AgentErrorCode.API_KEY_NOT_CONFIGURED,
-                    message="Configure a Seedance API key before creating a task.",
-                )
-            task = self.seedance_manager.create(request)
-            return self._seedance_success("seedance.create", {"task": self._project_seedance_task(task)})
-        except Exception as error:
-            return self._seedance_error("seedance.create", error)
+            artifacts = LocalArtifacts(self._storage_locations, (self._seedance_api_key(),))
+            data = artifacts.list(payload) if operation == "artifacts.list" else artifacts.read(payload.get("path"))
+            return success_response(operation, data)
+        except (ValueError, TypeError, OSError) as error:
+            return error_response(operation, str(error), "Cannot read local artifact")
+
+    def step_operation(self, operation: str, payload: dict[str, Any], request_id: str | None = None) -> dict[str, Any]:
+        from uuid import uuid4
+
+        client = AgentUIClient(host=self.ui_client.host, port=self.ui_client.port, timeout=15)
+        status = client.status()
+        if status.get("connected"):
+            return client.operation(
+                {
+                    "request_id": request_id or str(uuid4()),
+                    "operation": operation,
+                    "projects_root": str(self._storage_locations.projects_root),
+                    "payload": payload,
+                }
+            )
+        if operation in {"step.get", "step.set"}:
+            from backend.agent_control.steps import StepControl
+
+            try:
+                data = StepControl(self.project_api, self.process_api).apply(operation, payload)
+                return success_response(operation, {**data, "ui_sync": "not_running"})
+            except (ValueError, OSError, RuntimeError) as error:
+                return error_response(operation, str(error), "Cannot update saved parameters")
+        return error_response(operation, "UI_NOT_RUNNING", "Run the desktop application to track a processing task")
+
+    def reuse_draft(
+        self, kind: str, local_id: str | None = None, path: str | None = None, field: str | None = None
+    ) -> dict[str, Any]:
+        from uuid import uuid4
+
+        return AgentUIClient(host=self.ui_client.host, port=self.ui_client.port, timeout=15).operation(
+            {
+                "request_id": str(uuid4()),
+                "operation": "draft.restore" if local_id else "draft.reuse",
+                "projects_root": str(self._storage_locations.projects_root),
+                "payload": {"kind": kind, "local_id": local_id, "path": path, "field": field},
+            }
+        )
+
+    def draft_operation(
+        self, kind: str, patch: dict[str, Any] | None = None, request_id: str | None = None
+    ) -> dict[str, Any]:
+        from uuid import uuid4
+
+        return AgentUIClient(host=self.ui_client.host, port=self.ui_client.port, timeout=15).operation(
+            {
+                "request_id": request_id or str(uuid4()),
+                "operation": "draft.get" if patch is None else "draft.patch",
+                "projects_root": str(self._storage_locations.projects_root),
+                "payload": {"kind": kind, "patch": patch},
+            }
+        )
+
+    def generation_submit(self, kind: str, request: dict[str, Any], request_id: str | None = None) -> dict[str, Any]:
+        from uuid import uuid4
+
+        client = AgentUIClient(host=self.ui_client.host, port=self.ui_client.port, timeout=15)
+        return client.operation(
+            {
+                "request_id": request_id or str(uuid4()),
+                "operation": "generation.submit",
+                "projects_root": str(self._storage_locations.projects_root),
+                "payload": {"kind": kind, "request": request},
+            }
+        )
+
+    def generation_permission(self) -> dict[str, Any]:
+        from uuid import uuid4
+
+        return self.ui_client.operation(
+            {"request_id": str(uuid4()), "operation": "generation.permission", "payload": {}}
+        )
 
     def seedance_list(self, status: str | None = None) -> dict[str, Any]:
         try:
@@ -493,6 +594,26 @@ class AgentWorkflowService:
             projects = self.project_api.get_projects()
         return success_response(operation="project.list", data={"projects": projects})
 
+    def ui_navigate(
+        self,
+        target: str,
+        project_id: str | None = None,
+        step: int | None = None,
+        local_id: str | None = None,
+        request_id: str | None = None,
+    ) -> dict[str, Any]:
+        from uuid import uuid4
+
+        client = AgentUIClient(host=self.ui_client.host, port=self.ui_client.port, timeout=15)
+        return client.operation(
+            {
+                "request_id": request_id or str(uuid4()),
+                "operation": "ui.navigate",
+                "projects_root": str(self._storage_locations.projects_root),
+                "payload": {"target": target, "project_id": project_id, "step": step, "local_id": local_id},
+            }
+        )
+
     def ui_status(self) -> dict[str, Any]:
         return success_response(operation="ui.status", data={"ui": self.ui_client.status()})
 
@@ -539,8 +660,16 @@ class AgentWorkflowService:
                 details={"project_id": project_id},
             )
 
-        params_used = DEFAULT_STEP_PARAMS[step].copy()
-        params_used.update(params or {})
+        from backend.agent_control.steps import merge_params
+
+        try:
+            with self.process_api.parameter_transaction(project_id):
+                params_used = merge_params(self.process_api.get_step_params(project_id, step), step, params or {})
+                if not self.process_api.save_step_params(project_id, step, params_used):
+                    return error_response("step.run", "SAVE_FAILED", "Cannot save execution parameters")
+        except ValueError as error:
+            return error_response("step.run", "INPUT_INVALID", str(error))
+        params_used["processed"] = True
         if step == 1:
             params_used["video_path"] = project.get("video_path")
 
@@ -599,6 +728,10 @@ class AgentWorkflowService:
                 "step": step,
                 "status": "completed",
                 "requires_review": step in {2, 3},
+                "task_id": task_id,
+                "output_dir": str(
+                    Path(project["path"]) / "output" / {1: "01_frames", 2: "02_no_bg", 3: "03_hole_punched"}[step]
+                ),
                 "params_used": params_used,
                 "project": self.project_summary(project_id)["data"],
                 "ui": ui,
@@ -606,6 +739,8 @@ class AgentWorkflowService:
         )
 
     def batch_trim(self, project_ids: list[str], mode: str = "global") -> dict[str, Any]:
+        if self.ui_client.status().get("connected"):
+            return self.selection_operation("batch.trim", {"project_ids": project_ids, "mode": mode})
         if mode not in {"global", "individual"}:
             return error_response(
                 operation="batch-trim",
@@ -629,31 +764,14 @@ class AgentWorkflowService:
         with _cwd(self.root):
             raw_results = self.batch_trim_api.execute_trim({"projectIds": project_ids, "mode": mode})
 
-        results = []
-        warnings = []
-        for result in raw_results:
-            output_path = result.get("outputPath")
-            offset_data_path = None
-            if output_path and mode == "individual":
-                candidate = Path(output_path) / "_frame_data.json"
-                offset_data_path = str(candidate) if candidate.exists() else None
-            normalized = {
-                "project_id": result.get("projectId"),
-                "status": result.get("status"),
-                "frame_count": result.get("frameCount", 0),
-                "final_frames_dir": output_path,
-                "offset_data_path": offset_data_path,
-            }
-            results.append(normalized)
-            if result.get("status") != "success":
-                message = result.get("message", "Batch trim did not fully succeed")
-                warnings.append(f"{result.get('projectId')}: {message}")
+        from backend.agent_control.trim import normalize_trim_results
 
-        return success_response(
-            operation="batch-trim",
-            data={"final": True, "mode": mode, "results": results},
-            warnings=warnings,
-        )
+        normalized = normalize_trim_results(raw_results, project_ids, mode)
+        if not normalized["final"]:
+            return error_response(
+                "batch-trim", "BATCH_TRIM_PARTIAL", "Some selected animations could not be trimmed", normalized
+            )
+        return success_response(operation="batch-trim", data=normalized)
 
     def explain(self, step: int, parameter: str | None = None) -> dict[str, Any]:
         try:

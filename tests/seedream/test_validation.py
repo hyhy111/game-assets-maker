@@ -26,25 +26,17 @@ def test_flash_supports_1k_1_5k_2k():
         validate_request(SeedreamRequest(prompt="hero", model="flash", resolution=resolution, ratio="16:9"))
 
 
-def test_lite_only_supports_2k():
-    validate_request(SeedreamRequest(prompt="hero", model="lite", resolution="2K", ratio="16:9"))
-    with pytest.raises(ValidationError) as exc:
-        validate_request(SeedreamRequest(prompt="hero", model="lite", resolution="1K", ratio="16:9"))
-    assert exc.value.code == "UNSUPPORTED_RESOLUTION"
-    with pytest.raises(ValidationError) as exc:
-        validate_request(SeedreamRequest(prompt="hero", model="lite", resolution="1.5K", ratio="16:9"))
-    assert exc.value.code == "UNSUPPORTED_RESOLUTION"
-
-
-@pytest.mark.parametrize("model", ("v45", "v40"))
-def test_removed_4_x_models_are_rejected(model):
+@pytest.mark.parametrize(
+    "model", ("v45", "v40", "lite", "doubao-seedream-5-0-lite-260128", "doubao-seedream-5-0-260128")
+)
+def test_removed_models_are_rejected(model):
     with pytest.raises(ValidationError) as exc:
         validate_request(SeedreamRequest(prompt="hero", model=model, resolution="2K", ratio="16:9"))
     assert exc.value.code == "UNSUPPORTED_MODEL"
 
 
 def test_4k_rejected_for_all_models():
-    for model in ("pro", "flash", "lite"):
+    for model in ("pro", "flash"):
         with pytest.raises(ValidationError) as exc:
             validate_request(SeedreamRequest(prompt="hero", model=model, resolution="4K", ratio="16:9"))
         assert exc.value.code == "UNSUPPORTED_RESOLUTION"
@@ -85,10 +77,10 @@ def test_build_api_payload_single_image_non_streaming_url_no_watermark():
     assert "sequential_image_generation" not in payload
 
 
-def test_build_api_payload_lite_model_id():
-    payload = build_api_payload(SeedreamRequest(prompt="hero", model="lite", resolution="2K", ratio="1:1"))
-    assert payload["model"] == "doubao-seedream-5-0-260128"
-    assert payload["size"] == "2K"
+def test_build_api_payload_rejects_retired_lite():
+    with pytest.raises(ValidationError) as exc:
+        build_api_payload(SeedreamRequest(prompt="hero", model="lite", resolution="2K", ratio="1:1"))
+    assert exc.value.code == "UNSUPPORTED_MODEL"
 
 
 def test_build_api_payload_flash_model_id():

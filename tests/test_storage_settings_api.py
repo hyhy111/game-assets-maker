@@ -109,6 +109,21 @@ def test_save_without_path_keys_keeps_locations_unchanged(api):
     assert load_app_config()["language"] == "en"
 
 
+def test_plain_save_does_not_overwrite_immediate_audit_setting(api):
+    save_app_config({"ark_audit_enabled": True})
+    result = api.save_settings({"language": "en", "ark_audit_enabled": False})
+    assert result["success"] is True
+    assert load_app_config()["ark_audit_enabled"] is True
+
+
+def test_migration_draft_does_not_overwrite_later_audit_toggle(api, tmp_path):
+    result = api.save_settings(_draft(project_dir=str(tmp_path / "new-projects"), ark_audit_enabled=False))
+    assert result["migration_required"] is True
+    save_app_config({"ark_audit_enabled": True})
+    assert api.execute_migration(result["migration"]["token"])["success"] is True
+    assert load_app_config()["ark_audit_enabled"] is True
+
+
 def test_save_with_changed_project_dir_returns_precheck_summary(api, tmp_path: Path, storage_env: Path):
     target = tmp_path / "new-projects"
 

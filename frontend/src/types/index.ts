@@ -250,6 +250,9 @@ export interface AppConfig {
   theme: string;
   logger_enabled: boolean;
   paid_generation_confirmation_enabled: boolean;
+  cli_generation_enabled?: boolean;
+  ark_audit_enabled?: boolean;
+  ark_audit_available?: boolean;
   project_dir: string;
   logger_config: LoggerConfig;
   seedance: SeedanceSettings;
@@ -366,6 +369,7 @@ export interface SeedanceTask {
   request: SeedanceTaskRequest;
   input_urls: Record<string, string>;
   output_urls: Record<string, string>;
+  can_open_directory?: boolean;
   file_size_bytes?: number | null;
   created_at: string;
   updated_at: string;
@@ -550,7 +554,7 @@ export interface BatchTrimParams {
 /**
  * Seedream image-generation public PyWebView contracts.
  */
-export type SeedreamModel = 'pro' | 'flash' | 'lite';
+export type SeedreamModel = 'pro' | 'flash';
 export type SeedreamResolution = '1K' | '1.5K' | '2K';
 export type SeedreamRatio = '1:1' | '16:9' | '9:16' | '4:3' | '3:4';
 export type SeedreamAttemptStatus = 'queued' | 'generating' | 'downloading' | 'succeeded' | 'failed' | 'unknown' | 'download_failed';
@@ -614,6 +618,7 @@ export interface SeedreamAttempt {
   local_path: string | null;
   generation_layout?: GenerationLayout | null;
   has_original_backup?: boolean;
+  can_open_directory?: boolean;
   url_expired: boolean;
   created_at: string;
   updated_at: string;

@@ -24,6 +24,16 @@ from backend.seedream.downloader import ImageDownloader
 from backend.seedream.manager import SeedreamBatchManager
 from backend.seedream.models import SeedreamRequest
 from backend.seedream.repository import BatchRepository
+from src.utils.app_config import save_app_config
+
+
+@pytest.fixture(autouse=True)
+def enabled_dev_audit(tmp_path, monkeypatch):
+    monkeypatch.setenv("DEV_MODE", "1")
+    monkeypatch.setenv("GAM_DATA_MODE", "dev")
+    monkeypatch.setenv("GAM_DATA_ROOT", str(tmp_path / "data"))
+    monkeypatch.setenv("GAM_CONFIG", str(tmp_path / "config.json"))
+    save_app_config({"ark_audit_enabled": True})
 
 
 class FakeTransport:
@@ -164,7 +174,9 @@ def test_prior_process_intent_is_reconciled_without_billing_claim(tmp_path, monk
     assert "bill" not in path.read_text().lower()
 
 
-def test_image_manager_records_complete_local_timeline(tmp_path):
+@pytest.mark.parametrize("enabled", [True, False])
+def test_image_manager_records_complete_local_timeline(tmp_path, enabled):
+    save_app_config({"ark_audit_enabled": enabled})
     path = tmp_path / "ark.jsonl"
     transport = FakeTransport(
         ImageResponse(
@@ -187,6 +199,10 @@ def test_image_manager_records_complete_local_timeline(tmp_path):
     manager = SeedreamBatchManager(client, repository, ImageDownloader(repository, Download()))
     manager._run_attempt(batch.local_id, 0)
     assert repository.get(batch.local_id).attempts[0].status == "succeeded"
+    assert len(transport.calls) == 1
+    if not enabled:
+        assert not path.exists()
+        return
     assert [event["phase"] for event in _events(path)] == [
         "intent",
         "http_response",
@@ -198,13 +214,13 @@ def test_image_manager_records_complete_local_timeline(tmp_path):
     assert len(transport.calls) == 1
 
 
-def test_audit_uses_installed_data_root_override(tmp_path, monkeypatch):
+def test_installed_data_root_override_does_not_grant_audit_permission(tmp_path, monkeypatch):
     monkeypatch.setenv("GAM_DATA_MODE", "installed")
     monkeypatch.setenv("GAM_DATA_ROOT", str(tmp_path / "user-data"))
     audit = ArkAudit()
     audit.record("video.list", "intent")
     assert audit.path == tmp_path / "user-data" / "logs" / "ark-custom-key.jsonl"
-    assert audit.path.is_file()
+    assert not audit.path.exists()
 
 
 def test_audit_intent_survives_hard_exit(tmp_path):
@@ -230,7 +246,9 @@ def test_audit_rotation_is_bounded(tmp_path, monkeypatch):
     assert all(file.stat().st_size <= 400 for file in files)
 
 
-def test_video_manager_distinguishes_create_poll_and_download(tmp_path):
+@pytest.mark.parametrize("enabled", [True, False])
+def test_video_manager_distinguishes_create_poll_and_download(tmp_path, enabled):
+    save_app_config({"ark_audit_enabled": enabled})
     path = tmp_path / "ark.jsonl"
     first_frame = tmp_path / "first.png"
     Image.new("RGB", (300, 300)).save(first_frame)
@@ -251,6 +269,10 @@ def test_video_manager_distinguishes_create_poll_and_download(tmp_path):
         )
     )
     manager._sync(task["local_id"])
+    assert repository.get(task["local_id"]).download_status == "downloaded"
+    if not enabled:
+        assert not path.exists()
+        return
     phases = [(event["operation"], event["phase"]) for event in _events(path)]
     assert ("video.create", "task_persisted") in phases
     assert ("video.get", "task_persisted") in phases
@@ -274,3 +296,82 @@ def test_video_create_lost_response_stays_unknown_in_audit(tmp_path):
     assert task["remote_status"] == "submission_unknown"
     assert [event["phase"] for event in _events(path)] == ["intent", "failure", "local_unknown"]
     assert "secret provider detail" not in path.read_text()
+
+
+def test_disabled_audit_does_not_touch_unwritable_path_or_block_paid_post(tmp_path):
+    save_app_config({"ark_audit_enabled": False})
+    blocker = tmp_path / "blocker"
+    blocker.write_text("not a directory")
+    transport = FakeTransport(ImageResponse(200, {}, b'{"data":[{"url":"https://example.test/image"}]}'))
+    audit = ArkAudit(blocker / "ark.jsonl")
+    client = ImageClient("fake-key", transport=transport, audit=audit)
+    assert client.generate_image({"model": "test", "prompt": "test"})["data"][0]["url"] == "https://example.test/image"
+    audit.reconcile()
+    assert len(transport.calls) == 1
+    assert blocker.read_text() == "not a directory"
+
+
+@pytest.mark.parametrize("runtime", ["ordinary", "installed", "packaged"])
+def test_ineligible_runs_do_not_log_despite_enabled_config(tmp_path, monkeypatch, runtime):
+    if runtime == "ordinary":
+        monkeypatch.delenv("DEV_MODE")
+    elif runtime == "installed":
+        monkeypatch.setenv("GAM_DATA_MODE", "installed")
+    else:
+        monkeypatch.setattr(sys, "frozen", True, raising=False)
+    path = tmp_path / "ark.jsonl"
+    audit = ArkAudit(path)
+    audit.begin("image.create", paid=True).event("http_response", http_status=200)
+    audit.reconcile()
+    assert not path.exists()
+
+
+def test_mid_call_toggle_preserves_events_and_does_not_backfill(tmp_path):
+    path = tmp_path / "ark.jsonl"
+    audit = ArkAudit(path)
+    call = audit.begin("image.create", paid=True)
+    original = path.read_bytes()
+    save_app_config({"ark_audit_enabled": False})
+    call.event("http_response", http_status=200)
+    audit.reconcile()
+    assert path.read_bytes() == original
+    save_app_config({"ark_audit_enabled": True})
+    call.event("parsed_response", data_count=1)
+    assert [event["phase"] for event in _events(path)] == ["intent", "parsed_response"]
+    assert len({event["call_id"] for event in _events(path)}) == 1
+
+
+def test_transport_can_disable_audit_between_intent_and_response(tmp_path):
+    path = tmp_path / "ark.jsonl"
+
+    class ToggleTransport(FakeTransport):
+        def request(self, *args):
+            save_app_config({"ark_audit_enabled": False})
+            return super().request(*args)
+
+    client = ImageClient(
+        "fake-key",
+        transport=ToggleTransport(ImageResponse(200, {}, b'{"data":[{"url":"https://example.test/image"}]}')),
+        audit=ArkAudit(path),
+    )
+    assert client.generate_image({"model": "test", "prompt": "test"})["data"]
+    assert [event["phase"] for event in _events(path)] == ["intent"]
+
+
+def test_disabled_reconcile_does_not_read_or_modify_old_logs(tmp_path, monkeypatch):
+    path = tmp_path / "ark.jsonl"
+    path.write_text('{"phase":"intent","call_id":"previous"}\n')
+    original = path.read_bytes()
+    save_app_config({"ark_audit_enabled": False})
+
+    original_open = Path.open
+
+    def no_read(candidate, *args, **kwargs):
+        if candidate == path:
+            raise AssertionError("Disabled audit must not read the journal")
+        return original_open(candidate, *args, **kwargs)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(Path, "open", no_read)
+        ArkAudit(path).reconcile()
+    assert path.read_bytes() == original

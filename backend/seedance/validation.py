@@ -46,7 +46,7 @@ def _validate_integer(value: int, field: str, minimum: int, maximum: int, code: 
         raise ValidationError(field, code, f"{field} must be between {minimum} and {maximum}")
 
 
-def validate_request(request: SeedanceRequest) -> None:
+def validate_request(request: SeedanceRequest, *, draft: bool = False) -> None:
     if request.model not in MODEL_CAPABILITIES:
         raise ValidationError("model", "UNSUPPORTED_MODEL", "Unsupported Seedance model")
     if request.resolution not in MODEL_CAPABILITIES[request.model]["resolutions"]:
@@ -57,7 +57,8 @@ def validate_request(request: SeedanceRequest) -> None:
         raise ValidationError("duration", "INVALID_DURATION", "duration must be -1 or between 4 and 15")
     _validate_integer(request.priority, "priority", 0, 9, "INVALID_PRIORITY")
     _validate_integer(request.execution_expires_after, "execution_expires_after", 3600, 259200, "INVALID_EXPIRY")
-    _image_metadata(request.first_frame, "first_frame")
+    if not draft or str(request.first_frame) not in ("", "."):
+        _image_metadata(request.first_frame, "first_frame")
     if request.last_frame is not None:
         _image_metadata(request.last_frame, "last_frame")
 

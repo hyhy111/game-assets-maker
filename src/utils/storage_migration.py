@@ -139,7 +139,12 @@ class StorageMigrationCoordinator:
         entries = tuple(self._precheck_one(migration) for migration in normalized)
         pending = _PendingMigration(
             token=uuid.uuid4().hex,
-            settings_draft=dict(settings_draft),
+            # Immediate settings cannot be committed from an old migration draft.
+            settings_draft={
+                key: value
+                for key, value in settings_draft.items()
+                if key not in {"ark_audit_enabled", "ark_audit_available", "cli_generation_enabled"}
+            },
             migrations=normalized,
         )
         with self._state_lock:

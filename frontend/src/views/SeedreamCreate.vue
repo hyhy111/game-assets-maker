@@ -6,7 +6,11 @@
     >
       <section
         class="seedream-prompt-surface rounded-[24px] border border-[#3b3b3b] bg-[#1f1f1f] p-4 sm:p-5"
+        :class="referenceDragActive ? 'ring-2 ring-primary' : ''"
         data-test="seedream-composer"
+        @dragover="onReferenceDragOver"
+        @dragleave="referenceDragActive = false"
+        @drop.prevent="onReferenceDrop"
       >
         <div class="relative flex min-h-[282px] items-center gap-4 px-1 py-1">
           <div
@@ -26,9 +30,13 @@
               :change-label="t('seedream.create.changeReferenceImage')"
               :remove-label="t('seedream.create.removeReferenceImage')"
               :selected-label="t('seedream.create.referenceSelected')"
+              :drop-label="t('seedream.create.dropAsReference')"
               compact
               @select="selectReferenceImage"
               @clear="clearReferenceImage"
+              @drop-image="dropCandidateReference"
+              @drop-file="dropReferenceFile"
+              @drop-error="referenceError = t($event)"
             />
           </div>
           <div class="relative min-w-0 flex-1 self-stretch">
@@ -245,6 +253,7 @@
           </div>
         </div>
       </section>
+      <p v-if="referenceError" class="mt-2 text-sm text-danger" role="alert">{{ referenceError }}</p>
     </form>
 
     <div v-if="showBatchList" class="mt-8">
@@ -321,6 +330,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import { ArrowUp, Check, ChevronDown, Copy, Settings2 } from 'lucide-vue-next';
 import { useI18n } from 'vue-i18n';
+import { hasImageDrop, readImageDrop, type SeedreamImageDragPayload } from '@/seedream-image-drag';
 import { useRoute, useRouter } from 'vue-router';
 import DraftClearConfirmation from '@/components/ai-creation/DraftClearConfirmation.vue';
 import GenerationAccessDialog from '@/components/ai-creation/GenerationAccessDialog.vue';
@@ -378,7 +388,6 @@ const allowedCounts = ALLOWED_COUNTS;
 const modelOptions = computed(() => [
   { value: 'pro', label: t('seedream.models.pro') },
   { value: 'flash', label: t('seedream.models.flash') },
-  { value: 'lite', label: t('seedream.models.lite') },
 ]);
 
 const form: CreateForm = workspace.imageDraft;
@@ -398,6 +407,36 @@ const confirmModal = ref(false);
 const confirmModalRoot = ref<HTMLElement | null>(null);
 let confirmTrigger: HTMLElement | null = null;
 const copied = ref(false);
+const referenceError = ref('');
+const referenceDragActive = ref(false);
+
+async function dropCandidateReference(candidate: SeedreamImageDragPayload) {
+  referenceError.value = '';
+  if (!await workspace.handoffCandidateToImage(candidate.localId, candidate.attemptIndex)) {
+    referenceError.value = workspace.candidateHandoffError || t('aiCreation.imageUnavailable');
+  }
+}
+
+async function dropReferenceFile(file: File) {
+  referenceError.value = '';
+  if (!await workspace.importDroppedImage(file, 'reference')) {
+    referenceError.value = workspace.candidateHandoffError || t('aiCreation.imageUnavailable');
+  }
+}
+
+function onReferenceDragOver(event: DragEvent) {
+  event.preventDefault();
+  if (!hasImageDrop(event.dataTransfer)) return;
+  referenceDragActive.value = true;
+}
+
+function onReferenceDrop(event: DragEvent) {
+  referenceDragActive.value = false;
+  const result = readImageDrop(event.dataTransfer);
+  if (result.kind === 'candidate') void dropCandidateReference(result.candidate);
+  else if (result.kind === 'file') void dropReferenceFile(result.file);
+  else referenceError.value = t(result.key);
+}
 const copyTitle = computed(() => copied.value ? t('common.copied') : t('common.copy'));
 
 const promptInfo = computed(() => promptCount(form.prompt));

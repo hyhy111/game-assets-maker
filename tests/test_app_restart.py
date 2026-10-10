@@ -77,7 +77,7 @@ class _AppHarness:
         harness = self
 
         class FakeAgentControlServer:
-            def __init__(self, window):
+            def __init__(self, window, *, api=None):
                 self.window = window
 
             def start(self):

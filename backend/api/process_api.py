@@ -10,14 +10,15 @@ import time
 import traceback
 import uuid
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
 import cv2
 import numpy as np
+from filelock import FileLock
 
 from backend.api.project_paths import resolve_project_path
-from src.core.rembg_model import validate_model
 from backend.core.model_preloader import ModelLoader, ModelPreloader, ModelStatus, RembgModelLoader
 from backend.core.smart_remove_background import batch_remove_background
 
@@ -26,6 +27,7 @@ from backend.core.video_utils import (
     detect_background_color_from_frames,
     export_frames_step1,
 )
+from src.core.rembg_model import validate_model
 from src.utils.app_config import default_projects_root
 from src.utils.data_paths import data_root
 
@@ -69,6 +71,9 @@ class ProcessAPI:
 
     def __init__(self, window=None, *, model_loader: ModelLoader | None = None, projects_root: Path | None = None):
         self.tasks: dict[str, Task] = {}
+        self._control_lock = threading.RLock()
+        self._parameter_locks: dict[str, FileLock] = {}
+        self._parameter_lock_guard = threading.Lock()
         self.executor = ThreadPoolExecutor(max_workers=2)
         self._projects_root = projects_root if projects_root is not None else default_projects_root()
         self._window = window  # PyWebView window instance
@@ -135,6 +140,10 @@ class ProcessAPI:
 
     def start_processing(self, project_id: str, step: int, params: dict[str, Any]) -> str:
         """Start a processing task"""
+        with self._control_lock:
+            return self._start_processing(project_id, step, params)
+
+    def _start_processing(self, project_id: str, step: int, params: dict[str, Any]) -> str:
         if step == 2:
             model = params.get("model", "u2net")
             if self.get_model_status(model)["phase"] != "ready":
@@ -257,6 +266,7 @@ class ProcessAPI:
         # 重新抽取后，下游步骤的输出已失效：清空 02/03 输出并重置 processed=False。
         # 否则 _get_step_status 会因旧输出文件存在而仍标记 completed，导致 Step 2/3 加载到旧帧。
         import shutil
+
         for sub, step_num in [("02_no_bg", 2), ("03_hole_punched", 3)]:
             stale_dir = project_path / "output" / sub
             if stale_dir.exists():
@@ -428,6 +438,10 @@ class ProcessAPI:
         return None
 
     def _save_background_color(self, project_id: str, bg_hsv: tuple):
+        with self.parameter_transaction(project_id):
+            return self._write_background_color(project_id, bg_hsv)
+
+    def _write_background_color(self, project_id: str, bg_hsv: tuple):
         """Save background color to steps_config.json"""
         config_path = self._get_project_path(project_id) / "cache" / "steps_config.json"
         print(f"[DEBUG] _save_background_color called with HSV: {bg_hsv}")
@@ -584,7 +598,22 @@ class ProcessAPI:
 
         return config
 
+    @contextmanager
+    def parameter_transaction(self, project_id: str):
+        """Serialize read/merge/write with GUI saves and other local processes."""
+        config_path = self._get_steps_config_path(project_id)
+        if not config_path.parent.is_dir():
+            raise FileNotFoundError("Project cache not found")
+        with self._parameter_lock_guard:
+            lock = self._parameter_locks.setdefault(str(config_path), FileLock(str(config_path) + ".lock", timeout=10))
+        with self._control_lock, lock:
+            yield
+
     def get_step_params(self, project_id: str, step: int) -> dict[str, Any]:
+        with self.parameter_transaction(project_id):
+            return self._read_step_params(project_id, step)
+
+    def _read_step_params(self, project_id: str, step: int) -> dict[str, Any]:
         """Get saved parameters for a step from unified config"""
         project_path = self._get_project_path(project_id)
         config_path = self._get_steps_config_path(project_id)
@@ -595,7 +624,7 @@ class ProcessAPI:
                     config = json.load(f)
                 step_key = f"step{step}"
                 if step_key in config:
-                    return config[step_key]
+                    return {**self.DEFAULT_STEP_PARAMS.get(step, {}), **config[step_key]}
             except Exception as e:
                 print(f"Error reading steps config: {e}")
 
@@ -611,6 +640,10 @@ class ProcessAPI:
         return self.DEFAULT_STEP_PARAMS.get(step, {}).copy()
 
     def save_step_params(self, project_id: str, step: int, params: dict[str, Any]) -> bool:
+        with self.parameter_transaction(project_id):
+            return self._write_step_params(project_id, step, params)
+
+    def _write_step_params(self, project_id: str, step: int, params: dict[str, Any]) -> bool:
         """Save parameters for a step to unified config"""
         config_path = self._get_steps_config_path(project_id)
 

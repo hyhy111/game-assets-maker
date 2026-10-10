@@ -298,6 +298,16 @@ export const configApi = {
     return callApi<boolean>('save_config', 'saveConfig', config);
   },
 
+  async setCliGenerationEnabled(enabled: boolean, confirmed: boolean = false): Promise<boolean> {
+    const result = await callApi<{ success: boolean }>('save_cli_generation_enabled', 'saveCliGenerationEnabled', enabled, confirmed);
+    return result.success;
+  },
+
+  async setArkAuditEnabled(enabled: boolean): Promise<boolean> {
+    const result = await callApi<{ success: boolean }>('save_ark_audit_enabled', 'saveArkAuditEnabled', enabled);
+    return result.success;
+  },
+
   async getAvailableSizes(): Promise<number[]> {
     return callApi<number[]>('get_available_sizes', 'getAvailableSizes');
   }
@@ -364,6 +374,9 @@ export const audioApi = {
  * envelopes for every task operation; settings reads are already redacted.
  */
 export const seedanceApi = {
+  async openVideoDirectory(localId: string): Promise<SeedanceDeleteResult> {
+    return callApi('seedance_open_video_directory', 'seedanceOpenVideoDirectory', localId);
+  },
   async selectImageFile(): Promise<string | null> {
     return callApi<string | null>('seedance_select_image_file', 'seedanceSelectImageFile');
   },
@@ -492,6 +505,15 @@ export const seedanceApi = {
  * Seedream image-generation API. Reuses the same Ark API key as Seedance.
  */
 export const seedreamApi = {
+  async openImageDirectory(localId: string, attemptIndex: number): Promise<SeedreamDeleteResult> {
+    return callApi('seedream_open_image_directory', 'seedreamOpenImageDirectory', localId, attemptIndex);
+  },
+
+  async importReferenceImage(imageDataUrl: string, filename: string): Promise<
+    { success: true; path: string } | { success: false; error: { code: string; message: string } }
+  > {
+    return callApi('seedream_import_reference_image', 'seedreamImportReferenceImage', imageDataUrl, filename);
+  },
   async selectImageFile(): Promise<string | null> {
     return callApi<string | null>('seedream_select_image_file', 'seedreamSelectImageFile');
   },

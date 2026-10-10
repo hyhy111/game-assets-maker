@@ -1226,7 +1226,7 @@ def test_manager_list_batches_does_not_sequence_different_params(tmp_path):
 
     b1 = manager.create_batch(SeedreamRequest(prompt="hero", model="pro", resolution="1K", ratio="16:9", count=2))
     _wait_for_terminal(manager, b1["local_id"])
-    b2 = manager.create_batch(SeedreamRequest(prompt="villain", model="lite", resolution="2K", ratio="1:1", count=1))
+    b2 = manager.create_batch(SeedreamRequest(prompt="villain", model="flash", resolution="2K", ratio="1:1", count=1))
     _wait_for_terminal(manager, b2["local_id"])
 
     batches = manager.list_batches()
@@ -1245,7 +1245,7 @@ def test_manager_list_batches_sequences_only_matching_groups(tmp_path):
     # Two identical + one different.
     b1 = manager.create_batch(SeedreamRequest(prompt="hero", model="pro", resolution="1K", ratio="16:9", count=2))
     _wait_for_terminal(manager, b1["local_id"])
-    b2 = manager.create_batch(SeedreamRequest(prompt="different", model="lite", resolution="2K", ratio="1:1", count=1))
+    b2 = manager.create_batch(SeedreamRequest(prompt="different", model="flash", resolution="2K", ratio="1:1", count=1))
     _wait_for_terminal(manager, b2["local_id"])
     b3 = manager.create_batch(SeedreamRequest(prompt="hero", model="pro", resolution="1K", ratio="16:9", count=2))
     _wait_for_terminal(manager, b3["local_id"])
@@ -1377,3 +1377,17 @@ def test_manager_delete_batch_removes_cached_reference_image(tmp_path):
     manager.delete_batch(batch["local_id"])
 
     assert not cached.exists()
+
+
+def test_retired_lite_restores_pro_draft_without_modifying_history(tmp_path):
+    transport = FakeTransport(_ok_response())
+    manager = _make_manager(tmp_path, transport)
+    repository = BatchRepository(tmp_path / "cache")
+    original = SeedreamRequest(prompt="old hero", model="lite", resolution="2K", ratio="1:1", count=3)
+    batch = repository.create_batch(original)
+    before = manager.get_batch(batch.local_id)
+    draft = manager.get_regeneration_draft(batch.local_id)
+    assert draft["request"] == {**original.to_dict(), "model": "pro"}
+    assert manager.get_batch(batch.local_id) == before
+    assert len(manager.list_batches()) == 1
+    assert transport.calls == []

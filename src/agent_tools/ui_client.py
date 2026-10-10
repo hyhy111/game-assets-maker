@@ -66,6 +66,45 @@ class AgentUIClient:
             "payload": payload,
         }
 
+    def operation(self, request: dict[str, Any]) -> dict[str, Any]:
+        """Wait for an operation receipt without retrying a timed-out mutation."""
+        from src.agent_tools.schemas import error_response
+
+        try:
+            return self._request_json("POST", "/operations", request)
+        except urllib.error.HTTPError:
+            return error_response(
+                request.get("operation", "unknown"), "CONTROL_UNAVAILABLE", "Control endpoint unavailable"
+            )
+        except urllib.error.URLError as error:
+            if isinstance(error.reason, ConnectionRefusedError):
+                return error_response(
+                    request.get("operation", "unknown"), "UI_NOT_RUNNING", "Desktop application is not running"
+                )
+            return error_response(
+                request.get("operation", "unknown"),
+                "CONTROL_UNAVAILABLE",
+                "No receipt; query request status",
+                {"request_id": request.get("request_id")},
+            )
+        except (TimeoutError, json.JSONDecodeError, UnicodeDecodeError):
+            return error_response(
+                request.get("operation", "unknown"),
+                "CONTROL_UNAVAILABLE",
+                "No receipt; query request status before retrying",
+                {"request_id": request.get("request_id")},
+            )
+
+    def request_status(self, request_id: str) -> dict[str, Any]:
+        from urllib.parse import quote
+
+        from src.agent_tools.schemas import error_response
+
+        try:
+            return self._request_json("GET", "/operations/" + quote(request_id, safe=""))
+        except (TimeoutError, urllib.error.URLError, json.JSONDecodeError, UnicodeDecodeError):
+            return error_response("request.status", "UI_NOT_RUNNING", "Cannot query the application")
+
     def _request_json(self, method: str, path: str, body: dict[str, Any] | None = None) -> dict[str, Any]:
         data = None
         if body is not None:

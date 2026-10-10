@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { after, test } from 'node:test';
 import { closeSfcRenderer, renderSfc } from './vue-render-helper.mjs';
+import { MODEL_LABELS, MODEL_RESOLUTIONS } from '../src/seedream-ui.ts';
 
 after(closeSfcRenderer);
 
@@ -23,7 +24,9 @@ test('Seedream create page renders the supported Seedream 5.0 model options', as
   });
   assert.match(source, /value: 'pro', label: t\('seedream\.models\.pro'\)/);
   assert.match(source, /value: 'flash', label: t\('seedream\.models\.flash'\)/);
-  assert.match(source, /value: 'lite', label: t\('seedream\.models\.lite'\)/);
+  assert.doesNotMatch(source, /value: 'lite'/);
+  const settings = await readFile(new URL('../src/views/SeedanceSettings.vue', import.meta.url), 'utf8');
+  assert.doesNotMatch(settings, /value: 'lite'/);
   assert.doesNotMatch(source, /v45|v40|Seedream 4\.(?:5|0)/);
   assert.match(html, /Seedream 5\.0 Pro/);
 });
@@ -317,4 +320,10 @@ test('switching creation mode keeps the reference image in the image draft', asy
   } finally {
     await closeFrontendHarness();
   }
+});
+
+
+test('retired Lite remains named in history but is unavailable for new generation', () => {
+  assert.deepEqual(Object.keys(MODEL_RESOLUTIONS), ['pro', 'flash']);
+  assert.equal(MODEL_LABELS.lite, 'Seedream 5.0 Lite');
 });

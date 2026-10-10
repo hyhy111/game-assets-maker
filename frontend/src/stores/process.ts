@@ -121,37 +121,22 @@ export const useProcessStore = defineStore('process', () => {
     }
   }
 
+  function applyStepParams(step: number, params: Partial<Step1Params | Step2Params | Step3Params>) {
+    if (step === 1) s1Params.value = { ...s1Params.value, ...params } as Step1Params;
+    else if (step === 2) s2Params.value = { ...s2Params.value, ...params, model: 'u2net' } as Step2Params;
+    else if (step === 3) s3Params.value = { ...s3Params.value, ...params } as Step3Params;
+    else throw new Error('INVALID_STEP');
+    const saved = step === 1 ? s1Params.value : step === 2 ? s2Params.value : s3Params.value;
+    if (step === currentStep.value && saved.fps) usePlayerStore().setPlaybackFps(saved.fps);
+  }
+
   async function loadStepParams(projectId: string, step: number) {
-    const playerStore = usePlayerStore();
     try {
-      console.log(`[DEBUG] Loading step ${step} params for project ${projectId}`);
-      const params = await api.process.getStepParams(projectId, step);
-      console.log(`[DEBUG] Received step ${step} params:`, params);
-      if (step === 1) {
-        // Merge with defaults to ensure all fields exist
-        s1Params.value = { ...s1Params.value, ...params } as Step1Params;
-        console.log(`[DEBUG] Updated s1Params:`, s1Params.value);
-        // Sync fps to player store
-        if (s1Params.value.fps) {
-          playerStore.setPlaybackFps(s1Params.value.fps);
-        }
-      } else if (step === 2) {
-        s2Params.value = { ...s2Params.value, ...params, model: 'u2net' } as Step2Params;
-        console.log(`[DEBUG] Updated s2Params:`, s2Params.value);
-        // Sync fps to player store
-        if (s2Params.value.fps) {
-          playerStore.setPlaybackFps(s2Params.value.fps);
-        }
-      } else if (step === 3) {
-        s3Params.value = { ...s3Params.value, ...params } as Step3Params;
-        console.log(`[DEBUG] Updated s3Params:`, s3Params.value);
-        // Sync fps to player store
-        if (s3Params.value.fps) {
-          playerStore.setPlaybackFps(s3Params.value.fps);
-        }
-      }
+      applyStepParams(step, await api.process.getStepParams(projectId, step));
+      return true;
     } catch (e) {
       console.error(`Failed to load step ${step} params:`, e);
+      return false;
     }
   }
 
@@ -205,6 +190,12 @@ export const useProcessStore = defineStore('process', () => {
     }
   }
 
+  function observeAgentTask(taskId: string) {
+    usePlayerStore().pause();
+    currentTask.value = taskId;
+    startPolling(taskId);
+  }
+
   function startPolling(taskId: string) {
     isPolling.value = true;
 
@@ -215,7 +206,7 @@ export const useProcessStore = defineStore('process', () => {
         const status = await api.process.getTaskStatus(taskId);
         taskStatus.value = status;
 
-        if (status.status === 'running' && isPolling.value) {
+        if (['pending', 'running'].includes(status.status) && isPolling.value) {
           setTimeout(poll, 500);
         } else {
           // Task finished (completed, failed, or cancelled)
@@ -363,7 +354,9 @@ export const useProcessStore = defineStore('process', () => {
     nextStep,
     prevStep,
     loadStepParams,
+    applyStepParams,
     startProcessing,
+    observeAgentTask,
     startPolling,
     stopPolling,
     cancelProcessing,

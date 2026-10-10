@@ -82,13 +82,14 @@
             <label class="block text-xs text-gray-300">
               {{ t('seedream.detail.targetHeight') }}
               <input
-                v-model.number="resizeTargetRatio"
+                :value="resizeTargetRatio"
                 type="number"
                 min="1"
                 :max="100"
                 step="1"
                 class="mt-1 w-full rounded-lg border border-dark-border bg-dark-bg px-3 py-2 text-white"
                 data-test="image-editor-target-height-ratio"
+                @input="updateResizeRatio($event, 'height')"
               />
               <span class="mt-1 block text-gray-500" data-test="image-editor-measured-height-px">
                 {{ t('seedream.detail.measuredHeight') }}：{{ guideMeasuredHeight }} px
@@ -111,13 +112,14 @@
             <label class="block text-xs text-gray-300">
               {{ t('seedream.detail.bottomDistance') }}
               <input
-                v-model.number="resizeBottomMarginRatio"
+                :value="resizeBottomMarginRatio"
                 type="number"
                 min="0"
                 :max="Math.max(0, 100 - (resizeTargetRatio ?? 0))"
                 step="1"
                 class="mt-1 w-full rounded-lg border border-dark-border bg-dark-bg px-3 py-2 text-white"
                 data-test="image-editor-bottom-distance-ratio"
+                @input="updateResizeRatio($event, 'margin')"
               />
             </label>
             <p class="text-xs leading-5 text-gray-500">{{ t('seedream.detail.resizeCharacterHint') }}</p>
@@ -334,16 +336,23 @@ const estimatedVideoHeights = computed(() => [480, 720, 1080].map((videoHeight) 
 })));
 const bottomDistancePixels = computed(() => (
   typeof resizeBottomMarginRatio.value === 'number'
-    ? Math.round(imageHeight.value * resizeBottomMarginRatio.value / 100)
+    ? Math.min(
+      Math.round(imageHeight.value * resizeBottomMarginRatio.value / 100),
+      imageHeight.value - targetHeightPixels.value
+    )
     : 0
 ));
 const canApplyResize = computed(() => (
-  typeof resizeTargetRatio.value === 'number'
+  Number.isInteger(resizeTargetRatio.value)
+  && typeof resizeTargetRatio.value === 'number'
   && resizeTargetRatio.value > 0
   && resizeTargetRatio.value <= 100
+  && Number.isInteger(resizeBottomMarginRatio.value)
   && typeof resizeBottomMarginRatio.value === 'number'
   && resizeBottomMarginRatio.value >= 0
   && resizeBottomMarginRatio.value <= 100
+  && resizeTargetRatio.value + resizeBottomMarginRatio.value <= 100
+  && targetHeightPixels.value > 0
   && sourceMeasuredHeight.value > 0
   && (
     targetHeightPixels.value !== (currentGenerationLayout.value?.target_height ?? sourceMeasuredHeight.value)
@@ -440,6 +449,26 @@ function histogramMedian(histogram: Uint32Array, count: number): number {
   return 0;
 }
 
+function normalizeResizeRatios(height: number | null, margin: number | null) {
+  resizeTargetRatio.value = typeof height === 'number' && Number.isFinite(height)
+    ? Math.min(100, Math.max(1, Math.round(height)))
+    : null;
+  resizeBottomMarginRatio.value = typeof margin === 'number' && Number.isFinite(margin)
+    ? Math.min(100 - (resizeTargetRatio.value ?? 0), Math.max(0, Math.round(margin)))
+    : null;
+}
+
+function updateResizeRatio(event: Event, field: 'height' | 'margin') {
+  const input = event.target as HTMLInputElement;
+  const value = input.valueAsNumber;
+  normalizeResizeRatios(
+    field === 'height' ? value : resizeTargetRatio.value,
+    field === 'margin' ? value : resizeBottomMarginRatio.value
+  );
+  // Keep the DOM normalized even when rounding leaves the reactive value unchanged.
+  input.value = String((field === 'height' ? resizeTargetRatio.value : resizeBottomMarginRatio.value) ?? '');
+}
+
 function resetResizeGuides() {
   const height = imageHeight.value;
   const saved = props.generationLayout;
@@ -448,8 +477,7 @@ function resetResizeGuides() {
     sourceResizeBottom.value = saved.measured_bottom;
     resizeTop.value = height - saved.bottom_distance - saved.target_height;
     resizeBottom.value = height - saved.bottom_distance;
-    resizeTargetRatio.value = saved.character_height_ratio * 100;
-    resizeBottomMarginRatio.value = saved.bottom_margin_ratio * 100;
+    normalizeResizeRatios(saved.character_height_ratio * 100, saved.bottom_margin_ratio * 100);
     currentGenerationLayout.value = saved;
   } else {
     resizeTop.value = Math.round(height * 0.1);
@@ -590,8 +618,7 @@ function applyResize() {
   redoStack.value = [];
   resizeTop.value = Math.max(0, targetBottom - targetHeight);
   resizeBottom.value = targetBottom;
-  resizeTargetRatio.value = targetHeight / canvas.height * 100;
-  resizeBottomMarginRatio.value = bottomDistance / canvas.height * 100;
+  normalizeResizeRatios(targetHeight / canvas.height * 100, bottomDistance / canvas.height * 100);
   resizeError.value = '';
 }
 
@@ -843,8 +870,7 @@ function syncGuidesFromLayout() {
   sourceResizeBottom.value = layout.measured_bottom;
   resizeTop.value = targetBottom - layout.target_height;
   resizeBottom.value = targetBottom;
-  resizeTargetRatio.value = layout.character_height_ratio * 100;
-  resizeBottomMarginRatio.value = layout.bottom_margin_ratio * 100;
+  normalizeResizeRatios(layout.character_height_ratio * 100, layout.bottom_margin_ratio * 100);
 }
 
 function onKeydown(event: KeyboardEvent) {

@@ -42,11 +42,11 @@
           <Button
             v-if="selectedSucceededAttempt"
             variant="primary"
-            data-test="seedream-download"
-            @click="download(selectedSucceededAttempt.index)"
+            :disabled="!selectedSucceededAttempt.local_path || selectedSucceededAttempt.can_open_directory === false || workspace.candidateHandoffPending"
+            data-test="seedream-use-reference"
+            @click="useAsReference"
           >
-            <Download :size="16" aria-hidden="true" />
-            {{ t('seedream.detail.download') }}
+            {{ t('seedream.detail.useAsReference') }}
           </Button>
           <Button
             v-if="retryingDownloads || retryableAttempts.length > 1"
@@ -57,16 +57,36 @@
           >
             {{ t('seedream.detail.retryAllDownloads') }}
           </Button>
+          <div class="ml-auto flex items-center gap-2">
+            <button
+              type="button"
+              class="rounded-lg p-2 text-gray-400 transition duration-200 hover:-translate-y-0.5 hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-40"
+              :disabled="!selectedSucceededAttempt?.local_path || selectedSucceededAttempt.can_open_directory === false"
+              :title="t('seedream.detail.saveImage')"
+              :aria-label="t('seedream.detail.saveImage')"
+              data-test="seedream-download"
+              @click="selectedSucceededAttempt && download(selectedSucceededAttempt.index)"
+            ><Download :size="20" aria-hidden="true" /></button>
+            <button
+              type="button"
+              class="rounded-lg p-2 text-gray-400 transition duration-200 hover:-translate-y-0.5 hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-40"
+              :disabled="!selectedSucceededAttempt?.local_path || selectedSucceededAttempt.can_open_directory === false"
+              :title="t('aiCreation.openDirectory')"
+              :aria-label="t('aiCreation.openDirectory')"
+              data-test="seedream-open-directory"
+              @click="openDirectory"
+            ><FolderOpen :size="20" aria-hidden="true" /></button>
           <Button
             variant="danger"
-            class="ml-auto"
             :disabled="!canDelete || retryingDownloads"
             data-test="seedream-delete"
             @click="openDeleteConfirmation"
           >
             {{ t('seedream.detail.delete') }}
           </Button>
+          </div>
         </div>
+        <p v-if="mediaError" class="mb-3 text-sm text-danger" role="alert">{{ mediaError }}</p>
 
         <div
           v-if="selectedSucceededAttempt"
@@ -79,6 +99,8 @@
               :alt="t('seedream.detail.candidateImage')"
               class="block max-h-[60vh] max-w-full rounded-lg"
               :data-test="`seedream-image-${selectedSucceededAttempt.index}`"
+              :draggable="!!selectedSucceededAttempt.local_path && selectedSucceededAttempt.can_open_directory !== false"
+              @dragstart="dragCurrentImage($event)"
             />
             <RecentMediaFavoriteButton
               class="absolute right-3 top-3 z-[2]"
@@ -303,7 +325,10 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { ArrowLeft, Check, Copy, Download } from 'lucide-vue-next';
+import { ArrowLeft, Check, Copy, Download, FolderOpen } from 'lucide-vue-next';
+import { api } from '@/api';
+import { writeSeedreamImageDrag } from '@/seedream-image-drag';
+import { useAICreationStore } from '@/stores/aiCreation';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 import Button from '@/components/common/Button.vue';
@@ -321,6 +346,37 @@ const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
 const store = useSeedreamStore();
+const workspace = useAICreationStore();
+const mediaError = ref('');
+
+async function useAsReference() {
+  const attempt = selectedSucceededAttempt.value;
+  if (!attempt?.local_path) return;
+  mediaError.value = '';
+  if (await workspace.handoffCandidateToImage(batchId.value, attempt.index)) {
+    await router.push('/ai-creation');
+  } else mediaError.value = workspace.candidateHandoffError || t('aiCreation.imageUnavailable');
+}
+
+function dragCurrentImage(event: DragEvent) {
+  const attempt = selectedSucceededAttempt.value;
+  if (!attempt?.local_path) { event.preventDefault(); return; }
+  writeSeedreamImageDrag(
+    event.dataTransfer,
+    { localId: batchId.value, attemptIndex: attempt.index },
+    event.currentTarget as HTMLElement | null,
+  );
+}
+
+async function openDirectory() {
+  const attempt = selectedSucceededAttempt.value;
+  if (!attempt?.local_path) return;
+  mediaError.value = '';
+  try {
+    const result = await api.seedream.openImageDirectory(batchId.value, attempt.index);
+    if (!result.success) mediaError.value = result.error?.message || t('aiCreation.imageUnavailable');
+  } catch (error) { mediaError.value = error instanceof Error ? error.message : t('aiCreation.imageUnavailable'); }
+}
 const { imageMediaKey, isFavorite, toggleFavorite } = useRecentMediaFavorites();
 
 const loadError = ref('');

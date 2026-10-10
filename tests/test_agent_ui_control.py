@@ -274,9 +274,22 @@ def test_ui_client_open_handles_invalid_json_response():
 def test_run_step_success_survives_bad_ui_client(tmp_path):
     class FakeProjectAPI:
         def get_project(self, project_id):
-            return {"id": project_id, "video_path": str(tmp_path / "input.mp4")}
+            return {"id": project_id, "path": str(tmp_path), "video_path": str(tmp_path / "input.mp4")}
 
     class FakeProcessAPI:
+        def parameter_transaction(self, project_id):
+            from contextlib import nullcontext
+
+            return nullcontext()
+
+        def get_step_params(self, project_id, step):
+            from backend.api.process_api import ProcessAPI
+
+            return ProcessAPI.DEFAULT_STEP_PARAMS[step].copy()
+
+        def save_step_params(self, project_id, step, params):
+            return True
+
         def start_processing(self, project_id, step, params):
             return "task-completed"
 

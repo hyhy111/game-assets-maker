@@ -31,7 +31,8 @@
           :title="editLabel || changeLabel"
           @click="openSelectedImage"
         >
-          <img :src="previewUrl" alt="" class="h-full w-full rounded-[2px] object-cover">
+          <img v-if="previewUrl && !previewFailed" :src="previewUrl" alt="" class="h-full w-full rounded-[2px] object-cover" @error="previewFailed = true">
+          <span v-else class="text-[10px] text-gray-400">{{ t('aiCreation.imageUnavailable') }}</span>
           <span class="sr-only">{{ editLabel || changeLabel }}</span>
         </button>
         <button
@@ -88,10 +89,13 @@
         class="relative flex min-h-44 items-center gap-3 p-3"
       >
         <img
+          v-if="previewUrl && !previewFailed"
           :src="previewUrl"
           alt=""
           class="h-36 w-40 rounded-lg bg-black/30 object-contain"
+          @error="previewFailed = true"
         >
+        <p v-else class="text-xs text-gray-400">{{ t('aiCreation.imageUnavailable') }}</p>
         <div class="min-w-0 flex-1">
           <p class="truncate text-sm font-medium text-gray-200">{{ fileName }}</p>
           <p class="mt-1 text-xs text-[var(--seedance-muted)]">{{ selectedLabel }}</p>
@@ -140,9 +144,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { ImagePlus, Plus, X } from 'lucide-vue-next';
-import { hasSeedreamImageDrag, readSeedreamImageDrag, type SeedreamImageDragPayload } from '@/seedream-image-drag';
+import { hasImageDrop, readImageDrop, type SeedreamImageDragPayload } from '@/seedream-image-drag';
 
 const props = withDefaults(defineProps<{
   modelValue: string | null;
@@ -178,9 +183,14 @@ const emit = defineEmits<{
   edit: [];
   clear: [];
   'drop-image': [payload: SeedreamImageDragPayload];
+  'drop-file': [file: File];
+  'drop-error': [key: string];
 }>();
 
 const dragActive = ref(false);
+const previewFailed = ref(false);
+const { t } = useI18n();
+watch(() => props.previewUrl, () => { previewFailed.value = false; });
 const fileName = computed(() => props.modelValue?.split(/[\\/]/).pop() ?? '');
 const describedBy = computed(() => (
   props.error && props.errorId ? `${props.helpId} ${props.errorId}` : props.helpId
@@ -192,14 +202,14 @@ function openSelectedImage() {
 }
 
 function onDragEnter(event: DragEvent) {
-  if (!hasSeedreamImageDrag(event.dataTransfer)) return;
+  if (!hasImageDrop(event.dataTransfer)) return;
   event.preventDefault();
   dragActive.value = true;
 }
 
 function onDragOver(event: DragEvent) {
-  if (!hasSeedreamImageDrag(event.dataTransfer)) return;
   event.preventDefault();
+  if (!hasImageDrop(event.dataTransfer)) return;
   if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
   dragActive.value = true;
 }
@@ -212,10 +222,12 @@ function onDragLeave(event: DragEvent) {
 }
 
 function onDrop(event: DragEvent) {
-  const payload = readSeedreamImageDrag(event.dataTransfer);
-  if (!payload) return;
   event.preventDefault();
+  event.stopPropagation();
   dragActive.value = false;
-  emit('drop-image', payload);
+  const result = readImageDrop(event.dataTransfer);
+  if (result.kind === 'candidate') emit('drop-image', result.candidate);
+  else if (result.kind === 'file') emit('drop-file', result.file);
+  else emit('drop-error', result.key);
 }
 </script>

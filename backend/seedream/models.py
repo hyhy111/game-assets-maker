@@ -10,10 +10,6 @@ MODEL_CAPABILITIES = {
         "id": "doubao-seedream-5-0-flash-260915",
         "resolutions": ("1K", "1.5K", "2K"),
     },
-    "lite": {
-        "id": "doubao-seedream-5-0-260128",
-        "resolutions": ("2K",),
-    },
 }
 
 

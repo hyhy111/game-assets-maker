@@ -1,87 +1,66 @@
-# 模型文件管理
+# 去背模型下载与存储
 
-本项目使用 rembg 进行背景移除，支持将模型文件与应用一起打包分发。
+本说明适用于 Game Assets Maker 的本地背景移除功能。当前仅支持 **U2Net**，模型文件为 `u2net.onnx`，约 176 MB。它与 Seedream／Seedance 云端生成模型无关，本地去背不需要登录、积分或 API Key。
 
-## 模型存储位置
+仓库和当前发布包均不包含模型权重。模型下载到本地后可重复使用，不必每次处理都下载。
 
-模型文件存储在项目目录的 `models/rembg/` 文件夹中：
+## 安装版：在应用中下载
 
-```
-game_assets_maker/
-├── models/
-│   └── rembg/
-│       ├── u2net.onnx              # 默认模型 (~176MB)
-│       ├── u2netp.onnx             # 轻量版 (~4MB)
-│       ├── u2net_human_seg.onnx    # 人像专用 (~176MB)
-│       └── ...
-```
+1. 打开项目的“步骤 2：背景移除”。
+2. 缺少有效模型时，界面显示需要下载；选择 ModelScope 或 GitHub 下载源，点击下载。
+3. 等待下载和初始化完成，状态变为就绪后再开始处理。下载失败可更换来源并重试。
 
-## 下载模型
+默认下载源为 ModelScope。应用会显示下载／初始化状态；本地已有有效模型时只需初始化，不重新下载。首次缺少模型时需要用户选择来源并点击下载，不是启动应用后自动下载。
 
-### 方法一：下载所有模型（推荐）
+## 模型文件位置
 
-```bash
-python scripts/download_models.py
-```
+| 运行方式 | 模型目录 |
+| --- | --- |
+| 源码开发模式（默认） | 仓库根目录的 `models/rembg/` |
+| 安装版／`GAM_DATA_MODE=installed` | 用户主目录的 `.gam/models/rembg/` |
+| 安装数据模式且设置 `GAM_DATA_ROOT` | `<GAM_DATA_ROOT>/models/rembg/` |
 
-这会下载所有捆绑的模型（约 530MB）：
-- `u2net` - 通用模型（推荐，效果最佳）
-- `isnet-general-use` - ISNet 通用场景
-- `isnet-anime` - ISNet 动漫专用
+最终文件名均为 `u2net.onnx`。例如，macOS 默认安装目录为 `~/.gam/models/rembg/u2net.onnx`；Windows 位于用户主目录的 `.gam\models\rembg\u2net.onnx`。安装版模型位于可写的用户数据目录，更新或替换应用包不需要重新下载。
 
-### 方法二：下载特定模型
+需要自定义数据根时，在启动应用前设置 `GAM_DATA_ROOT`；源码启动还需使用 `GAM_DATA_MODE=installed` 才会将模型放到该数据根。该配置影响应用数据根，不是单独的模型目录设置。源码开发模式的模型位置仍固定在仓库内，不随 `GAM_DATA_ROOT` 改变。无需修改 `_MODELS_DIR` 源码，也不要依赖外部 `U2NET_HOME` 覆盖应用路径，应用会自行设置它。
+
+## 源码开发：提前下载
+
+在仓库根目录、完成 Python 依赖安装后运行：
 
 ```bash
-python scripts/download_models.py u2net
+uv run python scripts/download_models.py u2net
 ```
 
-## 模型大小参考
-
-| 模型 | 大小 | 用途 |
-|------|------|------|
-| u2net | ~176MB | 通用（推荐） |
-| isnet-general-use | ~176MB | 通用场景 |
-| isnet-anime | ~176MB | 动漫专用 |
-
-## 分发应用时的注意事项
-
-### 必需模型
-
-如果打包分发应用，**至少包含** `u2net.onnx`（默认模型），否则用户首次使用时会自动下载（需要网络连接）。
-
-### 打包清单
-
-分发前确保模型文件存在：
+不传模型名也只下载 U2Net：
 
 ```bash
-# 检查模型是否存在
-ls models/rembg/
-
-# 如果没有，先下载
-python scripts/download_models.py
+uv run python scripts/download_models.py
 ```
 
-### .gitignore 设置
+此脚本使用 ModelScope，始终保存到仓库内的 `models/rembg/`，不会按安装版数据根选择目录。它用于本地开发准备，不代替安装版界面的下载流程；当前不支持下载其他模型。
 
-模型文件较大，不应提交到 Git：
+## 离线使用与手动准备
 
-```gitignore
-# Models
-models/rembg/*.onnx
+离线前完成模型下载和初始化检查。也可以将已有的有效 `u2net.onnx` 复制到对应运行模式的模型目录，再打开步骤 2 等待初始化。应用使用 MD5 校验模型内容，预期值为：
+
+```text
+60024c5c889badc19c04ad937298a77b
 ```
 
-（已添加到项目 .gitignore）
+只创建同名文件或使用不匹配的模型无法通过校验。有效模型就绪后，视频抽帧、去背和后处理可在本地运行；云端图像／视频生成仍需要网络。
 
-## 用户侧行为
+## 故障排查
 
-- **模型已打包**：用户开箱即用，无需下载
-- **模型未打包**：首次使用时自动下载（需要网络）
-- **切换模型**：如果选择的模型不存在，也会自动下载
+| 状态／现象 | 检查与处理 |
+| --- | --- |
+| 一直提示需要下载 | 确认文件位于当前运行模式的目录，文件名为 `u2net.onnx`，内容校验通过；仓库模型不会自动成为安装版模型 |
+| 下载失败 | 检查网络、磁盘空间和目录写权限；在界面切换 ModelScope／GitHub 来源并重试 |
+| 下载后初始化失败 | 查看界面错误并重试；确认模型校验通过。若仍失败，检查应用错误日志中的运行环境／推理初始化错误，无需修改模型路径源码 |
+| 更新应用后找不到模型 | 检查是否改用了不同数据模式或 `GAM_DATA_ROOT`；安装版默认仍读取用户主目录的 `.gam` |
 
-## 自定义模型目录
+Windows 安装数据模式还会尝试将 `%LOCALAPPDATA%/VideoToSheet/models/rembg/u2net.onnx` 中校验有效的旧模型复制到当前模型目录，保留旧文件；这不适用于仓库模型或其他模型类型。
 
-如需更改模型存储位置，修改 `backend/core/smart_remove_background.py` 中的：
+## 打包与版本控制
 
-```python
-_MODELS_DIR = _PROJECT_ROOT / 'models' / 'rembg'
-```
+当前发布配置不捆绑模型权重，无需为打包提前下载全部模型。用户首次使用去背时通过界面下载，或提前向用户数据目录放入有效模型。模型权重属于本地下载数据，不应提交到 Git；仓库已忽略 `models/`。

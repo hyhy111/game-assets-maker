@@ -14,13 +14,13 @@ class ValidationError(ValueError):
         self.code = code
 
 
-def validate_request(request: SeedreamRequest) -> None:
-    _validate_common(request)
+def validate_request(request: SeedreamRequest, *, draft: bool = False) -> None:
+    _validate_common(request, draft=draft)
     if request.reference_image:
         _reference_image_format(Path(request.reference_image))
 
 
-def _validate_common(request: SeedreamRequest) -> None:
+def _validate_common(request: SeedreamRequest, *, draft: bool = False) -> None:
     if request.model not in MODEL_CAPABILITIES:
         raise ValidationError("model", "UNSUPPORTED_MODEL", "Unsupported Seedream model")
     if request.resolution not in MODEL_CAPABILITIES[request.model]["resolutions"]:
@@ -29,7 +29,7 @@ def _validate_common(request: SeedreamRequest) -> None:
         raise ValidationError("ratio", "UNSUPPORTED_RATIO", "Unsupported aspect ratio")
     if not isinstance(request.count, int) or request.count < 1 or request.count > 4:
         raise ValidationError("count", "INVALID_COUNT", "Image count must be between 1 and 4")
-    if not request.prompt.strip():
+    if not draft and not request.prompt.strip():
         raise ValidationError("prompt", "PROMPT_REQUIRED", "Prompt must not be empty")
 
 
