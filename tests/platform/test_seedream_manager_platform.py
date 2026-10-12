@@ -107,7 +107,7 @@ def _platform_request(tmp_path: Path, **kwargs) -> SeedreamRequest:
 
 def test_platform_attempt_success_downloads_image(manager, repository, platform, png_bytes):
     platform.image_bytes = png_bytes
-    batch = manager.create_batch(_platform_request(Path(".")))
+    batch = manager.create_batch(_platform_request(Path("."), resolution="1K"))
     _wait_terminal(repository, batch["local_id"])
 
     persisted = repository.get(batch["local_id"])
