@@ -442,13 +442,18 @@ def test_seedream_create_rejects_count_above_four(runtime_config_path):
     assert result["error"]["code"] == "INVALID_COUNT"
 
 
-def test_seedream_get_settings_returns_default_count(runtime_config_path):
+def test_seedream_get_settings_returns_image_defaults(runtime_config_path):
     from backend.api.seedream_api import SeedreamAPI
 
     api = SeedreamAPI(FakeManager(), media_resolver=MissingResolver())
     result = api.get_settings()
     assert result["success"] is True
-    assert result["settings"]["default_count"] == 2
+    assert result["settings"] == {
+        "default_count": 1,
+        "default_model": "pro",
+        "default_resolution": "2K",
+        "default_ratio": "16:9",
+    }
 
 
 def test_seedream_save_settings_persists_count(runtime_config_path):
@@ -1125,7 +1130,7 @@ def test_seedream_retired_default_falls_back_without_rewriting_config(runtime_co
     api = SeedreamAPI(FakeManager(), media_resolver=MissingResolver())
     settings = api.get_settings()["settings"]
     assert settings["default_model"] == "pro"
-    assert settings["default_resolution"] == "1K"
+    assert settings["default_resolution"] == "2K"
     assert runtime_config_path.read_bytes() == before
     result = api.save_settings({"default_model": "lite", "default_resolution": "2K"})
     assert result["error"]["code"] == "UNSUPPORTED_MODEL"

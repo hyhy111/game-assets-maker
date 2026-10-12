@@ -301,6 +301,48 @@ test('Seedance store exposes cancel, retry, continuation, deletion, and handoff 
   ]);
 });
 
+test('duplicate animation handoff preserves the task and allows retry with another name', async () => {
+  const downloaded = seedanceTask({
+    remote_status: 'succeeded',
+    download_status: 'downloaded',
+    output_urls: { video: 'local://video.mp4' },
+  });
+  const duplicateError = {
+    code: 'INVALID_REQUEST',
+    message: "角色 'hero' 下的动作 'idle' 已存在，请使用其他名称",
+    field: null,
+  };
+  const handedOff = seedanceTask({
+    ...downloaded,
+    handoffs: [{ project_id: 'hero/idle-2', role: 'hero', action: 'idle-2' }],
+  });
+  const bridge = createScriptedPyWebViewBridge({
+    seedance_handoff: [
+      { resolve: { success: false, error: duplicateError } },
+      { resolve: { success: true, project_id: 'hero/idle-2', task: handedOff } },
+    ],
+  });
+  setActivePinia(createPinia());
+  const { useSeedanceStore } = await loadFrontendModule('/src/stores/seedance.ts');
+  const store = useSeedanceStore();
+  store.upsertTask(downloaded);
+  store.currentTask = downloaded;
+
+  assert.equal(await store.handoff('task-1', 'hero', 'idle'), null);
+  assert.deepEqual(store.error, duplicateError);
+  assert.deepEqual(store.currentTask, downloaded);
+  assert.equal(store.loading, false);
+
+  assert.equal((await store.handoff('task-1', 'hero', 'idle-2'))?.project_id, 'hero/idle-2');
+  assert.equal(store.error, null);
+  assert.deepEqual(store.currentTask, handedOff);
+  assert.equal(store.loading, false);
+  assert.deepEqual(bridge.calls, [
+    { method: 'seedance_handoff', args: ['task-1', 'hero', 'idle'] },
+    { method: 'seedance_handoff', args: ['task-1', 'hero', 'idle-2'] },
+  ]);
+});
+
 test('Seedance image selection keeps the source path and builds a safe thumbnail preview', async () => {
   const bridge = createScriptedPyWebViewBridge({
     seedance_select_image_file: [{ resolve: '/tmp/rabbit.jpeg' }],

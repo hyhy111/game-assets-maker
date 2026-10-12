@@ -94,9 +94,10 @@ def test_build_api_payload_strips_prompt():
     assert payload["prompt"] == "图片比例 16:9，hero"
 
 
-def test_count_defaults_to_two():
-    request = SeedreamRequest(prompt="hero", model="pro", resolution="1K", ratio="16:9")
-    assert request.count == 2
+def test_image_request_defaults():
+    request = SeedreamRequest(prompt="hero")
+    assert (request.model, request.resolution, request.ratio, request.count) == ("pro", "2K", "16:9", 1)
+    validate_request(request)
 
 
 def test_count_valid_range_one_to_four():

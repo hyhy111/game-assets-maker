@@ -29,6 +29,7 @@
 
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from 'vue';
+import { reportStartup } from '@/api/channel';
 import { useConfigStore } from '@/stores/config';
 import { useAuthStore } from '@/stores/auth';
 import { useAgentControl } from '@/composables/useAgentControl';
@@ -36,8 +37,23 @@ import { api } from '@/api';
 import SeedreamCloseWarning from '@/components/seedream/SeedreamCloseWarning.vue';
 import DebugLogPanel from '@/components/layout/DebugLogPanel.vue';
 
-/** 临时诊断面板只在开发构建挂载（验收期用，见 DebugLogPanel.vue 顶部说明） */
-const showDebugPanel = import.meta.env.DEV;
+/** Keep the diagnostic panel and its shortcut limited to development builds. */
+const showDebugPanel = ref(import.meta.env.DEV);
+
+function handleDebugPanelShortcut(event: KeyboardEvent) {
+  if (
+    event.defaultPrevented ||
+    event.isComposing ||
+    !event.metaKey ||
+    event.ctrlKey ||
+    event.altKey ||
+    event.shiftKey ||
+    event.key.toLowerCase() !== 'b'
+  ) return;
+
+  event.preventDefault();
+  if (!event.repeat) showDebugPanel.value = !showDebugPanel.value;
+}
 
 const configStore = useConfigStore();
 const authStore = useAuthStore();
@@ -58,13 +74,16 @@ async function confirmExit() {
 }
 
 onMounted(() => {
+  reportStartup();
   configStore.loadConfig();
   authStore.init();
   window.addEventListener('seedream-close-requested', handleCloseRequested);
+  if (import.meta.env.DEV) window.addEventListener('keydown', handleDebugPanelShortcut);
 });
 
 onUnmounted(() => {
   window.removeEventListener('seedream-close-requested', handleCloseRequested);
+  if (import.meta.env.DEV) window.removeEventListener('keydown', handleDebugPanelShortcut);
 });
 </script>
 

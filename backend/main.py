@@ -20,6 +20,7 @@ from urllib.parse import unquote, urlsplit
 import webview
 
 from src.utils.app_config import current_storage_locations, save_app_config
+from src.utils.app_version import app_version
 from src.utils.data_paths import data_root
 from src.utils.storage_migration import StorageMigrationCoordinator
 
@@ -139,6 +140,13 @@ def start_assets_server(
     class CORSRequestHandler(SimpleHTTPRequestHandler):
         def __init__(self, *args, **kwargs):
             super().__init__(*args, directory=root_dir, **kwargs)
+
+        def handle(self):
+            try:
+                super().handle()
+            except (BrokenPipeError, ConnectionResetError):
+                # WebViews cancel media requests when seeking or switching views.
+                self.close_connection = True
 
         def end_headers(self):
             self.send_header("Access-Control-Allow-Origin", "*")
@@ -806,7 +814,7 @@ class API:
 
     def get_app_version(self) -> str:
         """Get application version"""
-        return "2.0.0"
+        return app_version()
 
     # ==================== App Lifecycle API ====================
 

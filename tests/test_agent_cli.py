@@ -6,6 +6,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+import pytest
+
 from src.agent_tools.explain import explain_step
 from src.agent_tools.schemas import AgentErrorCode, error_response, success_response
 from src.agent_tools.service import AgentWorkflowService
@@ -79,6 +81,55 @@ def test_installed_agent_entrypoint_defaults_to_home_gam(tmp_path, repo_root):
     assert result.returncode == 0, result.stderr
     payload = json.loads(result.stdout)
     assert Path(payload["data"]["project_root"]) == fake_home / ".gam"
+
+
+def test_packaged_agent_entry_uses_installed_config_from_another_directory(tmp_path, repo_root):
+    launch_dir = tmp_path / "launch"
+    launch_dir.mkdir()
+    user_data = tmp_path / "user-data"
+    user_data.mkdir()
+    (user_data / "config.json").write_text(json.dumps({"seedance": {"default_model": "invalid-model"}}))
+    env = {**os.environ, "GAM_DATA_ROOT": str(user_data), "PYTHONPATH": str(repo_root)}
+    env.pop("GAM_DATA_MODE", None)
+    env.pop("GAM_CONFIG", None)
+
+    result = subprocess.run(
+        [sys.executable, str(repo_root / "scripts" / "gam_agent_entry.py"), "doctor"],
+        cwd=launch_dir,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["ok"] is True
+    assert Path(payload["data"]["project_root"]) == user_data
+    assert payload["data"]["checks"]["seedance_default_model_valid"] is False
+    assert not (launch_dir / "config.dev.json").exists()
+
+
+def test_agent_doctor_checks_bundled_frontend_instead_of_user_data(tmp_path, monkeypatch):
+    resources = tmp_path / "bundle" / "resources"
+    (resources / "frontend" / "dist").mkdir(parents=True)
+    (resources / "backend").mkdir()
+    monkeypatch.setattr(sys, "_MEIPASS", str(resources), raising=False)
+    user_data = tmp_path / "user-data"
+    monkeypatch.setenv("GAM_DATA_ROOT", str(user_data))
+    monkeypatch.setenv("GAM_CONFIG", str(user_data / "config.json"))
+
+    service = AgentWorkflowService(root=user_data)
+    try:
+        payload = service.doctor()
+    finally:
+        service.close()
+
+    assert payload["data"]["checks"]["frontend_dist"] is True
+    assert payload["data"]["checks"]["backend_dir"] is True
+    assert payload["data"]["project_root"] == str(user_data)
+    assert "Frontend production build is missing: frontend/dist" not in payload.get("warnings", [])
+    assert not (user_data / "frontend").exists()
 
 
 def test_agent_cli_step_explain_outputs_json():
@@ -551,3 +602,33 @@ def test_service_explain_uses_step_explain_operation():
     assert invalid_response["ok"] is False
     assert invalid_response["operation"] == "step.explain"
     assert invalid_response["error"]["code"] == "INVALID_STEP"
+
+
+@pytest.mark.parametrize("duration", [-1, 3, 7, 15, 4.0, True])
+@pytest.mark.parametrize("command", ["draft", "generation"])
+def test_agent_cli_rejects_video_duration_without_contacting_app(tmp_path, duration, command):
+    patch = tmp_path / "parameters.json"
+    patch.write_text(json.dumps({"duration": duration}))
+    args = (
+        ("draft", "patch", "--kind", "video", "--patch-json", str(patch))
+        if command == "draft"
+        else ("generation", "video", "--request-json", str(patch))
+    )
+    result = _run_agent_cli(*args)
+    assert result.returncode == 1
+    payload = json.loads(result.stdout)
+    assert payload["error"]["code"] == "INVALID_DURATION"
+    assert payload["error"]["details"]["field"] == "duration"
+
+
+def test_seedance_create_parser_limits_duration_to_gui_choices():
+    from src.cli.agent import _build_parser
+
+    parser = _build_parser()
+    for duration in (4, 5, 6):
+        args = parser.parse_args(["seedance", "create", "--first-frame", "first.png", "--duration", str(duration)])
+        assert args.duration == duration
+    for duration in (-1, 3, 7):
+        with pytest.raises(SystemExit) as caught:
+            parser.parse_args(["seedance", "create", "--first-frame", "first.png", "--duration", str(duration)])
+        assert caught.value.code == 2

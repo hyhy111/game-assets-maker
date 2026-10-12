@@ -41,7 +41,7 @@ test('Seedream create page renders resolution options 1K 1.5K 2K without 4K', as
   assert.doesNotMatch(html, /data-value="4K"/);
 });
 
-test('Seedream create page defaults to Pro 1K 16:9', async () => {
+test('Seedream create page defaults to Pro 2K 16:9', async () => {
   const html = await renderSfc('views/SeedreamCreate.vue', {
     route: '/image-generation/create',
   });
@@ -49,7 +49,7 @@ test('Seedream create page defaults to Pro 1K 16:9', async () => {
   assert.match(html, /Seedream 5\.0 Pro/);
   assert.match(html, /data-test="seedream-parameter-summary"/);
   assert.match(html, /16:9/);
-  assert.match(html, /1K/);
+  assert.match(html, /2K/);
 });
 
 test('AI creation model dropdown uses the prompt composer palette', async () => {
@@ -74,11 +74,11 @@ test('Seedream create page renders count selector with options 1-4', async () =>
   assert.match(html, /data-value="4"/);
 });
 
-test('Seedream create page defaults count to 2', async () => {
+test('Seedream create page defaults count to 1', async () => {
   const html = await renderSfc('views/SeedreamCreate.vue', {
     route: '/image-generation/create',
   });
-  assert.match(html, /aria-pressed="true"[^>]*data-value="2"/);
+  assert.match(html, /aria-pressed="true"[^>]*data-value="1"/);
 });
 
 test('Seedream create page shows prompt suggestion on hover over the word counter', async () => {

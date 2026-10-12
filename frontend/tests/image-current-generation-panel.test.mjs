@@ -77,15 +77,19 @@ test('image current-generation panel stays expanded without a collapse control',
   assert.doesNotMatch(html, /data-test="image-current-panel-toggle"/);
 });
 
-test('workspace resolves the current image generation from the event-updated batch collection', async () => {
-  const source = await readFile(
-    new URL('../src/views/AICreationWorkspace.vue', import.meta.url),
-    'utf8',
-  );
+test('active image generation appears only in recent cards while the composer stays full-width', async () => {
+  const html = await renderSfc('views/AICreationWorkspace.vue', {
+    route: '/ai-creation',
+    piniaState: {
+      'ai-creation': { activeMode: 'image', recentFilter: 'image', currentGeneration: { kind: 'image', localId: batch.local_id } },
+      seedream: { batches: [batch], currentBatch: batch, loading: false, error: null },
+    },
+  });
 
-  assert.match(source, /seedream\.batches\.find/);
-  assert.match(source, /currentGeneration\?\.localId/);
-  assert.match(source, /ImageCurrentGenerationPanel/);
+  assert.match(html, /data-test="seedream-composer"/);
+  assert.match(html, /data-test="recent-image-batch-1"/);
+  assert.match(html, /生成中/);
+  assert.doesNotMatch(html, /data-test="image-current-panel"|lg:grid-cols-/);
 });
 
 test('image current-generation panel offers a close control', async () => {
@@ -99,26 +103,7 @@ test('image current-generation panel offers a close control', async () => {
   assert.match(button, /aria-label="关闭当前任务"/);
 });
 
-test('closing the current generation restores the single-column prompt layout', async () => {
-  const [workspaceSource, storeSource] = await Promise.all([
-    readFile(new URL('../src/views/AICreationWorkspace.vue', import.meta.url), 'utf8'),
-    readFile(new URL('../src/stores/aiCreation.ts', import.meta.url), 'utf8'),
-  ]);
-
-  assert.match(workspaceSource, /@close="dismissCurrentGeneration"/);
-  const dismiss = workspaceSource.match(/function dismissCurrentGeneration\(\) \{[\s\S]*?\n\}/)?.[0] ?? '';
-  assert.ok(dismiss, 'workspace dismiss handler should exist');
-  assert.match(dismiss, /workspace\.dismissCurrentGeneration\(\)/);
-  // Without a current generation the work area returns to one column, so the
-  // prompt composer regains its original full-width style.
-  assert.match(workspaceSource, /if \(!currentGenerationAvailable\.value\) return 'grid-cols-1';/);
-
-  const storeDismiss = storeSource.match(/function dismissCurrentGeneration\(\) \{[\s\S]*?\n\}/)?.[0] ?? '';
-  assert.ok(storeDismiss, 'store dismiss action should exist');
-  assert.match(storeDismiss, /currentGeneration\.value = null/);
-});
-
-test('paid image confirmation stays in the workspace and opens the returned batch panel', async () => {
+test('paid image confirmation stays in the workspace and preserves its draft', async () => {
   const source = await readFile(
     new URL('../src/views/SeedreamCreate.vue', import.meta.url),
     'utf8',

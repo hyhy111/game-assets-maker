@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+import pytest
 from PIL import Image
 
 from backend.main import API
@@ -47,3 +48,20 @@ def test_history_restore_rejects_missing_reference_without_submission(tmp_path, 
 
     with pytest.raises(ValueError, match="ASSET_MISSING"):
         restore_draft(api, "image", batch.local_id)
+
+
+@pytest.mark.parametrize("duration", [4, 5, 6])
+def test_agent_video_draft_accepts_gui_duration_choices(duration):
+    from backend.agent_control.drafts import validate_draft
+
+    validate_draft("video", {"first_frame": "", "duration": duration})
+
+
+@pytest.mark.parametrize("duration", [-1, 3, 7, 15, 4.0, True])
+def test_agent_video_draft_rejects_other_durations(duration):
+    from backend.agent_control.drafts import validate_draft
+    from backend.seedance.validation import ValidationError
+
+    with pytest.raises(ValidationError) as caught:
+        validate_draft("video", {"first_frame": "", "duration": duration})
+    assert caught.value.code == "INVALID_DURATION"

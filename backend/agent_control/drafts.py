@@ -4,9 +4,18 @@ from dataclasses import fields
 from typing import Any
 
 from backend.seedance.models import SeedanceRequest
+from backend.seedance.validation import ValidationError
 from backend.seedance.validation import validate_request as validate_video
 from backend.seedream.models import SeedreamRequest
 from backend.seedream.validation import validate_request as validate_image
+
+CLI_VIDEO_DURATIONS = (4, 5, 6)
+
+
+def validate_video_duration(duration: Any) -> None:
+    """Keep Agent video drafts and submissions within the GUI duration choices."""
+    if type(duration) is not int or duration not in CLI_VIDEO_DURATIONS:
+        raise ValidationError("duration", "INVALID_DURATION", "CLI video duration must be 4, 5 or 6 seconds")
 
 
 def validate_draft(kind: str, values: dict[str, Any]) -> None:
@@ -18,6 +27,8 @@ def validate_draft(kind: str, values: dict[str, Any]) -> None:
         allowed -= {"priority", "execution_expires_after"}
     if set(values) - allowed:
         raise ValueError("Unknown draft field")
+    if kind == "video":
+        validate_video_duration(values.get("duration", 5))
     for key, value in values.items():
         if key in {"duration", "count"}:
             valid = type(value) is int

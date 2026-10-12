@@ -79,14 +79,20 @@
               data-test="seedream-open-directory"
               @click="openDirectory"
             ><FolderOpen :size="20" aria-hidden="true" /></button>
-          <Button
-            variant="danger"
-            :disabled="!canDelete || retryingDownloads"
-            data-test="seedream-delete"
-            @click="openDeleteConfirmation"
-          >
-            {{ t('seedream.detail.delete') }}
-          </Button>
+            <button
+              type="button"
+              class="rounded-lg p-2 text-gray-400 transition-colors hover:bg-danger/15 hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger disabled:cursor-not-allowed disabled:opacity-40"
+              :disabled="!canDelete || retryingDownloads"
+              :title="t('seedream.detail.delete')"
+              :aria-label="t('seedream.detail.delete')"
+              data-test="seedream-delete"
+              @click="openDeleteConfirmation"
+            >
+              <Trash2
+                :size="20"
+                aria-hidden="true"
+              />
+            </button>
           </div>
         </div>
         <p v-if="mediaError" class="mb-3 text-sm text-danger" role="alert">{{ mediaError }}</p>
@@ -328,7 +334,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { ArrowLeft, Check, Copy, Download, FolderOpen } from 'lucide-vue-next';
+import { ArrowLeft, Check, Copy, Download, FolderOpen, Trash2 } from 'lucide-vue-next';
 import { api } from '@/api';
 import { writeSeedreamImageDrag } from '@/seedream-image-drag';
 import { useAICreationStore } from '@/stores/aiCreation';

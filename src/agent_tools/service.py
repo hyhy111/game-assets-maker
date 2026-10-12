@@ -11,6 +11,8 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from backend.agent_control.drafts import validate_video_duration
+from backend.seedance.validation import ValidationError
 from src.agent_tools.explain import explain_step
 from src.agent_tools.schemas import AgentErrorCode, error_response, redact_secret, success_response
 from src.agent_tools.ui_client import AgentUIClient
@@ -384,6 +386,11 @@ class AgentWorkflowService:
     ) -> dict[str, Any]:
         from uuid import uuid4
 
+        if kind == "video" and patch is not None and "duration" in patch:
+            try:
+                validate_video_duration(patch["duration"])
+            except ValidationError as error:
+                return error_response("draft.patch", error.code, str(error), {"field": error.field})
         return AgentUIClient(host=self.ui_client.host, port=self.ui_client.port, timeout=15).operation(
             {
                 "request_id": request_id or str(uuid4()),
@@ -396,6 +403,11 @@ class AgentWorkflowService:
     def generation_submit(self, kind: str, request: dict[str, Any], request_id: str | None = None) -> dict[str, Any]:
         from uuid import uuid4
 
+        if kind == "video":
+            try:
+                validate_video_duration(request.get("duration", 5))
+            except ValidationError as error:
+                return error_response("generation.submit", error.code, str(error), {"field": error.field})
         client = AgentUIClient(host=self.ui_client.host, port=self.ui_client.port, timeout=15)
         return client.operation(
             {
@@ -517,12 +529,13 @@ class AgentWorkflowService:
 
         seedance = self._seedance_config()
         cache_root = ai_cache_root(seedance.get("cache_dir"), base_dir=self.root)
+        resources_root = Path(getattr(sys, "_MEIPASS", self.root))
         checks = {
-            "pyproject": (self.root / "pyproject.toml").exists(),
-            "backend_dir": (self.root / "backend").is_dir(),
-            "frontend_dir": (self.root / "frontend").is_dir(),
+            "pyproject": (resources_root / "pyproject.toml").exists(),
+            "backend_dir": (resources_root / "backend").is_dir(),
+            "frontend_dir": (resources_root / "frontend").is_dir(),
             "project_dir": (self.root / "project").is_dir(),
-            "frontend_dist": (self.root / "frontend" / "dist").is_dir(),
+            "frontend_dist": (resources_root / "frontend" / "dist").is_dir(),
             "u2net_model": (models_root() / "u2net.onnx").is_file(),
             "seedance_api_key_configured": bool(seedance.get("api_key")),
             "seedance_cache_writable": os.access(cache_root if cache_root.exists() else cache_root.parent, os.W_OK),

@@ -182,7 +182,7 @@ test('controller plays crossed clips on forward frame advance with correct sourc
   assert.equal(engine.calls[0].fps, 24);
 });
 
-test('controller does not trigger on backward / scrub transition', () => {
+test('controller stops old sound on loop restart without triggering later clips', () => {
   const engine = mockEngine();
   const audioStore = {
     clips: [{ name: 'a', srcStartFrame: 0, srcEndFrame: 4, placementFrame: 10 }],
@@ -190,8 +190,8 @@ test('controller does not trigger on backward / scrub transition', () => {
     loaded: true,
   };
   const ctrl = createAudioSyncController({ audioStore, engine });
-  ctrl.onFrameAdvance(12, 5); // 后退（scrub / wrap）
-  assert.equal(engine.calls.length, 0);
+  ctrl.onFrameAdvance(12, 5);
+  assert.deepEqual(engine.calls, [{ type: 'stop' }]);
 });
 
 test('controller triggers each of multiple clips independently', () => {
@@ -342,4 +342,28 @@ test('setFrameAdvanceHook(null) unregisters without throwing', async () => {
 // 防御：computePeaks 仍可用（回归守卫）
 test('computePeaks still works (regression guard)', () => {
   assert.deepEqual(computePeaks(new Float32Array([0.1, -0.5]), 1)[0] - 0.5 < 1e-6, true);
+});
+
+test('playback start triggers a clip placed on the current frame', () => {
+  const engine = mockEngine();
+  const clip = { name: 'start', srcStartFrame: 0, srcEndFrame: 12, placementFrame: 5 };
+  const ctrl = createAudioSyncController({
+    audioStore: { loaded: true, sourceFps: 24, clips: [clip] }, engine,
+  });
+  ctrl.onPlaybackStart(5);
+  assert.deepEqual(engine.calls.filter((c) => c.type === 'play').map((c) => c.clip), [clip]);
+  ctrl.onFrameAdvance(5, 18);
+  assert.equal(engine.calls.filter((c) => c.type === 'play').length, 1);
+});
+
+test('loop restart stops old sources and plays the clip on the loop start frame', () => {
+  const engine = mockEngine();
+  const clip = { name: 'loop', srcStartFrame: 0, srcEndFrame: 12, placementFrame: 5 };
+  const ctrl = createAudioSyncController({
+    audioStore: { loaded: true, sourceFps: 24, clips: [clip] }, engine,
+  });
+  ctrl.onFrameAdvance(70, 5);
+  assert.deepEqual(engine.calls.map((c) => c.type), ['stop', 'play']);
+  ctrl.onFrameChanged(5);
+  assert.equal(engine.calls.length, 2);
 });

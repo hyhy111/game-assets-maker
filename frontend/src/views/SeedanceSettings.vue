@@ -538,7 +538,7 @@ const appDraft = reactive({
 const seedreamDraft = reactive<SeedreamSettings>({
   default_count: DEFAULT_COUNT,
   default_model: 'pro',
-  default_resolution: '1K',
+  default_resolution: '2K',
   default_ratio: '16:9',
 });
 const draft = reactive<Omit<SeedanceSettings, 'api_key_configured' | 'last_cleanup_at' | 'default_priority' | 'default_expires_after'>>({

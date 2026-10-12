@@ -22,7 +22,7 @@ export const MODEL_LABELS: Record<string, string> = {
 };
 
 export const ALLOWED_COUNTS = [1, 2, 3, 4] as const;
-export const DEFAULT_COUNT = 2;
+export const DEFAULT_COUNT = 1;
 
 export interface CreateForm {
   prompt: string;
@@ -35,7 +35,7 @@ export interface CreateForm {
 }
 
 export function defaultForm(defaultCount: number = DEFAULT_COUNT): CreateForm {
-  return { prompt: '', model: 'pro', resolution: '1K', ratio: '16:9', count: defaultCount, reference_image: '' };
+  return { prompt: '', model: 'pro', resolution: '2K', ratio: '16:9', count: defaultCount, reference_image: '' };
 }
 
 /** 本地预设表只覆盖直连短键；平台源下返回空数组表示"本地不管"。 */

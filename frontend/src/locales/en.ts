@@ -545,6 +545,8 @@ export default {
       submit: 'Send to Pipeline',
       creatingProject: 'Creating role animation…',
       success: 'Role animation created: {id}',
+      failedTitle: 'Unable to Create Frame Animation',
+      failed: 'Unable to create the frame animation. Please try again later.',
     },
     settings: {
       model: 'Model', resolution: 'Resolution',

@@ -49,7 +49,10 @@ DEFAULT_APP_CONFIG: dict[str, Any] = {
         "last_cleanup_at": None,
     },
     "seedream": {
-        "default_count": 2,
+        "default_count": 1,
+        "default_model": "pro",
+        "default_resolution": "2K",
+        "default_ratio": "16:9",
     },
 }
 

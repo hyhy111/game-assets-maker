@@ -125,7 +125,12 @@ test('Seedance preview and create retain protected actions and preflight guards'
   assert.match(preview, /variant="primary"\s+@click="regenerate"/);
   assert.match(preview, /@click="regenerate"[\s\S]*@click="continueFromReturnedFrame"[\s\S]*@click="downloadVideo"/);
   assert.doesNotMatch(preview, /seedance\.preview\.nextSteps/);
-  assert.match(preview, /variant="primary"\s+:loading="savingVideo"\s+@click="downloadVideo"/);
+  const saveButton = preview.match(/<button\s[^>]*data-test="seedance-download"[^>]*>[\s\S]*?<\/button>/)?.[0];
+  assert.ok(saveButton);
+  assert.match(saveButton, /:disabled="savingVideo"/);
+  assert.match(saveButton, /:aria-label="t\('seedance\.preview\.saveVideo'\)"/);
+  assert.match(saveButton, /<Download/);
+  assert.match(preview, /class="ml-auto flex items-center gap-2"[\s\S]*data-test="seedance-download"[\s\S]*data-test="seedance-open-directory"[\s\S]*@click="requestDelete"/);
   assert.match(preview, /store\.saveVideo/);
   assert.match(preview, /seedance\.preview\.saveVideo/);
   assert.match(preview, /:creating="handoffCreating"/);

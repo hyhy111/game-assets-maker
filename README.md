@@ -75,6 +75,25 @@ uv run python scripts/run_tests.py all-free   # 全部免费测试 + JSON 报告
 uv run python build.py
 ```
 
+渠道码由打包参数直接指定，无需在服务端预建：`uv run python build.py --channel-code douyin`。不填时为空；启动、注册和登录请求均携带此值。渠道码最多 64 个字符，不允许控制字符，保留大小写和空格。每次构建会覆盖渠道值；使用 `--skip-frontend` 时必须与已有前端产物的渠道码一致，否则构建失败。
+
+版本号统一来自 `pyproject.toml`；构建时自动同步前端包版本。macOS 构建会额外生成 `dist/GameAssetsMaker-<版本>-macos-<架构>.dmg` 和 `.dmg.sha256`，内含应用、Applications 快捷方式与安装说明。拖入 Applications 即可安装；覆盖更新前先退出应用。当前测试包没有 Developer ID 签名或 Apple 公证，受阻时按安装说明在“隐私与安全性”中选择“仍要打开”。
+
+保留已有产物并在独立目录打包：
+
+```bash
+uv run python build.py --dist-dir dist/local-1.0.0 --work-dir build/local-1.0.0
+```
+
+可用 `--skip-dmg` 仅构建应用。Windows 当前只生成 PyInstaller 目录，EXE 安装器暂缓。
+
+发行包同时包含 gam 桌面程序与 `gam-agent` CLI，共享运行库，用户无需安装 Python 或 uv。构建完成后自动在临时数据目录运行 CLI 自检；任一步失败都会使构建命令失败。
+
+- macOS：`dist/Game Assets Maker.app/Contents/MacOS/gam-agent`
+- Windows：`dist/game-assets-maker/gam-agent.exe`（与桌面程序及 `_internal` 一起交付）
+
+插件可通过已安装 gam 的绝对路径调用 CLI，无须配置 PATH。界面导航与草稿操作需要 gam 已启动；用户数据默认位于 `~/.gam`，模型及本地配置不包含在发行包中。
+
 ### 说明
 
 应用内的登录 / 积分等云端功能为可选扩展，依赖自建后端服务；本地素材处理能力不依赖任何账号。
@@ -151,6 +170,19 @@ Some tests need video fixtures; regenerate them with `python scripts/generate_te
 ```bash
 uv run python build.py
 ```
+
+Supply a package channel with `uv run python build.py --channel-code douyin` (empty by default, no server registration required). Startup, registration and login carry this exact value. Codes allow up to 64 characters without control characters. A skipped frontend rebuild requires a matching channel manifest to prevent stale attribution.
+
+The canonical version is in `pyproject.toml`; the build synchronizes frontend package versions. On macOS it also creates `dist/GameAssetsMaker-<version>-macos-<architecture>.dmg` and `.dmg.sha256`, containing the app, an Applications shortcut, and installation instructions. Quit the old app before replacing it. Test builds have no Developer ID signature or Apple notarization; if blocked, follow the included Privacy & Security > Open Anyway instructions.
+
+To preserve previous output, use `uv run python build.py --dist-dir dist/local-1.0.0 --work-dir build/local-1.0.0`. Use `--skip-dmg` for the app bundle only. Windows currently produces a PyInstaller directory; its EXE installer is deferred.
+
+The release includes both the gam desktop application and `gam-agent`, sharing runtime libraries. Users need neither Python nor uv. After packaging, the build runs the bundled CLI against temporary user data and fails if its smoke check fails.
+
+- macOS: `dist/Game Assets Maker.app/Contents/MacOS/gam-agent`
+- Windows: `dist/game-assets-maker/gam-agent.exe` (distribute it with the desktop executable and `_internal`)
+
+Plugins can invoke the installed CLI by absolute path without modifying PATH. Navigation and draft operations require the desktop application to be running. Writable data defaults to `~/.gam`; model weights and local configuration are excluded from the release.
 
 ### Note
 

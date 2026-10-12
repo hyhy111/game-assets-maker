@@ -1,6 +1,6 @@
 [project]
 name = "game-assets-maker"
-version = "0.1.0"
+version = "1.0.0"
 description = "Game Assets Maker - A desktop application for creating game-ready visual assets"
 readme = "README.md"
 requires-python = ">=3.12, <3.13"

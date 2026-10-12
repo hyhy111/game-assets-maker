@@ -9,8 +9,10 @@ import sys
 from contextlib import redirect_stdout
 from typing import Any
 
+from backend.agent_control.drafts import CLI_VIDEO_DURATIONS
 from src.agent_tools.schemas import AgentErrorCode, error_response
 from src.agent_tools.service import AgentWorkflowService
+from src.utils.app_version import app_version
 
 
 class ParamParseError(ValueError):
@@ -46,6 +48,7 @@ def _parse_params(raw_params: list[str] | None) -> dict[str, Any]:
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="gam-agent")
+    parser.add_argument("--version", action="version", version=app_version())
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     subparsers.add_parser("doctor")
@@ -179,7 +182,7 @@ def _build_parser() -> argparse.ArgumentParser:
     seedance_create.add_argument("--model", choices=["standard", "fast", "mini"])
     seedance_create.add_argument("--resolution", choices=["480p", "720p", "1080p", "4k"])
     seedance_create.add_argument("--ratio", choices=["adaptive", "16:9", "1:1", "4:3"])
-    seedance_create.add_argument("--duration", type=int)
+    seedance_create.add_argument("--duration", type=int, choices=CLI_VIDEO_DURATIONS)
     seedance_create.add_argument("--audio", action="store_true")
     seedance_create.add_argument("--return-last-frame", action="store_true")
     seedance_create.add_argument("--priority", type=int)

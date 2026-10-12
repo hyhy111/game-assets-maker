@@ -392,6 +392,8 @@ export interface AudioSyncControllerDeps {
 }
 
 export interface AudioSyncController {
+  /** Trigger clips placed exactly on the frame where playback begins. */
+  onPlaybackStart(currentFrame: number): void;
   /**
    * 连续播放帧推进回调（由 player store 的 frame-advance hook 调用）。
    * 跨越的片段以当前 sourceFps 触发播放。仅向前跨越才触发。
@@ -415,8 +417,23 @@ export interface AudioSyncController {
 export function createAudioSyncController(deps: AudioSyncControllerDeps): AudioSyncController {
   let lastTickFrame = -1;
 
+  function onPlaybackStart(currentFrame: number): void {
+    lastTickFrame = currentFrame;
+    if (!deps.audioStore.loaded || deps.audioStore.sourceFps <= 0) return;
+    for (const clip of getTriggeredClips(currentFrame - 1, currentFrame, deps.audioStore.clips)) {
+      deps.engine.playClip(clip, deps.audioStore.sourceFps);
+    }
+  }
+
   return {
+    onPlaybackStart,
     onFrameAdvance(prevFrame, currentFrame) {
+      if (currentFrame < prevFrame) {
+        // Only continuous playback calls this hook; a backward tick is a loop.
+        deps.engine.stopAll();
+        onPlaybackStart(currentFrame);
+        return;
+      }
       lastTickFrame = currentFrame;
       if (!deps.audioStore.loaded) return;
       const triggered = getTriggeredClips(prevFrame, currentFrame, deps.audioStore.clips);

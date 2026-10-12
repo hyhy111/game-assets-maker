@@ -1,11 +1,11 @@
 ---
 name: gam-export
-description: 将 Game Assets Maker 的普通 PNG 序列、逐帧裁剪偏移和按帧触发音频导入 Godot 4，生成动画资源与可播放预览场景。
+description: 将 gam 的普通 PNG 序列、逐帧裁剪偏移和按帧触发音频导入 Godot 4，生成动画资源与可播放预览场景。
 ---
 
-# GAM 导出
+# gam 导出
 
-将 Game Assets Maker 已处理好的素材导入 Godot 4，生成动画配置和可播放的预览场景。此 skill 负责导出与 Godot 验证，可作为制作指导 skill 的最后一步。
+将 gam 已处理好的素材导入 Godot 4，生成动画配置和可播放的预览场景。此 skill 负责导出与 Godot 验证，可作为制作指导 skill 的最后一步。
 
 ## 引导流程
 

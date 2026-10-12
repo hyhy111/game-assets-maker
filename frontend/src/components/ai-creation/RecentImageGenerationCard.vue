@@ -1,6 +1,7 @@
 <template>
   <article
     class="overflow-hidden rounded-xl border border-dark-border bg-dark-surface transition hover:border-primary/50"
+    :class="{ 'recent-generation-card-active': active }"
     :data-test="`recent-image-${batch.local_id}`"
   >
     <div class="relative bg-[#18191c]">

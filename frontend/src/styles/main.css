@@ -141,6 +141,34 @@
     @apply ring-2 ring-primary/70;
   }
 
+  .recent-generation-card-active {
+    position: relative;
+  }
+
+  .recent-generation-card-active::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    border: 2px solid #ffbd5b;
+    border-radius: inherit;
+    box-shadow: inset 0 0 10px rgb(255 189 91 / 35%);
+    pointer-events: none;
+    animation: generation-edge-pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes generation-edge-pulse {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 1; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .recent-generation-card-active::after {
+      animation: none;
+      opacity: 0.65;
+    }
+  }
+
   .card {
     @apply bg-dark-surface border border-dark-border rounded-xl p-6;
   }

@@ -28,7 +28,7 @@ test('Seedream create page with regenerate query does not render confirmation mo
       seedream: {
         batches: [],
         currentBatch: null,
-        settings: { default_count: 2 },
+        settings: { default_count: 1 },
         creatingBatch: false,
         loading: false,
         error: null,
@@ -46,7 +46,7 @@ test('Seedream create page without regenerate query renders normally', async () 
       seedream: {
         batches: [],
         currentBatch: null,
-        settings: { default_count: 2 },
+        settings: { default_count: 1 },
         creatingBatch: false,
         loading: false,
         error: null,
@@ -54,8 +54,8 @@ test('Seedream create page without regenerate query renders normally', async () 
     },
   });
   assert.match(html, /data-test="seedream-submit"/);
-  // Default count is 2.
-  assert.match(html, /aria-pressed="true"[^>]*data-value="2"/);
+  // Default count is 1.
+  assert.match(html, /aria-pressed="true"[^>]*data-value="1"/);
 });
 
 test('Seedream create page with regenerate query does not auto-submit', async () => {
@@ -68,7 +68,7 @@ test('Seedream create page with regenerate query does not auto-submit', async ()
       seedream: {
         batches: [],
         currentBatch: null,
-        settings: { default_count: 2 },
+        settings: { default_count: 1 },
         creatingBatch: false,
         loading: false,
         error: null,

@@ -70,26 +70,57 @@
           >
             {{ t('seedance.ui.continueGeneration') }}
           </Button>
-          <Button
-            v-if="hasMedia(task) && task.output_urls.video"
-            variant="primary"
-            :loading="savingVideo"
-            @click="downloadVideo"
-          >
-            <Download :size="16" aria-hidden="true" />
-            {{ t('seedance.preview.saveVideo') }}
-          </Button>
-          <Button variant="secondary" :disabled="!task.output_urls.video || task.cache_status !== 'complete' || task.can_open_directory === false" data-test="seedance-open-directory" @click="openDirectory">
-            <FolderOpen :size="16" aria-hidden="true" />
-            {{ t('aiCreation.openDirectory') }}
-          </Button>
-          <Button
-            class="ml-auto"
-            variant="danger"
-            @click="requestDelete"
-          >
-            {{ t('seedance.tasks.delete') }}
-          </Button>
+          <div class="ml-auto flex items-center gap-2">
+            <button
+              v-if="hasMedia(task) && task.output_urls.video"
+              type="button"
+              class="rounded-lg p-2 text-gray-400 transition duration-200 hover:-translate-y-0.5 hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-40"
+              :disabled="savingVideo"
+              :aria-busy="savingVideo"
+              :title="t('seedance.preview.saveVideo')"
+              :aria-label="t('seedance.preview.saveVideo')"
+              data-test="seedance-download"
+              @click="downloadVideo"
+            >
+              <Loader2
+                v-if="savingVideo"
+                class="animate-spin"
+                :size="20"
+                aria-hidden="true"
+              />
+              <Download
+                v-else
+                :size="20"
+                aria-hidden="true"
+              />
+            </button>
+            <button
+              type="button"
+              class="rounded-lg p-2 text-gray-400 transition duration-200 hover:-translate-y-0.5 hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-40"
+              :disabled="!task.output_urls.video || task.cache_status !== 'complete' || task.can_open_directory === false"
+              :title="t('aiCreation.openDirectory')"
+              :aria-label="t('aiCreation.openDirectory')"
+              data-test="seedance-open-directory"
+              @click="openDirectory"
+            >
+              <FolderOpen
+                :size="20"
+                aria-hidden="true"
+              />
+            </button>
+            <button
+              type="button"
+              class="rounded-lg p-2 text-gray-400 transition-colors hover:bg-danger/15 hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger"
+              :title="t('seedance.tasks.delete')"
+              :aria-label="t('seedance.tasks.delete')"
+              @click="requestDelete"
+            >
+              <Trash2
+                :size="20"
+                aria-hidden="true"
+              />
+            </button>
+          </div>
         </div>
 
         <p v-if="downloadLinkMayBeExpired" class="mb-4 rounded-lg border border-warning/30 bg-warning/10 p-3 text-sm text-warning">
@@ -131,6 +162,32 @@
         </aside>
       </div>
     </template>
+
+    <div
+      v-if="handoffError"
+      ref="modalRoot"
+      class="seedance-modal"
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="handoff-error-title"
+      aria-describedby="handoff-error-description"
+      @keydown="onModalKeydown"
+      @click.self="closeConfirmation"
+    >
+      <div>
+        <h2 id="handoff-error-title">
+          {{ t('seedance.handoff.failedTitle') }}
+        </h2>
+        <p id="handoff-error-description">
+          {{ handoffError }}
+        </p>
+        <div class="mt-5 flex justify-end">
+          <Button @click="closeConfirmation">
+            {{ t('common.confirm') }}
+          </Button>
+        </div>
+      </div>
+    </div>
 
     <div
       v-if="confirmProtected"
@@ -186,7 +243,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
-import { ArrowLeft, Download, FolderOpen } from 'lucide-vue-next';
+import { ArrowLeft, Download, FolderOpen, Loader2, Trash2 } from 'lucide-vue-next';
 import { api } from '@/api';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
@@ -220,6 +277,7 @@ const output = computed(() => task.value
 const phase = computed(() => task.value ? seedanceTaskPhase(task.value) : 'submitting');
 const handoffResult = ref('');
 const handoffCreating = ref(false);
+const handoffError = ref('');
 const savingVideo = ref(false);
 const directoryError = ref('');
 
@@ -268,6 +326,7 @@ async function openConfirmation(kind: PaidGenerationAction | 'delete') {
 }
 
 function closeConfirmation() {
+  handoffError.value = '';
   confirmProtected.value = false;
   pendingPaidAction.value = null;
   trigger?.focus();
@@ -317,10 +376,18 @@ function continueFromReturnedFrame() {
 
 async function handoff(payload: { role: string; action: string }) {
   if (!task.value || handoffCreating.value) return;
+  const handoffTrigger = document.activeElement as HTMLElement;
+  handoffError.value = '';
   handoffCreating.value = true;
   try {
     const result = await store.handoff(task.value.local_id, payload.role, payload.action);
-    if (!result || !('project_id' in result)) return;
+    if (!result || !('project_id' in result)) {
+      trigger = handoffTrigger;
+      handoffError.value = store.error?.message || t('seedance.handoff.failed');
+      await nextTick();
+      modalRoot.value?.querySelector<HTMLElement>('button')?.focus();
+      return;
+    }
     handoffResult.value = result.project_id;
     const project = await projectStore.loadProject(result.project_id);
     if (project) await router.push('/editor');

@@ -46,8 +46,9 @@
               v-model.number="s1Params.start_frame"
               type="number"
               :min="0"
-              :max="maxFrame"
+              :max="Math.min(maxFrame, s1Params.end_frame)"
               class="w-20"
+              @change="clampStartFrame"
               @blur="clampStartFrame"
             />
             <button
@@ -67,9 +68,10 @@
             <Input
               v-model.number="s1Params.end_frame"
               type="number"
-              :min="0"
+              :min="s1Params.start_frame"
               :max="maxFrame"
               class="w-20"
+              @change="clampEndFrame"
               @blur="clampEndFrame"
             />
             <button

@@ -245,9 +245,12 @@ playerStore.setFrameAdvanceHook((prev, next) => {
 const stopWatchPlaying = watch(
   () => playerStore.isPlaying,
   (playing) => {
-    if (playing && audioPlaybackActive.value) audioEngine.resume();
-    else audioEngine.stopAll();
+    if (playing && audioPlaybackActive.value) {
+      audioEngine.resume();
+      syncController.onPlaybackStart(mapToSource(playerStore.currentIndex));
+    } else audioEngine.stopAll();
   },
+  { flush: 'sync' },
 );
 const stopWatchAudioPlayback = watch(audioPlaybackActive, (active) => {
   if (!active) audioEngine.stopAll();

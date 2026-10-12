@@ -46,9 +46,9 @@ from src.utils.system_paths import open_directory
 _DEFAULT_MODEL = "pro"
 # 平台定价尺寸档（客户端用 1K/1.5K/2K 展示，下发前转小写）
 _PLATFORM_SIZES = ("1K", "1.5K", "2K")
-_DEFAULT_RESOLUTION = "1K"
+_DEFAULT_RESOLUTION = "2K"
 _DEFAULT_RATIO = "16:9"
-_DEFAULT_COUNT = 2
+_DEFAULT_COUNT = 1
 
 _IMAGE_FILE_TYPES = ("JPEG image (*.jpg;*.jpeg)",)
 _REFERENCE_FILE_TYPES = ("Image files (*.jpg;*.jpeg;*.png;*.webp;*.bmp;*.tif;*.tiff;*.gif;*.heic;*.heif)",)

@@ -177,6 +177,7 @@ export const useAICreationStore = defineStore('ai-creation', () => {
 
   function setCurrentGeneration(generation: CurrentGeneration) {
     currentGeneration.value = generation;
+    setRecentFilter(generation.kind);
     candidateHandoffError.value = '';
   }
 

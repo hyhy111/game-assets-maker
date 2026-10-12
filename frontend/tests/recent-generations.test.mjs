@@ -355,3 +355,46 @@ test('refresh reloads only the selected list and cards route directly to full de
   assert.match(recent, /router\.push\(`\/image-generation\/batches\/\$\{encodeURIComponent\(localId\)\}`\)/);
   assert.match(recent, /router\.push\(`\/video-generation\/tasks\/\$\{encodeURIComponent\(localId\)\}`\)/);
 });
+
+
+test('successful creations select their media list while later manual filtering stays independent', async () => {
+  setActivePinia(createPinia());
+  const { useAICreationStore } = await loadFrontendModule('/src/stores/aiCreation.ts');
+  const workspace = useAICreationStore();
+  workspace.activeMode = 'video';
+  workspace.loadMoreRecent('image');
+
+  workspace.setCurrentGeneration({ kind: 'video', localId: 'new-video' });
+  assert.equal(workspace.recentFilter, 'video');
+  workspace.setRecentFilter('image');
+  assert.equal(workspace.recentFilter, 'image');
+  assert.equal(workspace.currentGeneration.localId, 'new-video');
+
+  workspace.setCurrentGeneration({ kind: 'image', localId: 'new-image' });
+  assert.equal(workspace.recentFilter, 'image');
+  assert.equal(workspace.activeMode, 'video');
+  assert.equal(workspace.recentLoaded.image, 24);
+  workspace.setRecentFilter('video');
+  workspace.setCurrentGeneration({ kind: 'image', localId: 'another-image' });
+  assert.equal(workspace.recentFilter, 'image');
+});
+
+test('only active image and video cards receive the generation edge effect', async () => {
+  for (const status of ['generating', 'completed', 'partially_complete', 'failed', 'unknown']) {
+    const html = await renderSfc('components/ai-creation/RecentImageGenerationCard.vue', {
+      props: { batch: batch(1, { status }) },
+    });
+    assert.equal(html.includes('recent-generation-card-active'), status === 'generating', status);
+  }
+  for (const phase of ['submitting', 'queued', 'running', 'cancelling', 'downloading', 'succeeded', 'failed', 'cancelled', 'expired', 'cleared']) {
+    const html = await renderSfc('components/ai-creation/RecentVideoGenerationCard.vue', {
+      props: { task: task(1, {
+        remote_status: phase === 'downloading' || phase === 'cleared' ? 'succeeded' : phase,
+        download_status: phase === 'downloading' ? 'downloading' : 'downloaded',
+        cache_status: phase === 'cleared' ? 'cleared' : 'complete',
+      }) },
+    });
+    assert.equal(html.includes('recent-generation-card-active'),
+      ['submitting', 'queued', 'running', 'cancelling', 'downloading'].includes(phase), phase);
+  }
+});

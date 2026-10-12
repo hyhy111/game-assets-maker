@@ -542,6 +542,8 @@ export default {
       submit: '创建逐帧动画',
       creatingProject: '角色动画正在创建中',
       success: '角色动画已创建：{id}',
+      failedTitle: '创建逐帧动画失败',
+      failed: '无法创建逐帧动画，请稍后重试。',
     },
     settings: {
       model: '模型', resolution: '分辨率',

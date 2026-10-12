@@ -7,6 +7,8 @@ import threading
 from copy import deepcopy
 from typing import Any
 
+from backend.agent_control.drafts import validate_video_duration
+from backend.seedance.validation import ValidationError
 from src.agent_tools.schemas import error_response, success_response
 
 NAVIGATION_TARGETS = frozenset(
@@ -112,6 +114,11 @@ class AgentOperations:
                 or not isinstance(payload.get("request"), dict)
             ):
                 return error_response(operation, "INPUT_INVALID", "Generation requires kind and request object")
+            if payload["kind"] == "video":
+                try:
+                    validate_video_duration(payload["request"].get("duration", 5))
+                except ValidationError as error:
+                    return error_response(operation, error.code, str(error), {"field": error.field})
         elif operation.startswith(("step.", "artifacts.")) or operation in {
             "roles.list",
             "animations.list",

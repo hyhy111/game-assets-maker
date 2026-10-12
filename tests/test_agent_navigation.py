@@ -3,6 +3,8 @@
 import threading
 import time
 
+import pytest
+
 from backend.agent_control.server import AgentControlServer
 from src.agent_tools.ui_client import AgentUIClient
 
@@ -114,3 +116,35 @@ def test_browser_origin_cannot_submit_control_requests():
         assert caught.value.code == 403
     finally:
         server.stop()
+
+
+@pytest.mark.parametrize("duration", [-1, 3, 7, 15, 4.0, True])
+def test_agent_video_submission_rejects_duration_before_browser_dispatch(duration, monkeypatch):
+    monkeypatch.setattr("src.utils.app_config.cli_generation_enabled", lambda: True)
+    server = AgentControlServer(BrowserWindow(), port=0)
+    result = server.operations.execute(
+        {
+            "request_id": "invalid-duration",
+            "operation": "generation.submit",
+            "payload": {"kind": "video", "request": {"duration": duration}},
+        }
+    )
+    assert result["error"]["code"] == "INVALID_DURATION"
+    assert result["error"]["details"]["field"] == "duration"
+    assert not server.window.scripts
+
+
+@pytest.mark.parametrize("duration", [4, 5, 6])
+def test_agent_video_submission_dispatches_gui_duration_choices(duration, monkeypatch):
+    monkeypatch.setattr("src.utils.app_config.cli_generation_enabled", lambda: True)
+    server = AgentControlServer(BrowserWindow(), port=0)
+    server.operations.timeout = 0
+    result = server.operations.execute(
+        {
+            "request_id": "valid-duration",
+            "operation": "generation.submit",
+            "payload": {"kind": "video", "request": {"duration": duration}},
+        }
+    )
+    assert result["error"]["code"] == "UI_SYNC_TIMEOUT"
+    assert len(server.window.scripts) == 1

@@ -1,6 +1,7 @@
 <template>
   <article
     class="group cursor-pointer overflow-hidden rounded-xl border border-dark-border bg-dark-surface transition hover:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/60"
+    :class="{ 'recent-generation-card-active': active }"
     :data-test="`recent-video-${task.local_id}`"
     tabindex="0"
     role="button"

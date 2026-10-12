@@ -148,3 +148,26 @@ def test_audio_wav_url_uses_project_media_prefix_under_custom_root(tmp_path: Pat
     wav = custom / "mage" / "walk" / "cache" / "01_audio" / "source.wav"
 
     assert api._wav_url(wav).startswith("http://127.0.0.1:9000/project-media/mage/walk/cache/01_audio/source.wav?t=")
+
+
+@pytest.mark.parametrize("disconnect", [BrokenPipeError, ConnectionResetError])
+def test_client_disconnect_is_quiet_and_next_media_request_succeeds(media_server, monkeypatch, capsys, disconnect):
+    from socketserver import _SocketWriter
+
+    port, _, project_root = media_server
+    wav = project_root / "mage" / "walk" / "cache" / "source.wav"
+    wav.parent.mkdir(parents=True)
+    wav.write_bytes(b"RIFF-test-audio")
+    original_write = _SocketWriter.write
+
+    def disconnected_write(writer, data):
+        if data == b"RIFF-test-audio":
+            raise disconnect("client cancelled media request")
+        return original_write(writer, data)
+
+    monkeypatch.setattr(_SocketWriter, "write", disconnected_write)
+    with urlopen(f"http://127.0.0.1:{port}/project-media/mage/walk/cache/source.wav") as response:
+        assert response.status == 200
+    # This request is processed after the cancelled request finishes.
+    assert _status(port, "/project-media/mage/walk/output/01_frames/frame_000001.png") == 200
+    assert "Exception occurred during processing" not in capsys.readouterr().err

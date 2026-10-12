@@ -569,7 +569,7 @@ onMounted(async () => {
   workspace.initializeImageDraft({
     ...defaultForm(settings?.default_count ?? DEFAULT_COUNT),
     model: settings?.default_model ?? 'pro',
-    resolution: correctResolution(settings?.default_model ?? 'pro', settings?.default_resolution ?? '1K'),
+    resolution: correctResolution(settings?.default_model ?? 'pro', settings?.default_resolution ?? '2K'),
     ratio: settings?.default_ratio ?? '16:9',
   });
   const regenerateId = typeof route.query.regenerate === 'string' ? route.query.regenerate : '';

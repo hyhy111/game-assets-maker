@@ -95,19 +95,12 @@ test('workspace remembers and restores scroll only for the current window sessio
   assert.doesNotMatch(state, /localStorage|sessionStorage|persist/);
 });
 
-test('current generation uses one stable workspace column split without collapse state', async () => {
+test('creation workspace keeps a full-width composer and recent generations without a current-task sidebar', async () => {
   const workspace = await source('views/AICreationWorkspace.vue');
 
-  assert.match(workspace, /lg:grid-cols-\[minmax\(0,65fr\)_minmax\(280px,35fr\)\]/);
-  assert.doesNotMatch(workspace, /currentPanelCollapsed|@collapse=|@open=|@toggle="toggleCurrentPanel"/);
-});
-
-test('current generation panel stretches to the composer height', async () => {
-  const workspace = await source('views/AICreationWorkspace.vue');
-
-  assert.match(workspace, /class="grid items-stretch gap-5"/);
-  assert.match(workspace, /<VideoCurrentGenerationPanel/);
-  assert.doesNotMatch(workspace, /self-start/);
+  assert.doesNotMatch(workspace, /ImageCurrentGenerationPanel|VideoCurrentGenerationPanel/);
+  assert.doesNotMatch(workspace, /workAreaColumns|lg:grid-cols-/);
+  assert.match(workspace, /<RecentGenerations/);
 });
 
 test('router exposes one workspace and safely redirects legacy create routes', async () => {

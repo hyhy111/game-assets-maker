@@ -28,9 +28,9 @@ def platform_model_id(model: str) -> str:
 class SeedreamRequest:
     prompt: str = ""
     model: str = "pro"
-    resolution: str = "1K"
+    resolution: str = "2K"
     ratio: str = "16:9"
-    count: int = 2
+    count: int = 1
     reference_image: str | None = None
     # 'api-key' = direct Ark with the user's own key; 'forfuner-ai' = platform.
     source: str = "api-key"

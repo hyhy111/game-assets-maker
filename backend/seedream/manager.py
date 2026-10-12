@@ -105,9 +105,9 @@ class SeedreamBatchManager:
             "request": {
                 "prompt": request.get("prompt", ""),
                 "model": "pro" if request.get("model") == "lite" else request.get("model", "pro"),
-                "resolution": request.get("resolution", "1K"),
+                "resolution": request.get("resolution", "2K"),
                 "ratio": request.get("ratio", "16:9"),
-                "count": request.get("count", 2),
+                "count": request.get("count", 1),
                 "reference_image": reference_path,
                 "source": request.get("source", "api-key"),
             },

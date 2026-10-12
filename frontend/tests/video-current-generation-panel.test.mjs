@@ -39,10 +39,6 @@ const taskFixture = (overrides = {}) => ({
 });
 
 test('current video generation panel matches the composer surface and keeps only the detail action', async () => {
-  const workspaceSource = await readFile(
-    new URL('../src/views/AICreationWorkspace.vue', import.meta.url),
-    'utf8',
-  );
   const html = await renderSfc('components/ai-creation/VideoCurrentGenerationPanel.vue', {
     props: { task: taskFixture() },
   });
@@ -55,12 +51,10 @@ test('current video generation panel matches the composer surface and keeps only
   const closeButton = html.match(/<button[^>]*data-test="video-current-close"[^>]*>/)?.[0] ?? '';
   assert.ok(closeButton, 'close button should render');
   assert.match(closeButton, /aria-label="关闭当前任务"/);
-  assert.match(workspaceSource, /@close="dismissCurrentGeneration"/);
   assert.match(html, /flex h-full flex-col/);
   assert.match(html, /min-h-0 flex-1/);
   assert.match(html, /mt-4 flex h-11 flex-nowrap items-center/);
   assert.doesNotMatch(html, /Seedance 生成视频|另存视频|送入逐帧动画流水线|总 Token 数|删除任务/);
-  assert.match(workspaceSource, /class="grid items-stretch gap-5"/);
 });
 
 test('current video generation panel presents recovery actions for active and failed downloads', async () => {
@@ -129,4 +123,20 @@ test('confirmed video submission stays in the workspace and preserves its draft'
   assert.match(source, /store\.createTask\(request, source\)/);
   assert.match(source, /workspace\.setCurrentGeneration\(\{ kind: 'video', localId: task\.local_id \}\)/);
   assert.doesNotMatch(confirmMatch[0], /router\.push|resetVideoDraft|form\.prompt\s*=|clearDraft\(/);
+});
+
+test('active video generation appears only in recent cards while the composer stays full-width', async () => {
+  const task = taskFixture({ remote_status: 'running', download_status: 'pending', output_urls: {}, finished_at: null });
+  const html = await renderSfc('views/AICreationWorkspace.vue', {
+    route: '/ai-creation?mode=video',
+    piniaState: {
+      'ai-creation': { activeMode: 'video', recentFilter: 'video', currentGeneration: { kind: 'video', localId: task.local_id } },
+      seedance: { tasks: [task], currentTask: task, loading: false, error: null },
+    },
+  });
+
+  assert.match(html, /data-test="seedance-composer"/);
+  assert.match(html, /data-test="recent-video-video-1"/);
+  assert.match(html, /生成中/);
+  assert.doesNotMatch(html, /data-test="video-current-generation-panel"|lg:grid-cols-/);
 });

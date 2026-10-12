@@ -1,12 +1,14 @@
 # -*- mode: python ; coding: utf-8 -*-
-import os
 import sys
+import tomllib
+from pathlib import Path
 
 """
 PyInstaller spec for Game Assets Maker - WebView UI (PyWebView + Vue3)
 Usage: uv run pyinstaller GameAssetsMaker.spec
 
-Uses one-directory mode. Model weights are downloaded on demand and are not bundled.
+Bundles the GUI and Agent CLI in one directory with shared runtime libraries.
+Model weights and user configuration are not bundled.
 """
 
 from PyInstaller.building.build_main import Analysis
@@ -17,20 +19,21 @@ if sys.platform == 'darwin':
     from PyInstaller.building.osx import BUNDLE
 
 APP_DISPLAY_NAME = 'Game Assets Maker'
+with (Path(SPECPATH) / 'pyproject.toml').open('rb') as stream:
+    APP_VERSION = tomllib.load(stream)['project']['version']
 
 a = Analysis(
     ['backend/__main__.py'],
     pathex=['.'],
     binaries=[],
     datas=[
+        ('pyproject.toml', '.'),
         ('frontend/dist', 'frontend/dist'),
         ('backend', 'backend'),
         ('src/core', 'src/core'),
         ('src/utils', 'src/utils'),
         ('icon', 'icon'),
-        # config.json is an optional gitignored legacy dev config; installed
-        # releases read the per-user config and do not require it.
-    ] + ([('config.json', '.')] if os.path.exists('config.json') else []) + copy_metadata('rembg') + copy_metadata('pymatting'),
+    ] + copy_metadata('rembg') + copy_metadata('pymatting'),
     hiddenimports=[
         'rembg',
         'rembg.session_factory',
@@ -81,10 +84,45 @@ exe = EXE(
     contents_directory='_internal',
 )
 
+# Analyze the console entry separately so it never starts the desktop window.
+agent_analysis = Analysis(
+    ['scripts/gam_agent_entry.py'],
+    pathex=['.'],
+    binaries=[],
+    datas=[],
+    hiddenimports=[],
+    hookspath=[],
+    hooksconfig={},
+    runtime_hooks=[],
+    excludes=['torch', 'torchvision', 'torchaudio', 'pytest', 'matplotlib', 'pandas'],
+    noarchive=False,
+    optimize=0,
+)
+agent_pyz = PYZ(agent_analysis.pure)
+agent_exe = EXE(
+    agent_pyz,
+    agent_analysis.scripts,
+    [],
+    exclude_binaries=True,
+    name='gam-agent',
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=False,
+    console=True,
+    target_arch=None,
+    codesign_identity=None,
+    entitlements_file=None,
+    contents_directory='_internal',
+)
+
 coll = COLLECT(
     exe,
+    agent_exe,
     a.binaries,
     a.datas,
+    agent_analysis.binaries,
+    agent_analysis.datas,
     strip=False,
     upx=False,
     upx_exclude=[],
@@ -97,4 +135,12 @@ if sys.platform == 'darwin':
         name=f'{APP_DISPLAY_NAME}.app',
         bundle_identifier='com.hyhy111.game-assets-maker',
         icon='icon/app-icon.icns',
+        version=APP_VERSION,
+        # The console sibling must not make the GUI a background-only app.
+        info_plist={
+            'LSBackgroundOnly': False,
+            'NSHighResolutionCapable': True,
+            'CFBundleShortVersionString': APP_VERSION,
+            'CFBundleVersion': APP_VERSION,
+        },
     )
