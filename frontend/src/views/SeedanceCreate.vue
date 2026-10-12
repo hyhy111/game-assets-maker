@@ -123,6 +123,22 @@
           {{ handoffLoadFailed ? t('seedance.create.handoffLoadFailed') : t('seedance.create.continuationLoadFailed') }}
         </p>
         <p v-if="errors.body" class="mt-3 text-sm text-danger">{{ errorMessage(errors.body) }}</p>
+        <div
+          v-if="capabilitiesBlocked"
+          class="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning"
+          data-test="seedance-capabilities-blocked"
+          role="alert"
+        >
+          <span>{{ workspace.capabilitiesError ? t('aiCreation.capabilitiesFailed', { message: workspace.capabilitiesError }) : t('aiCreation.capabilitiesLoading') }}</span>
+          <button
+            type="button"
+            class="rounded-md border border-warning/40 px-2 py-0.5 text-xs transition-colors hover:bg-warning/20"
+            data-test="seedance-capabilities-retry"
+            @click="reloadCapabilities()"
+          >
+            {{ t('aiCreation.capabilitiesRetry') }}
+          </button>
+        </div>
 
         <div class="mt-4 flex flex-wrap items-center gap-2 border-t border-[#343434] pt-4">
           <div class="inline-flex h-10 items-center rounded-xl border border-[#414141] bg-[#2d2d2d] p-1">
@@ -238,7 +254,7 @@
                           class="absolute left-0 top-full z-40 mt-2 w-full overflow-hidden rounded-xl border border-[#3b3b3b] bg-[#1f1f1f] p-1 shadow-2xl shadow-black/50 focus:outline-none"
                         >
                           <ListboxOption
-                            v-for="duration in DURATION_OPTIONS"
+                            v-for="duration in durationOptions"
                             :key="duration"
                             v-slot="{ active, selected }"
                             as="template"
@@ -271,7 +287,10 @@
 
               <div class="mt-4 flex flex-wrap gap-x-8 gap-y-4 border-t border-white/[0.06] pt-4">
                 <Switch v-model="form.generate_audio" :label="t('seedance.create.generateAudio')" />
-                <Switch v-model="form.return_last_frame" :label="t('seedance.create.returnLastFrame')" />
+                <div>
+                  <Switch v-model="form.return_last_frame" :disabled="platformGenerationSelected" :label="t('seedance.create.returnLastFrame')" />
+                  <p v-if="platformGenerationSelected" class="mt-1 text-xs text-gray-500">{{ t('aiCreation.platformLimited') }}</p>
+                </div>
               </div>
 
             </div>
@@ -288,7 +307,13 @@
 
           <div class="ml-auto flex min-w-0 items-center gap-3 pl-2">
             <div v-if="showCreditEstimate" class="text-right" data-test="generation-credits" aria-live="polite">
-              <p class="text-sm text-gray-300">{{ estimatedCredits === null ? t('aiCreation.creditsUnavailable') : t('aiCreation.estimatedCredits', { credits: estimatedCredits }) }}</p>
+              <template v-if="platformGenerationSelected">
+                <p v-if="quoteLoading" class="text-sm text-gray-500">{{ t('aiCreation.platformQuoteLoading') }}</p>
+                <p v-else-if="quoteValue !== null" class="text-sm text-gray-300">{{ t('aiCreation.estimatedCredits', { credits: quoteValue }) }}</p>
+                <p v-else-if="quoteError" class="max-w-[16rem] text-xs leading-5 text-warning">{{ t('aiCreation.platformQuoteFailed', { message: quoteError }) }}</p>
+                <p v-else class="text-sm text-gray-500">{{ t('aiCreation.creditsUnavailable') }}</p>
+              </template>
+              <p v-else class="text-sm text-gray-300">{{ estimatedCredits === null ? t('aiCreation.creditsUnavailable') : t('aiCreation.estimatedCredits', { credits: estimatedCredits }) }}</p>
             </div>
             <CreationModelSelect
               v-if="showGenerationSourceSelector"
@@ -301,9 +326,9 @@
             <button
               type="submit"
               class="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#ffbd5c] text-[#242424] transition hover:bg-[#ffc975] disabled:cursor-not-allowed disabled:bg-[#4a4a4a] disabled:text-[#777]"
-              :disabled="submitting || platformGenerationSelected || draftLoadFailed || !form.first_frame || !form.prompt.trim()"
-              :aria-label="platformGenerationSelected ? t('aiCreation.platformGenerationUnavailable') : t('seedance.create.createTask')"
-              :title="platformGenerationSelected ? t('aiCreation.platformGenerationUnavailable') : t('seedance.create.createTask')"
+              :disabled="submitting || capabilitiesBlocked || draftLoadFailed || !form.first_frame || !form.prompt.trim()"
+              :aria-label="t('seedance.create.createTask')"
+              :title="t('seedance.create.createTask')"
               data-test="seedance-submit"
             >
               <span v-if="submitting" class="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" aria-hidden="true" />
@@ -370,9 +395,14 @@
           <li>{{ t('seedance.create.paidConfirmDownload') }}</li>
           <li>{{ t('seedance.create.paidConfirmExpiry') }}</li>
         </ol>
+        <div v-if="platformGenerationSelected" class="mt-4 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm" data-test="seedance-platform-quote" aria-live="polite">
+          <p v-if="quoteLoading" class="text-gray-400">{{ t('aiCreation.platformQuoteLoading') }}</p>
+          <p v-else-if="quoteError" class="text-danger">{{ t('aiCreation.platformQuoteFailed', { message: quoteError }) }}</p>
+          <p v-else-if="quoteValue !== null" class="text-gray-200">{{ t('aiCreation.platformQuote', { credits: quoteValue }) }}</p>
+        </div>
         <div class="mt-5 flex justify-end gap-3">
           <Button variant="secondary" :disabled="submitting" @click="cancelPaidAction">{{ t('seedance.create.paidConfirmCancel') }}</Button>
-          <Button :loading="submitting" :disabled="submitting" @click="confirmPaidAction">{{ t('seedance.create.paidConfirmConfirm') }}</Button>
+          <Button :loading="submitting" :disabled="submitting || platformConfirmBlocked" @click="confirmPaidAction">{{ t('seedance.create.paidConfirmConfirm') }}</Button>
         </div>
       </div>
     </div>
@@ -393,7 +423,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { Listbox, ListboxButton, ListboxOption, ListboxOptions } from '@headlessui/vue';
 import { ArrowRight, ArrowUp, Check, ChevronDown, Copy, Settings2 } from 'lucide-vue-next';
 import { useI18n } from 'vue-i18n';
@@ -417,7 +447,7 @@ import {
   correctDuration,
   createRequest,
   DURATION_OPTIONS,
-  MODEL_RESOLUTIONS,
+  localModelResolutions,
   promptCount,
   validateCreateForm,
   validationIssueForApiError,
@@ -428,6 +458,8 @@ import { useSeedanceStore } from '@/stores/seedance';
 import { useConfigStore } from '@/stores/config';
 import { useAuthStore } from '@/stores/auth';
 import { defaultVideoDraft, useAICreationStore, type CreationMode, type GenerationSource } from '@/stores/aiCreation';
+import { usePlatformCapabilities } from '@/composables/usePlatformCapabilities';
+import { platformModelOptions, type ModelOption } from '@/platform-models';
 import type { GenerationLayout, SeedanceModel, SeedanceResolution } from '@/types';
 
 withDefaults(defineProps<{
@@ -451,6 +483,8 @@ const store = useSeedanceStore();
 const configStore = useConfigStore();
 const authStore = useAuthStore();
 const workspace = useAICreationStore();
+// 平台能力清单的加载时机：登录后 / 切到平台源 / 登出清空。
+const { reload: reloadCapabilities } = usePlatformCapabilities();
 const errors = ref<Record<string, SeedanceValidationIssue>>({});
 const validationModal = ref(false);
 const modalMessage = ref('');
@@ -475,28 +509,108 @@ const editorGenerationLayout = ref<GenerationLayout | null>(null);
 const imageEditorLaunchError = ref('');
 let validationTrigger: HTMLElement | null = null;
 const allResolutions: SeedanceResolution[] = ['480p', '720p', '1080p'];
-const modelOptions = computed(() => [
+// 平台源下模型与参数由能力清单决定（每个模型只暴露自己有定价的分辨率/时长）；
+// 直连源仍用客户端预设表。见 openspec: gen-capabilities。
+const platformVideoModels = computed(() => workspace.capabilities?.video.models ?? []);
+const localVideoModelOptions = (): ModelOption[] => [
   { value: 'standard', label: t('seedance.models.standard') },
   { value: 'fast', label: t('seedance.models.fast') },
   { value: 'mini', label: t('seedance.models.mini') },
-]);
+];
+const modelOptions = computed<ModelOption[]>(() => (
+  platformGenerationSelected.value
+    ? platformModelOptions(platformVideoModels.value)
+    : localVideoModelOptions()
+));
 const form: CreateForm = workspace.videoDraft;
 const estimatedCredits = computed(() => videoGenerationCredits(form.model, form.resolution, form.duration));
-const showGenerationSourceSelector = computed(() => authStore.isLoggedIn && store.settings?.api_key_configured);
+// 平台源只需要登录；api-key 源还需要已配置 Ark Key。
+const showGenerationSourceSelector = computed(() => authStore.isLoggedIn);
 const generationSourceOptions = computed(() => [
   { value: 'api-key', label: t('aiCreation.customApiKey') },
   { value: 'forfuner-ai', label: t('aiCreation.forfunerAI') },
 ]);
 const platformGenerationSelected = computed(() => workspace.generationSource === 'forfuner-ai');
+// 降级（design D3）：平台源下拉取失败/未就绪时**阻断提交**并提示重试，
+// 绝不回退到客户端预设模型表——那会把"选中后必然失败"的组合重新放出来。
+const capabilitiesBlocked = computed(() => (
+  platformGenerationSelected.value
+  && (authStore.isLoggedIn && (!workspace.capabilities || !!workspace.capabilitiesError))
+));
 const showCreditEstimate = computed(() => (
   authStore.isLoggedIn && (!store.settings?.api_key_configured || platformGenerationSelected.value)
 ));
+// 平台源报价（quote-preview）：编辑页参数一变就刷新，弹窗确认前必须有值。
+const quoteLoading = ref(false);
+const quoteValue = ref<number | null>(null);
+const quoteError = ref('');
+const platformConfirmBlocked = computed(() => (
+  platformGenerationSelected.value && (quoteLoading.value || quoteError.value !== '' || quoteValue.value === null)
+));
+const QUOTE_DEBOUNCE_MS = 350;
+let quoteTimer: ReturnType<typeof setTimeout> | null = null;
+let quoteRequestId = 0;
+/** 当前报价对应的参数签名；与表单不一致时说明报价已过期。 */
+const quoteSignatureOf = ref('');
+
+/** 报价只依赖 model/resolution/duration/ratio/generate_audio（与图片无关）。 */
+function quoteSignature() {
+  return [form.model, form.resolution, form.duration, form.ratio, form.generate_audio].join('|');
+}
+
+async function refreshPlatformQuote() {
+  if (!platformGenerationSelected.value || !authStore.isLoggedIn) {
+    quoteValue.value = null;
+    quoteError.value = '';
+    quoteLoading.value = false;
+    quoteSignatureOf.value = '';
+    return;
+  }
+  const signature = quoteSignature();
+  const requestId = ++quoteRequestId;
+  quoteLoading.value = true;
+  quoteError.value = '';
+  const data = await store.quoteVideo(createRequest(form));
+  // 只接受最后一次请求的结果，避免快速切参数时旧响应覆盖新报价。
+  if (requestId !== quoteRequestId) return;
+  quoteLoading.value = false;
+  quoteSignatureOf.value = signature;
+  if (data && typeof data.quote === 'number') {
+    quoteValue.value = data.quote;
+    return;
+  }
+  quoteValue.value = null;
+  quoteError.value = store.error?.message ?? t('aiCreation.creditsUnavailable');
+}
+
+function scheduleQuoteRefresh() {
+  if (quoteTimer) clearTimeout(quoteTimer);
+  quoteTimer = setTimeout(() => {
+    quoteTimer = null;
+    void refreshPlatformQuote();
+  }, QUOTE_DEBOUNCE_MS);
+}
 const previewUrls = workspace.videoPreviewUrls;
 const promptInfo = computed(() => promptCount(form.prompt));
 const promptPlaceholder = computed(() => t(
   form.first_frame ? 'seedance.create.imagePromptPlaceholder' : 'seedance.create.textPromptPlaceholder',
 ));
-const supportedResolutions = computed(() => MODEL_RESOLUTIONS[form.model]);
+const platformModelEntry = computed(() => (
+  platformVideoModels.value.find((entry) => entry.model === form.model) ?? null
+));
+const supportedResolutions = computed<SeedanceResolution[]>(() => (
+  platformGenerationSelected.value
+    ? (platformModelEntry.value?.resolutions ?? []) as SeedanceResolution[]
+    : localModelResolutions(form.model)
+));
+// 平台源的时长由清单决定，且**按当前分辨率取**——不同分辨率可售的时长可以不同
+// （如 480p 有 4s/5s，720p 只有 4s）。直连源沿用本地选项。
+const platformDurations = computed<number[]>(() => (
+  platformModelEntry.value?.durationsByResolution?.[form.resolution] ?? []
+));
+const durationOptions = computed<number[]>(() => (
+  platformGenerationSelected.value ? platformDurations.value : [...DURATION_OPTIONS]
+));
 const paidConfirmationEnabled = computed(() => configStore.config?.paid_generation_confirmation_enabled !== false);
 const copied = ref(false);
 const copyTitle = computed(() => copied.value ? t('common.copied') : t('common.copy'));
@@ -609,10 +723,51 @@ function fixResolution() {
   form.resolution = correctResolution(form.model as SeedanceModel, form.resolution);
 }
 
+/**
+ * 平台源：把模型/分辨率/时长收敛到清单给的合法域。
+ * 清单变化、切源、切模型后都要调用——否则会留下"当前模型没有这个档位"的悬空值，
+ * 用户点提交才被后端拒掉。
+ */
+function clampToPlatformModel() {
+  const models = platformVideoModels.value;
+  if (!models.length) return;
+  let entry = models.find((candidate) => candidate.model === form.model);
+  if (!entry) {
+    entry = models[0];
+    form.model = entry.model;
+  }
+  const resolutions = (entry.resolutions ?? []) as SeedanceResolution[];
+  if (resolutions.length && !resolutions.includes(form.resolution)) {
+    form.resolution = resolutions[0];
+  }
+  // 时长按**当前分辨率**收敛：换分辨率后原时长可能在该分辨率下没有定价
+  const durations = entry.durationsByResolution?.[form.resolution] ?? [];
+  if (durations.length && !durations.includes(form.duration)) {
+    form.duration = durations[0] as CreateForm['duration'];
+  }
+}
+
 function selectModel(model: string) {
   form.model = model as SeedanceModel;
-  fixResolution();
+  if (platformGenerationSelected.value) clampToPlatformModel();
+  else fixResolution();
 }
+
+// 切模型/分辨率/时长/比例/音频都刷新平台报价（仅平台源）。
+watch(
+  () => [platformGenerationSelected.value, quoteSignature()].join('#'),
+  () => scheduleQuoteRefresh(),
+);
+
+// 清单是异步到达的：到了之后把表单收敛一次（也覆盖"清单被刷新导致档位变少"）。
+watch(platformVideoModels, () => {
+  if (platformGenerationSelected.value) clampToPlatformModel();
+});
+
+// 换分辨率后，原时长可能在该分辨率下没有定价 → 收敛回该分辨率的第一个可售时长
+watch(() => form.resolution, () => {
+  if (platformGenerationSelected.value) clampToPlatformModel();
+});
 
 async function selectFrame(field: 'first_frame' | 'last_frame') {
   const selection = await store.selectImageFile();
@@ -715,6 +870,10 @@ function onValidationKeydown(event: KeyboardEvent) {
 }
 
 onBeforeUnmount(() => {
+  if (quoteTimer) {
+    clearTimeout(quoteTimer);
+    quoteTimer = null;
+  }
   closeValidationModal();
   editingField.value = null;
   editorImageUrl.value = '';
@@ -725,6 +884,8 @@ onBeforeUnmount(() => {
 
 function errorMessage(issue?: SeedanceValidationIssue) {
   if (!issue) return '';
+  // 平台业务异常原文优先透传（余额不足/未定价/素材无效等）。
+  if (issue.message) return issue.message;
   return issue.key === 'seedance.validation.generic'
     ? `${t(issue.key)} (${safeCode(issue.code)})`
     : t(issue.key);
@@ -737,7 +898,7 @@ function safeCode(code: string) {
 async function submit() {
   if (submitting.value) return;
   if (paidConfirmModal.value) return;
-  if (platformGenerationSelected.value) return;
+  if (capabilitiesBlocked.value) return;
   submitting.value = true;
   try {
   errors.value = validateCreateForm(form);
@@ -747,8 +908,10 @@ async function submit() {
     return;
   }
   if (!ensureGenerationAccess()) return;
-  const request = createRequest(form);
-  const preflight = await store.validateRequest(request);
+  const request = platformGenerationSelected.value
+    ? { ...createRequest(form), return_last_frame: false }
+    : createRequest(form);
+  const preflight = await store.validateRequest(request, workspace.generationSource);
   if (!preflight) {
     const error = store.error;
     if (error) {
@@ -767,6 +930,7 @@ async function submit() {
   }
   paidConfirmTrigger = document.activeElement as HTMLElement;
   paidConfirmModal.value = true;
+  if (platformGenerationSelected.value) void ensureQuoteForConfirm();
   await nextTick();
   paidConfirmModalRoot.value?.querySelector<HTMLElement>('button:not([disabled])')?.focus();
   } finally {
@@ -774,14 +938,41 @@ async function submit() {
   }
 }
 
+/** 弹窗确认前确保报价对应当前参数：签名一致就复用，否则立即重拉（不走防抖）。 */
+async function ensureQuoteForConfirm() {
+  if (quoteSignatureOf.value === quoteSignature() && (quoteValue.value !== null || quoteError.value)) return;
+  if (quoteTimer) {
+    clearTimeout(quoteTimer);
+    quoteTimer = null;
+  }
+  await refreshPlatformQuote();
+}
+
 function ensureGenerationAccess(): boolean {
+  if (platformGenerationSelected.value) {
+    if (authStore.isLoggedIn) return true;
+    accessDialogOpen.value = true;
+    return false;
+  }
   if (store.settings?.api_key_configured) return true;
   accessDialogOpen.value = true;
   return false;
 }
 
 function selectGenerationSource(source: string) {
-  workspace.setGenerationSource(source as GenerationSource);
+  const next = source as GenerationSource;
+  workspace.setGenerationSource(next);
+  if (next === 'forfuner-ai') {
+    // 参数收敛：平台源强制重置越界值（后端同样校验，双保险）。
+    form.return_last_frame = false;
+    clampToPlatformModel();
+  } else {
+    // 切回直连：模型可能还是上游 ID，本地表不认，重置为预设默认。
+    if (!localModelResolutions(form.model).length) form.model = 'standard';
+    fixResolution();
+    form.duration = correctDuration(form.duration);
+  }
+  scheduleQuoteRefresh();
 }
 
 function goToLogin() {
@@ -795,7 +986,7 @@ function goToSettings() {
 }
 
 async function confirmPaidAction() {
-  if (submitting.value || !pendingRequest) return;
+  if (submitting.value || !pendingRequest || platformConfirmBlocked.value) return;
   paidConfirmModal.value = false;
   submitting.value = true;
   try {
@@ -809,7 +1000,16 @@ async function createPendingTask() {
   if (!pendingRequest) return;
   const request = pendingRequest;
   pendingRequest = null;
-  const task = await store.createTask(request);
+  const source = workspace.generationSource;
+  let task = await store.createTask(request, source);
+  // 平台 401：token 过期——先静默重登（token watcher 会自动把新 token 推进 Python），重试一次。
+  if (!task && source === 'forfuner-ai' && store.error?.code === 'UNAUTHORIZED') {
+    const recovered = await authStore.silentRelogin();
+    if (recovered) task = await store.createTask(request, source);
+  }
+  quoteLoading.value = false;
+  quoteError.value = '';
+  quoteValue.value = null;
   if (task) {
     workspace.setCurrentGeneration({ kind: 'video', localId: task.local_id });
     return;
@@ -824,6 +1024,9 @@ async function createPendingTask() {
 function cancelPaidAction() {
   paidConfirmModal.value = false;
   pendingRequest = null;
+  quoteLoading.value = false;
+  quoteError.value = '';
+  quoteValue.value = null;
   paidConfirmTrigger?.focus();
   paidConfirmTrigger = null;
 }

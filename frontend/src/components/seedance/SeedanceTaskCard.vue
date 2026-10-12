@@ -12,8 +12,9 @@
       <div v-else class="grid h-full place-items-center text-gray-600">
         <Video :size="32" aria-hidden="true" />
       </div>
-      <div class="absolute left-3 top-3">
+      <div class="absolute left-3 top-3 flex items-center gap-1.5">
         <SeedanceStatusBadge :task="task" />
+        <PlatformSourceBadge :source="task.source" />
       </div>
       <span
         v-if="sequence"
@@ -75,6 +76,7 @@
 import { computed } from 'vue';
 import { Video } from 'lucide-vue-next';
 import { useI18n } from 'vue-i18n';
+import { useModelDisplayName } from '@/composables/useModelDisplayName';
 import {
   downloadUrlMayBeExpired,
   formatElapsed,
@@ -82,6 +84,7 @@ import {
   type SeedanceTaskAction,
 } from '@/seedance-ui';
 import type { SeedanceTask } from '@/types';
+import PlatformSourceBadge from '@/components/ai-creation/PlatformSourceBadge.vue';
 import SeedanceStatusBadge from './SeedanceStatusBadge.vue';
 
 const props = defineProps<{ task: SeedanceTask; sequence?: string }>();
@@ -95,6 +98,7 @@ const emit = defineEmits<{
   delete: [id: string];
 }>();
 const { t, locale } = useI18n();
+const { modelName } = useModelDisplayName();
 
 const actions = computed(() => seedanceTaskActions(props.task));
 const downloadLinkMayBeExpired = computed(() => (
@@ -107,7 +111,7 @@ const createdAt = computed(() => (
   new Date(props.task.created_at).toLocaleString(locale.value)
 ));
 const tags = computed(() => [
-  t(`seedance.models.${props.task.request.model}`),
+  modelName(props.task.request.model, 'video'),
   props.task.request.resolution,
   props.task.request.ratio === 'adaptive' ? t('seedance.create.adaptive') : props.task.request.ratio,
   props.task.request.duration === -1 ? t('seedance.ui.smart') : `${props.task.request.duration}s`,

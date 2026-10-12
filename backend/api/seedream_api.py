@@ -27,11 +27,15 @@ from backend.image_layout import (
     edit_source_path,
     write_generation_layout,
 )
+from backend.platform.client import PlatformClient, PlatformError, PlatformUnauthorizedError
+from backend.platform.config import PlatformConfig
+from backend.platform.downloads import PlatformArtifactTransport
+from backend.platform.images import PlatformImageClient
 from backend.seedream.client import ArkAPIError, ArkClient, SubmissionUnknownError
 from backend.seedream.downloader import ImageDownloader
-from backend.seedream.manager import SeedreamBatchManager
+from backend.seedream.manager import PLATFORM_SOURCE, SeedreamBatchManager
 from backend.seedream.media import SeedreamMediaResolver
-from backend.seedream.models import MODEL_CAPABILITIES, SeedreamRequest
+from backend.seedream.models import MODEL_CAPABILITIES, SeedreamRequest, platform_model_id
 from backend.seedream.repository import BatchRepository
 from backend.seedream.validation import _ALLOWED_RATIOS, ValidationError, validate_request
 from src.utils.ai_cache_paths import ai_pic_cache_root
@@ -40,6 +44,8 @@ from src.utils.storage_locations import StorageLocations
 from src.utils.system_paths import open_directory
 
 _DEFAULT_MODEL = "pro"
+# 平台定价尺寸档（客户端用 1K/1.5K/2K 展示，下发前转小写）
+_PLATFORM_SIZES = ("1K", "1.5K", "2K")
 _DEFAULT_RESOLUTION = "1K"
 _DEFAULT_RATIO = "16:9"
 _DEFAULT_COUNT = 2
@@ -60,6 +66,7 @@ class SeedreamAPI:
         media_base_url: str = "http://localhost:8080",
         media_resolver: SeedreamMediaResolver | None = None,
         storage_locations: StorageLocations | None = None,
+        platform_config: PlatformConfig | None = None,
     ) -> None:
         self._window_getter = window_getter or self._active_window
         self._client_factory = client_factory
@@ -68,8 +75,44 @@ class SeedreamAPI:
         self._external_manager = manager is not None
         self._media_resolver = media_resolver
         self._storage_locations = storage_locations
+        self._platform_config = platform_config
+        self._platform_client: PlatformClient | None = None
         self._window = None
         self._started = False
+
+    def update_platform(self, base_url: str, token: str | None) -> None:
+        """Refresh platform base URL/token (see SeedanceAPI.update_platform)."""
+        if self._platform_config is None:
+            return
+        old_base = self._platform_client.base_url if self._platform_client is not None else None
+        self._platform_config.set(base_url, token)
+        if self._platform_client is None:
+            if self._platform_config.configured():
+                self._platform_client = self._platform_config.client()
+                self._refresh_manager_platform()
+            return
+        if (base_url or "").rstrip("/") != old_base:
+            if self._platform_config.configured():
+                self._platform_client = self._platform_config.client()
+            self._refresh_manager_platform()
+            return
+        self._platform_client.set_token(token)
+
+    def _refresh_manager_platform(self) -> None:
+        """Attach platform support to an already-created manager (post-login)."""
+        if self._manager is None or self._manager._platform is not None:
+            return
+        if self._platform_client is None:
+            return
+        self._manager = SeedreamBatchManager(
+            self._manager._client,
+            self._manager._repository,
+            ImageDownloader(self._manager._repository, PlatformArtifactTransport(self._platform_client)),
+            platform=PlatformImageClient(self._platform_client),
+        )
+        self._media_resolver = None
+        if self._window is not None:
+            self._manager.set_event_sink(self._dispatch_batch_update)
 
     def set_media_base_url(self, media_base_url: str) -> None:
         self._media_base_url = media_base_url.rstrip("/")
@@ -114,11 +157,14 @@ class SeedreamAPI:
         )
         return result[0] if result else None
 
-    def create_batch(self, request_data: dict[str, Any]) -> dict[str, Any]:
+    def create_batch(self, request_data: dict[str, Any], source: str = "api-key") -> dict[str, Any]:
         try:
-            request = SeedreamRequest.from_dict(request_data)
+            request = SeedreamRequest.from_dict({**request_data, "source": source})
             validate_request(request)
-            self._require_api_key()
+            if request.source == PLATFORM_SOURCE:
+                self._require_platform()
+            else:
+                self._require_api_key()
             batch = self._ensure_manager().create_batch(request)
             return {"success": True, "batch": self._decorate_batch(batch)}
         except Exception as error:
@@ -568,14 +614,53 @@ class SeedreamAPI:
                 else ai_pic_cache_root(config.get("cache_dir"))
             )
             repository = BatchRepository(cache_root)
+            platform = self._build_platform_images()
             self._manager = SeedreamBatchManager(
                 self._new_client(config["api_key"]),
                 repository,
-                ImageDownloader(repository),
+                ImageDownloader(
+                    repository,
+                    PlatformArtifactTransport(self._platform_client) if platform is not None else None,
+                ),
+                platform=platform,
             )
         if self._media_resolver is None:
             self._media_resolver = SeedreamMediaResolver(self._manager._repository)
         return self._manager
+
+    def _build_platform_images(self) -> PlatformImageClient | None:
+        if self._platform_config is None or not self._platform_config.configured():
+            return None
+        if self._platform_client is None:
+            self._platform_client = self._platform_config.client()
+        return PlatformImageClient(self._platform_client)
+
+    def quote_image(self, request_data: dict[str, Any]) -> dict[str, Any]:
+        """Server-side quote preview for the platform source (read-only).
+
+        Pricing dimensions are model + size, so the preview deliberately does NOT
+        require prompt or a reference image — the create page quotes as soon as
+        the model/size are chosen, before the user picks an image. Count is a
+        client-side fan-out (N images = N jobs), so the caller multiplies.
+        """
+        try:
+            config = self._require_platform()
+            # 见 quote_video：平台源下 model 是上游 ID，本地表拦不得。
+            model = platform_model_id(request_data.get("model") or "pro")
+            # 与 Ark 文档口径一致（大写）；平台入参大小写不敏感，此处按客户端取值原样下发。
+            resolution = str(request_data.get("resolution") or "1K").upper()
+            if resolution not in _PLATFORM_SIZES:
+                raise ValidationError("resolution", "UNSUPPORTED_RESOLUTION", "平台仅支持 1K/1.5K/2K")
+            body = {"model": model, "size": resolution}
+            data = config.client().quote_image(body)
+            return {"success": True, "data": data}
+        except Exception as error:
+            return self._error_response(error)
+
+    def _require_platform(self) -> PlatformConfig:
+        if self._platform_config is None or not self._platform_config.configured():
+            raise ValidationError("source", "PLATFORM_NOT_CONFIGURED", "请先登录 ForFuner 账户")
+        return self._platform_config
 
     def _decorate_batch(self, batch: dict[str, Any]) -> dict[str, Any]:
         decorated = self._redact_value(deepcopy(batch), self._configured_api_key())
@@ -650,6 +735,11 @@ class SeedreamAPI:
             error_data = {"code": error.code, "message": self._safe_text(str(error)), "field": error.field}
         elif isinstance(error, ArkAPIError):
             error_data = {"code": error.code, "message": self._safe_text(error.message), "field": None}
+        elif isinstance(error, PlatformUnauthorizedError):
+            error_data = {"code": "UNAUTHORIZED", "message": error.message, "field": None}
+        elif isinstance(error, PlatformError):
+            # 平台业务异常原文透传（未定价/余额不足/超并发/素材无效）。
+            error_data = {"code": error.code, "message": error.message, "field": None}
         elif isinstance(error, SubmissionUnknownError):
             error_data = {"code": "SUBMISSION_UNKNOWN", "message": "Image generation outcome is unknown", "field": None}
         elif isinstance(error, FileNotFoundError):

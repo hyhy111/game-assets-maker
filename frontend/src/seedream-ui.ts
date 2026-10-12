@@ -3,10 +3,10 @@ import type {
   SeedreamBatchStatus,
   SeedreamCreateRequest,
   SeedreamModel,
+  SeedreamModelRef,
   SeedreamRatio,
   SeedreamResolution,
 } from '@/types';
-
 export const MODEL_RESOLUTIONS: Record<SeedreamModel, SeedreamResolution[]> = {
   pro: ['1K', '1.5K', '2K'],
   flash: ['1K', '1.5K', '2K'],
@@ -26,7 +26,8 @@ export const DEFAULT_COUNT = 2;
 
 export interface CreateForm {
   prompt: string;
-  model: SeedreamModel;
+  /** 直连模式是本地短键；平台源是能力清单下发的上游 ID */
+  model: SeedreamModelRef;
   resolution: SeedreamResolution;
   ratio: SeedreamRatio;
   count: number;
@@ -37,8 +38,20 @@ export function defaultForm(defaultCount: number = DEFAULT_COUNT): CreateForm {
   return { prompt: '', model: 'pro', resolution: '1K', ratio: '16:9', count: defaultCount, reference_image: '' };
 }
 
-export function correctResolution(model: SeedreamModel, resolution: SeedreamResolution): SeedreamResolution {
-  return MODEL_RESOLUTIONS[model].includes(resolution) ? resolution : MODEL_RESOLUTIONS[model][0];
+/** 本地预设表只覆盖直连短键；平台源下返回空数组表示"本地不管"。 */
+export function localModelResolutions(model: string): SeedreamResolution[] {
+  return MODEL_RESOLUTIONS[model as SeedreamModel] ?? [];
+}
+
+export function correctResolution(model: SeedreamModelRef, resolution: SeedreamResolution): SeedreamResolution {
+  const allowed = localModelResolutions(model);
+  if (!allowed.length) return resolution;
+  return allowed.includes(resolution) ? resolution : allowed[0];
+}
+
+/** 模型展示名：认识的用本地文案，不认识的（运营新上的）直接显示上游 ID。 */
+export function modelLabel(model: string): string {
+  return MODEL_LABELS[model as SeedreamModel] ?? model;
 }
 
 export function createRequest(form: CreateForm): SeedreamCreateRequest {

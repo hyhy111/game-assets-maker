@@ -32,9 +32,12 @@
         data-test="recent-video-poster"
       >
       <div v-else class="grid h-full place-items-center text-gray-600"><Video :size="32" aria-hidden="true" /></div>
-      <span class="absolute left-3 top-3 rounded-full px-3 py-1 text-xs font-medium shadow-sm" :class="statusClass">
-        {{ statusText }}
-      </span>
+      <div class="absolute left-3 top-3 flex items-center gap-1.5">
+        <span class="rounded-full px-3 py-1 text-xs font-medium shadow-sm" :class="statusClass">
+          {{ statusText }}
+        </span>
+        <PlatformSourceBadge :source="task.source" />
+      </div>
       <div v-if="$slots['top-right']" class="absolute right-3 top-3 z-[2]">
         <slot name="top-right" />
       </div>
@@ -42,7 +45,7 @@
 
     <div class="p-4">
       <div class="flex flex-nowrap gap-1.5 overflow-hidden whitespace-nowrap text-xs text-gray-400" data-test="recent-video-metadata">
-        <span class="shrink-0 rounded-md bg-black/20 px-2 py-1">{{ t(`seedance.models.${task.request.model}`) }}</span>
+        <span class="shrink-0 rounded-md bg-black/20 px-2 py-1">{{ modelName(task.request.model, 'video') }}</span>
         <span class="shrink-0 rounded-md bg-black/20 px-2 py-1">{{ task.request.resolution }}</span>
         <span class="shrink-0 rounded-md bg-black/20 px-2 py-1">{{ ratio }}</span>
         <span class="shrink-0 rounded-md bg-black/20 px-2 py-1">{{ duration }}</span>
@@ -68,13 +71,16 @@
 import { computed, onBeforeUnmount, ref } from 'vue';
 import { Video } from 'lucide-vue-next';
 import { useI18n } from 'vue-i18n';
+import { useModelDisplayName } from '@/composables/useModelDisplayName';
+import PlatformSourceBadge from '@/components/ai-creation/PlatformSourceBadge.vue';
 import { formatElapsed, seedanceTaskPhase } from '@/seedance-ui';
 import type { SeedanceTask } from '@/types';
 
 const props = defineProps<{ task: SeedanceTask }>();
 const emit = defineEmits<{ open: [localId: string] }>();
 const { t, locale } = useI18n();
-const activePhases = new Set(['submitting', 'queued', 'running', 'cancelling', 'downloading']);
+const { modelName } = useModelDisplayName();
+const activePhases = new Set(['submitting', 'queued', 'running', 'unknown', 'cancelling', 'downloading']);
 const SOURCE_FRAME_INTERVAL = 4;
 const SOURCE_FRAME_LIMIT = 80;
 const PREVIEW_FRAME_LIMIT = 20;

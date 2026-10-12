@@ -60,6 +60,8 @@ import type {
   StorageSaveResult,
   StorageMigrationResult,
   StorageMigrationStateResult,
+  PlatformCapabilities,
+  PlatformDataResult,
 } from '@/types';
 
 declare const window: PyWebViewWindow;
@@ -420,12 +422,16 @@ export const seedanceApi = {
     );
   },
 
-  async createTask(request: SeedanceCreateRequest): Promise<SeedanceTaskResult> {
-    return callApi<SeedanceTaskResult>('seedance_create_task', 'seedanceCreateTask', request);
+  async createTask(request: SeedanceCreateRequest, source: string = 'api-key'): Promise<SeedanceTaskResult> {
+    return callApi<SeedanceTaskResult>('seedance_create_task', 'seedanceCreateTask', request, source);
   },
 
-  async validateRequest(request: SeedanceCreateRequest): Promise<SeedanceDataResult<{ valid: true }>> {
-    return callApi<SeedanceDataResult<{ valid: true }>>('seedance_validate_request', 'seedanceValidateRequest', request);
+  async validateRequest(request: SeedanceCreateRequest, source: string = 'api-key'): Promise<SeedanceDataResult<{ valid: true }>> {
+    return callApi<SeedanceDataResult<{ valid: true }>>('seedance_validate_request', 'seedanceValidateRequest', request, source);
+  },
+
+  async quoteVideo(request: SeedanceCreateRequest): Promise<SeedanceDataResult<{ quote: number }>> {
+    return callApi<SeedanceDataResult<{ quote: number }>>('seedance_quote_video', 'seedanceQuoteVideo', request);
   },
 
   async listTasks(): Promise<SeedanceTaskListResult> {
@@ -518,8 +524,13 @@ export const seedreamApi = {
     return callApi<string | null>('seedream_select_image_file', 'seedreamSelectImageFile');
   },
 
-  async createBatch(request: SeedreamCreateRequest): Promise<SeedreamBatchResult> {
-    return callApi<SeedreamBatchResult>('seedream_create_batch', 'seedreamCreateBatch', request);
+  async createBatch(request: SeedreamCreateRequest, source: string = 'api-key'): Promise<SeedreamBatchResult> {
+    return callApi<SeedreamBatchResult>('seedream_create_batch', 'seedreamCreateBatch', request, source);
+  },
+
+  /** 平台源单价报价（只依赖 model + resolution）；总数 = 单价 × count。 */
+  async quoteImage(request: SeedreamCreateRequest): Promise<SeedreamDataResult<{ quote: number }>> {
+    return callApi<SeedreamDataResult<{ quote: number }>>('seedream_quote_image', 'seedreamQuoteImage', request);
   },
 
   async getBatch(localId: string): Promise<SeedreamBatchResult> {
@@ -674,6 +685,25 @@ export const lifecycleApi = {
 };
 
 /**
+ * Platform (ForFuner AI) bridge config. The platform base URL + JWT live in
+ * Python process memory only; the frontend re-pushes them whenever auth state
+ * changes (see stores/auth.ts token watcher).
+ */
+export const platformApi = {
+  async setConfig(baseUrl: string, token: string | null): Promise<{ success: boolean; error?: string }> {
+    return callApi<{ success: boolean; error?: string }>('set_platform_config', 'setPlatformConfig', baseUrl, token);
+  },
+
+  /** 平台可售能力清单；平台源下渲染模型/参数选项的唯一来源。 */
+  async getCapabilities(): Promise<PlatformDataResult<PlatformCapabilities>> {
+    return callApi<PlatformDataResult<PlatformCapabilities>>(
+      'get_platform_capabilities',
+      'getPlatformCapabilities',
+    );
+  }
+};
+
+/**
  * Combined API export
  */
 export const api = {
@@ -689,5 +719,6 @@ export const api = {
   seedream: seedreamApi,
   storage: storageApi,
   lifecycle: lifecycleApi,
+  platform: platformApi,
   isAvailable: isApiAvailable
 };

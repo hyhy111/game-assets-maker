@@ -90,7 +90,10 @@ test('Seedance create screen uses one compact composer with collapsed parameters
   assert.match(html, /<button[^>]*data-test="seedance-duration"/);
   assert.doesNotMatch(html, /<select[^>]*data-test="seedance-duration"/);
   const createSource = await readFile(new URL('../src/views/SeedanceCreate.vue', import.meta.url), 'utf8');
-  assert.match(createSource, /v-for="duration in DURATION_OPTIONS"/);
+  // 时长选项改由 durationOptions 计算属性提供：直连源 = 本地 DURATION_OPTIONS，
+  // 平台源 = 能力清单给的档位。见 openspec: gam-platform-capabilities 3.1。
+  assert.match(createSource, /v-for="duration in durationOptions"/);
+  assert.match(createSource, /: \[\.\.\.DURATION_OPTIONS\]/);
   assert.match(createSource, /\{\{ duration \}\}s/);
   assert.doesNotMatch(createSource, /:value="(?:-1|7|15)"/);
   assert.match(html, /aria-describedby="seedance-first-frame-help"/);
@@ -542,11 +545,11 @@ test('Seedance create form wires paid confirmation before task creation and prot
   assert.doesNotMatch(create, /skipPaidConfirmation|paid_generation_confirmation_enabled: false/);
   assert.doesNotMatch(confirmMatch[0], /router\.push/);
   // Guard against duplicate confirmation
-  assert.match(confirmMatch[0], /if \(submitting\.value \|\| !pendingRequest\) return/);
+  assert.match(confirmMatch[0], /if \(submitting\.value \|\| !pendingRequest \|\| platformConfirmBlocked\.value\) return/);
 
   const createPendingMatch = create.match(/async function createPendingTask\(\)\s*\{[\s\S]*?\n\}/);
   assert.ok(createPendingMatch, 'createPendingTask function should exist');
-  assert.match(createPendingMatch[0], /store\.createTask\(request\)/);
+  assert.match(createPendingMatch[0], /store\.createTask\(request, source\)/);
   assert.match(createPendingMatch[0], /workspace\.setCurrentGeneration\(\{ kind: 'video', localId: task\.local_id \}\)/);
 
   // cancelPaidAction does NOT call createTask
@@ -557,6 +560,6 @@ test('Seedance create form wires paid confirmation before task creation and prot
   assert.match(cancelMatch[0], /pendingRequest = null/);
 
   // Confirm and cancel buttons are both disabled while submitting
-  assert.match(create, /:loading="submitting" :disabled="submitting" @click="confirmPaidAction"/);
+  assert.match(create, /:loading="submitting" :disabled="submitting \|\| platformConfirmBlocked" @click="confirmPaidAction"/);
   assert.match(create, /:disabled="submitting" @click="cancelPaidAction"/);
 });

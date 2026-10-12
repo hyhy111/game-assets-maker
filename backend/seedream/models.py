@@ -13,6 +13,17 @@ MODEL_CAPABILITIES = {
 }
 
 
+def platform_model_id(model: str) -> str:
+    """平台源下发给上游的模型标识。
+
+    平台源下 model 有两类取值：直连模式的本地短键（"pro", "flash", "lite"），
+    以及能力清单返回的上游 ID。这里把两者统一归一到上游 ID，
+    且**上游 ID 原样透传**——否则运营上新模型时，客户端会因本地表查不到而失败。
+    """
+    capability = MODEL_CAPABILITIES.get(model)
+    return capability["id"] if capability else model
+
+
 @dataclass(slots=True)
 class SeedreamRequest:
     prompt: str = ""
@@ -21,6 +32,8 @@ class SeedreamRequest:
     ratio: str = "16:9"
     count: int = 2
     reference_image: str | None = None
+    # 'api-key' = direct Ark with the user's own key; 'forfuner-ai' = platform.
+    source: str = "api-key"
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

@@ -395,6 +395,14 @@ class API:
             progress_callback=self._dispatch_migration_progress,
         )
 
+        self._subscription_bridge = SubscriptionWindowBridge()
+        from backend.platform.config import PlatformConfig
+        from backend.platform.trace import trace_event
+
+        self._platform_config = PlatformConfig()
+        self._platform_facade_instance = None
+        self._trace_event = trace_event
+
     def _api_has_active_writes(self, instance_attribute: str) -> bool:
         instance = getattr(self, instance_attribute)
         return instance is not None and instance.has_active_writes()
@@ -428,6 +436,15 @@ class API:
     def storage_locations(self):
         """The storage roots resolved once at startup and shared by all APIs."""
         return self._storage_locations
+
+    @property
+    def _platform_facade(self):
+        """平台源级操作门面（能力清单等，不属于视频/图片任一媒体域）。"""
+        if self._platform_facade_instance is None:
+            from backend.api.platform_api import PlatformFacade
+
+            self._platform_facade_instance = PlatformFacade(self._platform_config)
+        return self._platform_facade_instance
 
     @property
     def _project_api(self):
@@ -499,6 +516,7 @@ class API:
                 window_getter=lambda: self._window,
                 media_base_url=self._assets_base_url,
                 storage_locations=self._storage_locations,
+                platform_config=self._platform_config,
             )
         return self._seedance_api_instance
 
@@ -515,6 +533,7 @@ class API:
                 window_getter=lambda: self._window,
                 media_base_url=self._assets_base_url,
                 storage_locations=self._storage_locations,
+                platform_config=self._platform_config,
             )
         return self._seedream_api_instance
 
@@ -914,11 +933,21 @@ class API:
     def seedance_open_video_directory(self, local_id: str) -> dict[str, Any]:
         return self._seedance_api.open_video_directory(local_id)
 
-    def seedance_create_task(self, request: dict[str, Any]) -> dict[str, Any]:
-        return self._seedance_api.create_task(request)
+    def seedance_create_task(self, request: dict[str, Any], source: str = "api-key") -> dict[str, Any]:
+        return self._seedance_api.create_task(request, source)
 
-    def seedance_validate_request(self, request: dict[str, Any]) -> dict[str, Any]:
-        return self._seedance_api.validate_request(request)
+    def seedance_quote_video(self, request: dict[str, Any]) -> dict[str, Any]:
+        return self._seedance_api.quote_video(request)
+
+    def get_platform_capabilities(self) -> dict[str, Any]:
+        """平台可售能力清单（视频/图片共用一份）。"""
+        return self._platform_facade.capabilities()
+
+    def seedream_quote_image(self, request: dict[str, Any]) -> dict[str, Any]:
+        return self._seedream_api.quote_image(request)
+
+    def seedance_validate_request(self, request: dict[str, Any], source: str = "api-key") -> dict[str, Any]:
+        return self._seedance_api.validate_request(request, source)
 
     def seedance_list_tasks(self) -> dict[str, Any]:
         return self._seedance_api.list_tasks()
@@ -984,8 +1013,28 @@ class API:
     def seedream_import_reference_image(self, image_data_url: str, filename: str = "") -> dict[str, Any]:
         return self._seedream_api.import_reference_image(image_data_url, filename)
 
-    def seedream_create_batch(self, request: dict[str, Any]) -> dict[str, Any]:
-        return self._seedream_api.create_batch(request)
+    def seedream_create_batch(self, request: dict[str, Any], source: str = "api-key") -> dict[str, Any]:
+        return self._seedream_api.create_batch(request, source)
+
+    # ==================== Platform (ForFuner AI) ====================
+
+    def set_platform_config(self, base_url: str, token: str | None) -> dict[str, Any]:
+        """Push platform base URL + app JWT into the Python backend.
+
+        Called by the frontend whenever auth state changes. Token lives only in
+        process memory and is never persisted or logged.
+        """
+        try:
+            self._seedance_api.update_platform(base_url, token)
+            self._seedream_api.update_platform(base_url, token)
+            # 只记"有没有 token"，绝不记 token 本身——这条日志用于确认前端推送是否到达。
+            self._trace_event(
+                f"platform config updated base_url={base_url or '(empty)'} token={'present' if token else 'absent'}"
+            )
+            return {"success": True}
+        except Exception as error:
+            self._trace_event(f"platform config update FAILED: {error}")
+            return {"success": False, "error": str(error)}
 
     def seedream_get_batch(self, local_id: str) -> dict[str, Any]:
         return self._seedream_api.get_batch(local_id)

@@ -5,6 +5,7 @@ import type { PyWebViewWindow } from '@/types/api';
 import { readImageFile } from '@/seedream-image-drag';
 import { defaultForm, type CreateForm as SeedreamCreateForm } from '@/seedream-ui';
 import type { CreateForm as SeedanceCreateForm } from '@/seedance-ui';
+import type { PlatformCapabilities } from '@/types';
 
 export type CreationMode = 'image' | 'video';
 export type GenerationSource = 'api-key' | 'forfuner-ai';
@@ -54,6 +55,51 @@ export const useAICreationStore = defineStore('ai-creation', () => {
   const workspaceScrollY = ref(0);
   const candidateHandoffPending = ref(false);
   const candidateHandoffError = ref('');
+
+  // 平台可售能力清单：视频页与图片页共享同一份（拉取与缓存收敛在此处，避免两页各自漂移）。
+  const capabilities = ref<PlatformCapabilities | null>(null);
+  const capabilitiesLoading = ref(false);
+  const capabilitiesError = ref('');
+  let capabilitiesInFlight: Promise<boolean> | null = null;
+
+  /**
+   * 拉取能力清单。已在手且非强制时直接复用。
+   *
+   * 失败**不设兜底清单**（design D3）：回退到客户端预设模型表会把"选中后必然失败"
+   * 的组合重新放出来；调用方据此阻断平台源提交。
+   */
+  async function ensureCapabilities(force = false): Promise<boolean> {
+    if (!force && capabilities.value) return true;
+    if (capabilitiesInFlight) return capabilitiesInFlight;
+    capabilitiesLoading.value = true;
+    capabilitiesError.value = '';
+    capabilitiesInFlight = (async () => {
+      try {
+        const result = await api.platform.getCapabilities();
+        if (!result.success) {
+          capabilities.value = null;
+          capabilitiesError.value = result.error?.message || 'CAPABILITIES_UNAVAILABLE';
+          return false;
+        }
+        capabilities.value = result.data;
+        return true;
+      } catch (error) {
+        capabilities.value = null;
+        capabilitiesError.value = error instanceof Error ? error.message : 'CAPABILITIES_UNAVAILABLE';
+        return false;
+      } finally {
+        capabilitiesLoading.value = false;
+        capabilitiesInFlight = null;
+      }
+    })();
+    return capabilitiesInFlight;
+  }
+
+  function clearCapabilities() {
+    capabilities.value = null;
+    capabilitiesError.value = '';
+    capabilitiesLoading.value = false;
+  }
 
   function initializeImageDraft(defaults: SeedreamCreateForm) {
     Object.assign(imageDefaults, defaults);
@@ -249,6 +295,11 @@ export const useAICreationStore = defineStore('ai-creation', () => {
     workspaceScrollY,
     candidateHandoffPending,
     candidateHandoffError,
+    capabilities,
+    capabilitiesLoading,
+    capabilitiesError,
+    ensureCapabilities,
+    clearCapabilities,
     initializeImageDraft,
     initializeVideoDraft,
     resetImageDraft,

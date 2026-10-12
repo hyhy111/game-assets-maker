@@ -126,7 +126,7 @@ test('confirmed video submission stays in the workspace and preserves its draft'
   assert.ok(confirmMatch, 'confirmPaidAction function should exist');
 
   assert.match(confirmMatch[0], /createPendingTask\(\)/);
-  assert.match(source, /store\.createTask\(request\)/);
+  assert.match(source, /store\.createTask\(request, source\)/);
   assert.match(source, /workspace\.setCurrentGeneration\(\{ kind: 'video', localId: task\.local_id \}\)/);
   assert.doesNotMatch(confirmMatch[0], /router\.push|resetVideoDraft|form\.prompt\s*=|clearDraft\(/);
 });

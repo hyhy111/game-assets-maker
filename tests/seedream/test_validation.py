@@ -178,3 +178,49 @@ def test_reference_image_is_optional_in_validate_request(tmp_path):
     validate_request(SeedreamRequest(prompt="hero", reference_image=str(_reference_png(tmp_path))))
     validate_request(SeedreamRequest(prompt="hero", reference_image=None))
     validate_request(SeedreamRequest(prompt="hero"))
+
+
+# --------------------------------------------------------------------------
+# 参考图校验（gen-asset-local-delivery：补齐尺寸缺口 + 与视频接口区分）
+# --------------------------------------------------------------------------
+
+def _png(path, size):
+    from PIL import Image
+
+    Image.new("RGB", size).save(path)
+    return path
+
+
+@pytest.fixture
+def ref(tmp_path):
+    return tmp_path / "ref.png"
+
+
+def test_reference_image_accepts_sizes_the_video_interface_rejects(ref):
+    """图片接口比视频接口宽松：200×200 / 比例 0.2 这类图，视频拒、图片收。
+
+    此前 _reference_image_format 只取格式、丢弃宽高，这些图会一路走到上游才失败。
+    """
+    from backend.seedream.validation import _reference_image_format
+
+    for size in ((200, 200), (100, 500), (500, 100)):
+        assert _reference_image_format(_png(ref, size)) == "PNG", size
+
+
+def test_reference_image_rejects_what_both_interfaces_reject(ref):
+    from backend.seedream.validation import ValidationError, _reference_image_format
+
+    with pytest.raises(ValidationError):
+        _reference_image_format(_png(ref, (7000, 7000)))  # 超出 6000px
+    with pytest.raises(ValidationError):
+        _reference_image_format(_png(ref, (100, 4000)))  # 比例 0.025 < 1/16
+
+
+def test_reference_image_total_pixel_cap(ref):
+    from backend.seedream.validation import ValidationError, _reference_image_format
+
+    # 6000×6000 = 3600 万是上限；6000×7000 会被 6000px 先拦，这里用一个两者都在界内
+    # 但总像素超标的组合不成立，故只断言上限本身可被触达：6000×6000 通过。
+    assert _reference_image_format(_png(ref, (6000, 6000))) == "PNG"
+    with pytest.raises(ValidationError):
+        _reference_image_format(_png(ref, (6000, 6001)))

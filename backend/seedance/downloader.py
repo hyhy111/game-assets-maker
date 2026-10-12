@@ -9,6 +9,7 @@ from typing import Protocol
 import cv2
 from PIL import Image
 
+from backend.platform.downloads import direct_link_candidates, fresh_upstream_link
 from backend.seedance.models import SeedanceTask
 from backend.seedance.repository import TaskRepository
 
@@ -40,7 +41,12 @@ class ResultDownloader:
                 raise ValueError("Completed task is missing a video URL")
 
             video_path = self._repository.resolve_asset(current.local_id, "output/video.mp4")
-            self._download_to(content["video_url"], video_path, self._validate_video)
+            candidates = direct_link_candidates(content, content["video_url"])
+            if not candidates:
+                # v1：平台不再提供副本，新鲜期外没有任何下载来源
+                raise ValueError("URL_EXPIRED")
+            attempted_direct = fresh_upstream_link(content) is not None
+            self._download_first_available(candidates, video_path, self._validate_video)
             downloaded_paths["video"] = "output/video.mp4"
 
             last_frame_url = content.get("last_frame_url")
@@ -50,7 +56,7 @@ class ResultDownloader:
                 last_frame_path = self._repository.resolve_asset(current.local_id, "output/returned_last_frame.png")
                 self._download_to(last_frame_url, last_frame_path, self._validate_image)
                 downloaded_paths["returned_last_frame"] = "output/returned_last_frame.png"
-            return self._finish(current.local_id, downloaded_paths, "downloaded")
+            return self._finish(current.local_id, downloaded_paths, "downloaded", consume_direct_link=attempted_direct)
         except Exception:
             self._finish(current.local_id, downloaded_paths, "failed")
             raise
@@ -74,19 +80,32 @@ class ResultDownloader:
             self._repository._write_unlocked(current)
             return current, True
 
-    def _finish(self, local_id: str, downloaded_paths: dict[str, str], status: str) -> SeedanceTask:
+    def _finish(
+        self, local_id: str, downloaded_paths: dict[str, str], status: str, *, consume_direct_link: bool = False
+    ) -> SeedanceTask:
         with self._repository.task_lock(local_id):
             current = self._repository._read_unlocked(local_id)
             if current.download_status != "downloading":
                 return current
             if status == "downloaded":
                 self._validate_downloaded_paths(local_id, downloaded_paths)
+                if consume_direct_link:
+                    self._consume_direct_link(current)
             current.output_paths.update(downloaded_paths)
             current.download_status = status
             if status == "downloaded":
                 current.cache_status = "complete"
             self._repository._write_unlocked(current)
             return current
+
+    @staticmethod
+    def _consume_direct_link(current: SeedanceTask) -> None:
+        """直链一次性：取回成功后从持久化 remote 里抹掉，重新下载（缓存被清理、
+        手动重下）只走平台地址，不再消耗上游 ~100 次的下载额度。"""
+        content = current.remote.get("content")
+        if isinstance(content, dict):
+            content.pop("upstream_url", None)
+            content.pop("upstream_expires_at", None)
 
     def _validate_downloaded_paths(self, local_id: str, downloaded_paths: dict[str, str]) -> None:
         video_relative_path = downloaded_paths.get("video")
@@ -103,6 +122,25 @@ class ResultDownloader:
             if not last_frame_path.is_file():
                 raise RuntimeError("Downloaded last frame disappeared before finalization")
             self._validate_image(last_frame_path)
+
+    def _download_first_available(
+        self, candidates: list[str], destination: Path, validate: Callable[[Path], None]
+    ) -> None:
+        """Try each candidate in order; raise the last error if all fail.
+
+        v1: candidates come from direct_link_candidates — a platform entry has at
+        most the fresh upstream link (no platform copy to fall back to), so a
+        failure here means the link itself broke, not a fallback situation.
+        """
+        last_error: Exception | None = None
+        for url in candidates:
+            try:
+                self._download_to(url, destination, validate)
+                return
+            except Exception as error:  # noqa: BLE001 - fallback is the point
+                last_error = error
+        assert last_error is not None
+        raise last_error
 
     def _download_to(self, url: str, destination: Path, validate: Callable[[Path], None]) -> None:
         content = self._transport.download(url)

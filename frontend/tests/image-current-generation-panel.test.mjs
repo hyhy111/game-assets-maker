@@ -126,7 +126,7 @@ test('paid image confirmation stays in the workspace and opens the returned batc
   const confirmSubmit = source.match(/async function confirmSubmit\(\) \{([\s\S]*?)\n\}/);
 
   assert.ok(confirmSubmit, 'confirmSubmit should exist');
-  assert.match(confirmSubmit[0], /store\.createBatch\(request\)/);
+  assert.match(confirmSubmit[0], /store\.createBatch\(request, source\)/);
   assert.match(confirmSubmit[0], /workspace\.setCurrentGeneration\(\{ kind: 'image', localId: batch\.local_id \}\)/);
   assert.doesNotMatch(confirmSubmit[0], /router\.push/);
   assert.doesNotMatch(confirmSubmit[0], /resetImageDraft|form\.prompt\s*=\s*['"]/);

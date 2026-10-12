@@ -8,6 +8,7 @@ from collections.abc import Callable
 from contextlib import suppress
 from copy import deepcopy
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
@@ -15,13 +16,19 @@ from PIL import Image
 
 from backend.ark_audit import audit_context
 from backend.image_layout import read_generation_layout
+from backend.platform.client import PlatformError, PlatformUnauthorizedError, new_idem_key
+from backend.platform.downloads import direct_link_candidates
+from backend.platform.images import PlatformImageClient
+from backend.platform.sources import PLATFORM_SOURCE
+from backend.platform.video import parse_error_json
 from backend.seedream.client import ArkAPIError, ArkClient, ArkResponseError, SubmissionUnknownError
 from backend.seedream.downloader import ImageDownloader
-from backend.seedream.models import ImageBatch, SeedreamRequest
+from backend.seedream.models import ImageBatch, SeedreamRequest, platform_model_id
 from backend.seedream.repository import BatchRepository, utc_now_iso
-from backend.seedream.validation import build_api_payload, validate_request
+from backend.seedream.validation import _build_prompt_with_ratio, build_api_payload, validate_request
 
 EventSink = Callable[[str, dict[str, Any]], None]
+
 
 _ACTIVE_STATUSES = {"queued", "generating", "downloading"}
 _TERMINAL_STATUSES = {"succeeded", "failed", "unknown", "download_failed"}
@@ -41,6 +48,7 @@ class SeedreamBatchManager:
         downloader: ImageDownloader,
         *,
         now: Callable[[], datetime] | None = None,
+        platform: PlatformImageClient | None = None,
     ) -> None:
         self._client = client
         self._audit = getattr(client, "audit", None)
@@ -49,6 +57,7 @@ class SeedreamBatchManager:
         self._client_lock = threading.Lock()
         self._repository = repository
         self._downloader = downloader
+        self._platform = platform
         self._now = now or (lambda: datetime.now(UTC))
         self._event_sink: EventSink | None = None
         self._event_lock = threading.Lock()
@@ -100,6 +109,7 @@ class SeedreamBatchManager:
                 "ratio": request.get("ratio", "16:9"),
                 "count": request.get("count", 2),
                 "reference_image": reference_path,
+                "source": request.get("source", "api-key"),
             },
             "reference_image_url": reference_url,
         }
@@ -144,6 +154,25 @@ class SeedreamBatchManager:
         url = self._extract_image_url(attempt.response)
         self._run_download_retry(local_id, attempt_index, url)
         return self.public_batch(self._repository.get(local_id))
+
+    def _download_platform_image(
+        self, batch_id: str, attempt_index: int, response: dict[str, Any], fallback_url: str
+    ) -> str:
+        """平台图片取回：v1 仅新鲜上游直链一个候选（无平台副本回退）。
+
+        候选为空（直链过期/缺失）时异常冒泡，任务落 download_failed，
+        由 `_is_url_expired` 给出去"链接已过期"的明确语义。
+        """
+        data = response.get("data")
+        entry = data[0] if isinstance(data, list) and data and isinstance(data[0], dict) else {}
+        candidates = direct_link_candidates(entry, fallback_url)
+        for index, url in enumerate(candidates):
+            try:
+                return self._downloader.download_image(batch_id, attempt_index, url)
+            except Exception:  # noqa: BLE001 - 回退平台地址是设计行为
+                if index == len(candidates) - 1:
+                    raise
+        raise ArkResponseError("Platform image download exhausted all candidates")
 
     def _run_download_retry(self, batch_id: str, attempt_index: int, url: str) -> None:
         with self._active_lock:
@@ -262,16 +291,18 @@ class SeedreamBatchManager:
             if isinstance(stored_reference, str) and stored_reference
             else None
         )
-        return deepcopy({
-            "local_id": batch.local_id,
-            "request": batch.request,
-            "status": self._aggregate_status(batch),
-            "sequence": "",
-            "reference_image_url": reference_image_url,
-            "attempts": attempts,
-            "created_at": batch.created_at,
-            "updated_at": batch.updated_at,
-        })
+        return deepcopy(
+            {
+                "local_id": batch.local_id,
+                "request": batch.request,
+                "status": self._aggregate_status(batch),
+                "sequence": "",
+                "reference_image_url": reference_image_url,
+                "attempts": attempts,
+                "created_at": batch.created_at,
+                "updated_at": batch.updated_at,
+            }
+        )
 
     @staticmethod
     def _assign_sequences(public_batches: list[dict[str, Any]]) -> None:
@@ -327,31 +358,31 @@ class SeedreamBatchManager:
             local_path = self._repository.resolve_asset(batch_id, attempt.local_path)
             try:
                 with Image.open(local_path) as image:
-                    generation_layout = read_generation_layout(
-                        local_path, width=image.width, height=image.height
-                    )
+                    generation_layout = read_generation_layout(local_path, width=image.width, height=image.height)
             except (OSError, ValueError):
                 generation_layout = None
-        return deepcopy({
-            "local_id": attempt.local_id,
-            "index": attempt.index,
-            "status": attempt.status,
-            "request": attempt.request,
-            "response": response,
-            "usage": usage,
-            "total_tokens": total_tokens if isinstance(total_tokens, (int, float)) else None,
-            "image_url": image_url,
-            "image_width": image_width if isinstance(image_width, int) else None,
-            "image_height": image_height if isinstance(image_height, int) else None,
-            "local_path": attempt.local_path,
-            "generation_layout": generation_layout,
-            "url_expired": attempt.status == "download_failed" and self._is_url_expired(attempt),
-            "created_at": attempt.created_at,
-            "updated_at": attempt.updated_at,
-            "finished_at": attempt.finished_at,
-            "elapsed_seconds": self._elapsed_seconds(attempt),
-            "error": attempt.error,
-        })
+        return deepcopy(
+            {
+                "local_id": attempt.local_id,
+                "index": attempt.index,
+                "status": attempt.status,
+                "request": attempt.request,
+                "response": response,
+                "usage": usage,
+                "total_tokens": total_tokens if isinstance(total_tokens, (int, float)) else None,
+                "image_url": image_url,
+                "image_width": image_width if isinstance(image_width, int) else None,
+                "image_height": image_height if isinstance(image_height, int) else None,
+                "local_path": attempt.local_path,
+                "generation_layout": generation_layout,
+                "url_expired": attempt.status == "download_failed" and self._is_url_expired(attempt),
+                "created_at": attempt.created_at,
+                "updated_at": attempt.updated_at,
+                "finished_at": attempt.finished_at,
+                "elapsed_seconds": self._elapsed_seconds(attempt),
+                "error": attempt.error,
+            }
+        )
 
     def _run_attempt_async(self, batch_id: str, attempt_index: int) -> None:
         with self._active_lock:
@@ -365,6 +396,145 @@ class SeedreamBatchManager:
         thread.start()
 
     def _run_attempt(self, batch_id: str, attempt_index: int) -> None:
+        batch = self._repository.get(batch_id)
+        request = SeedreamRequest.from_dict(batch.request)
+        if request.source == PLATFORM_SOURCE:
+            self._run_platform_attempt(batch_id, attempt_index, request)
+            return
+        self._run_ark_attempt(batch_id, attempt_index, request)
+
+    def _run_platform_attempt(self, batch_id: str, attempt_index: int, request: SeedreamRequest) -> None:
+        """One synchronous platform image job per attempt (sync endpoint held in this thread)."""
+        try:
+            if self._platform is None:
+                raise ValueError("Platform generation is not configured; sign in first")
+            if request.reference_image:
+                # Same convention as the Ark path: resolve the batch-relative
+                # reference path before building the platform request.
+                reference = Path(request.reference_image)
+                if not reference.is_absolute():
+                    reference = self._repository.resolve_asset(batch_id, request.reference_image)
+                request.reference_image = str(reference)
+            self._update_attempt(batch_id, attempt_index, lambda a: setattr(a, "status", "generating"))
+            self._emit(batch_id)
+
+            payload = self._build_platform_payload(request)
+            response = self._platform.generate_image(payload)
+            platform_status = str(response.get("platform_status", ""))
+
+            if platform_status == "SUCCEEDED":
+                # Persist the response BEFORE downloading the image.
+                self._update_attempt(
+                    batch_id,
+                    attempt_index,
+                    lambda a: (
+                        setattr(a, "response", response),
+                        setattr(a, "status", "downloading"),
+                    ),
+                )
+                self._emit(batch_id)
+                image_url = self._extract_image_url(response)
+                try:
+                    local_path = self._download_platform_image(batch_id, attempt_index, response, image_url)
+                except Exception as error:  # noqa: BLE001 - 下载失败可重试，不是生成失败
+                    # v1：平台已确认生成成功，仅取回失败 → download_failed，
+                    # retry_download 在直链新鲜期内可重试（落 unknown 会被判"未确定结果"而 stranded）
+                    self._finish_platform_attempt(
+                        batch_id,
+                        attempt_index,
+                        "download_failed",
+                        {"code": "DOWNLOAD_FAILED", "message": str(error) or "成品下载失败"},
+                    )
+                    return
+                self._update_attempt(
+                    batch_id,
+                    attempt_index,
+                    lambda a: (
+                        setattr(a, "local_path", local_path),
+                        setattr(a, "status", "succeeded"),
+                        setattr(a, "finished_at", utc_now_iso()),
+                    ),
+                )
+                self._emit(batch_id)
+                return
+
+            error = parse_error_json(response.get("error")) or {
+                "code": "PLATFORM_ERROR",
+                "message": "平台生成未成功",
+            }
+            if platform_status == "SUBMISSION_UNKNOWN":
+                # 平台已计费但结果未确定（制品转存失败等），保持 unknown 待人工确认。
+                error = {**error, "code": error.get("code") or "SUBMISSION_UNKNOWN"}
+                self._finish_platform_attempt(batch_id, attempt_index, "unknown", error)
+            else:
+                self._finish_platform_attempt(batch_id, attempt_index, "failed", error)
+        except PlatformUnauthorizedError as error:
+            self._finish_platform_attempt(
+                batch_id, attempt_index, "failed", {"code": "UNAUTHORIZED", "message": error.message}
+            )
+        except PlatformError as error:
+            self._finish_platform_attempt(
+                batch_id,
+                attempt_index,
+                "failed",
+                {"code": error.code, "message": error.message, "status": error.status},
+            )
+        except (OSError, TimeoutError) as error:
+            self._finish_platform_attempt(
+                batch_id,
+                attempt_index,
+                "unknown",
+                {"code": "SUBMISSION_UNKNOWN", "message": f"平台请求未收到确定结果：{error}"},
+            )
+        except Exception as error:
+            self._fail_attempt(batch_id, attempt_index, error)
+        finally:
+            with self._active_lock:
+                indices = self._active_attempts.get(batch_id)
+                if indices is not None:
+                    indices.discard(attempt_index)
+                    if not indices:
+                        self._active_attempts.pop(batch_id, None)
+
+    def _finish_platform_attempt(self, batch_id: str, attempt_index: int, status: str, error: dict[str, Any]) -> None:
+        self._update_attempt(
+            batch_id,
+            attempt_index,
+            lambda a: (
+                setattr(a, "status", status),
+                setattr(a, "error", error),
+                setattr(a, "finished_at", utc_now_iso()),
+            ),
+        )
+        self._emit(batch_id)
+
+    def _build_platform_payload(self, request: SeedreamRequest) -> dict[str, Any]:
+        assert self._platform is not None
+        payload: dict[str, Any] = {
+            "idemKey": new_idem_key(),
+            "model": platform_model_id(request.model),
+            "prompt": _build_prompt_with_ratio(request.prompt, request.ratio),
+            # 尺寸档沿用客户端取值（1K/1.5K/2K），与 Ark 文档口径一致；平台侧大小写不敏感。
+            "size": request.resolution,
+        }
+        if request.reference_image:
+            asset = self._platform.upload_asset(Path(request.reference_image))
+            payload["image"] = str(asset["assetId"])
+        return payload
+
+    def _fail_attempt(self, batch_id: str, attempt_index: int, error: Exception) -> None:
+        self._update_attempt(
+            batch_id,
+            attempt_index,
+            lambda a, caught=error: (
+                setattr(a, "status", "failed"),
+                setattr(a, "error", self._error_dict(caught)),
+                setattr(a, "finished_at", utc_now_iso()),
+            ),
+        )
+        self._emit(batch_id)
+
+    def _run_ark_attempt(self, batch_id: str, attempt_index: int, request: SeedreamRequest) -> None:
         response_persisted = False
         # Capture the client once: a credential swap mid-attempt must not
         # change the key this attempt already started with.
@@ -541,8 +711,18 @@ class SeedreamBatchManager:
         return parsed.replace(tzinfo=UTC) if parsed.tzinfo is None else parsed.astimezone(UTC)
 
     def _is_url_expired(self, attempt) -> bool:
-        """Check if the image URL has expired (24 hours after generation)."""
+        """Check if the image URL has expired (24 hours after generation).
+
+        Platform artifact pseudo-URLs follow the platform's 30-day artifact
+        retention instead of the upstream 24-hour rule; they expire only when
+        the download itself fails with the platform's expiry error.
+        """
         response = attempt.response if isinstance(attempt.response, dict) else {}
+        data = response.get("data")
+        if isinstance(data, list) and data and isinstance(data[0], dict):
+            url = data[0].get("url")
+            if isinstance(url, str) and url.startswith("platform://"):
+                return False
         created = response.get("created")
         if isinstance(created, (int, float)) and created > 0:
             try:

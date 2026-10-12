@@ -286,6 +286,7 @@ def test_seedance_task_round_trip_ignores_unknown_future_keys_and_defaults_link_
 
     expected = {key: value for key, value in values.items() if key != "future_key"}
     expected["download_url_received_at"] = None
+    expected["source"] = "api-key"
     assert task.to_dict() == expected
     with pytest.raises(ValueError, match="local_id"):
         SeedanceTask.from_dict({key: value for key, value in values.items() if key not in {"local_id", "future_key"}})

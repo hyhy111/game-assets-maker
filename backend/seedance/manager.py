@@ -9,18 +9,30 @@ from collections.abc import Callable
 from contextlib import suppress
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 from backend.ark_audit import AuditStorageError, audit_context
+from backend.platform.client import PlatformError, PlatformUnauthorizedError, new_idem_key
+from backend.platform.last_frame import extract_last_frame
+from backend.platform.sources import PLATFORM_SOURCE
+from backend.platform.video import PlatformVideoClient
 from backend.seedance.cache import CacheManager
 from backend.seedance.client import ArkAPIError, ArkClient, ArkResponseError, SubmissionUnknownError
 from backend.seedance.downloader import ResultDownloader
-from backend.seedance.models import SeedanceRequest, SeedanceTask
+from backend.seedance.models import SeedanceRequest, SeedanceTask, platform_model_id
 from backend.seedance.repository import TaskRepository
 from backend.seedance.validation import build_api_payload, validate_request
 
 EventSink = Callable[[str, dict[str, Any]], None]
 ConfigSaver = Callable[[dict[str, Any]], None]
+
+
+# 平台入参合法域（单一来源：manager 校验、API 预校验、报价预览三处共用）。
+PLATFORM_RESOLUTIONS = ("480p", "720p", "1080p")
+PLATFORM_RATIOS = ("adaptive", "16:9", "1:1", "4:3")
+PLATFORM_MIN_DURATION = 4
+PLATFORM_MAX_DURATION = 15
 
 _ACTIVE_STATUSES = {"queued", "running"}
 _CANCELLING_STATUS = "cancelling"
@@ -54,12 +66,16 @@ class SeedanceTaskManager:
         now: Callable[[], datetime] | None = None,
         monotonic: Callable[[], float] | None = None,
         config_saver: ConfigSaver | None = None,
+        platform: PlatformVideoClient | None = None,
+        platform_downloader: ResultDownloader | None = None,
     ) -> None:
         self._client = client
         self._audit = getattr(client, "audit", None)
         self._repository = repository
         self._downloader = downloader
         self._cache_manager = cache_manager
+        self._platform = platform
+        self._platform_downloader = platform_downloader
         self._config = config.get("seedance", config)
         self._now = now or (lambda: datetime.now(UTC))
         self._monotonic = monotonic or time.monotonic
@@ -113,6 +129,8 @@ class SeedanceTaskManager:
         return self._create(request)
 
     def _create(self, request: SeedanceRequest, retry_of: str | None = None) -> dict[str, Any]:
+        if request.source == PLATFORM_SOURCE:
+            return self._create_platform(request, retry_of)
         task = self._repository.create_draft(request)
         if retry_of is not None:
             task = self._repository.update(task.local_id, lambda current: setattr(current, "retry_of", retry_of))
@@ -172,6 +190,89 @@ class SeedanceTaskManager:
         self._emit("seedance-task-updated", task)
         return self.public_task(task)
 
+    def _create_platform(self, request: SeedanceRequest, retry_of: str | None = None) -> dict[str, Any]:
+        """Persist the draft, upload input images, then the one platform create call."""
+        if self._platform is None:
+            raise ValueError("Platform generation is not configured; sign in first")
+        task = self._repository.create_draft(request)
+        if retry_of is not None:
+            task = self._repository.update(task.local_id, lambda current: setattr(current, "retry_of", retry_of))
+        try:
+            platform_request = self._build_platform_video_request(task)
+            remote = self._platform.create_task(platform_request)
+        except PlatformUnauthorizedError as error:
+            task = self._repository.update(
+                task.local_id, lambda current, caught=error: self._mark_create_error(current, caught)
+            )
+            self._emit("seedance-task-updated", task)
+            raise
+        except (PlatformError, ValueError) as error:
+            task = self._repository.update(
+                task.local_id, lambda current, caught=error: self._mark_create_error(current, caught)
+            )
+            self._emit("seedance-task-updated", task)
+            return self.public_task(task)
+        except (OSError, TimeoutError) as error:
+            task = self._repository.update(
+                task.local_id, lambda current, caught=error: self._mark_submission_unknown(current, caught)
+            )
+            self._emit("seedance-task-updated", task)
+            return self.public_task(task)
+        task = self._repository.update(task.local_id, lambda current: self._mark_created(current, remote))
+        if task.remote_status == "succeeded":
+            task = self._download_succeeded(task)
+        elif task.remote_status in _ACTIVE_STATUSES:
+            self._schedule(task.local_id, 0)
+        self._emit("seedance-task-updated", task)
+        return self.public_task(task)
+
+    def _build_platform_video_request(self, task: SeedanceTask) -> dict[str, Any]:
+        """Upload draft input images and assemble the platform job request JSON."""
+        assert self._platform is not None
+
+        request = self._request_from_task(task)
+        if request.return_last_frame:
+            raise ValueError("平台模式不支持 return_last_frame（平台一任务一制品）")
+        if request.duration == -1 or not PLATFORM_MIN_DURATION <= request.duration <= PLATFORM_MAX_DURATION:
+            raise ValueError("平台模式时长须为 4~15 秒")
+        if request.resolution not in PLATFORM_RESOLUTIONS:
+            raise ValueError(f"平台模式分辨率仅支持 480p/720p/1080p：{request.resolution}")
+        if request.ratio not in PLATFORM_RATIOS:
+            raise ValueError(f"平台模式画面比例仅支持 adaptive/16:9/1:1/4:3：{request.ratio}")
+        content: list[dict[str, Any]] = []
+        prompt = request.prompt.strip()
+        if prompt:
+            content.append({"type": "text", "text": prompt})
+        content.append(
+            {
+                "type": "image_url",
+                "assetId": self._upload_platform_asset(request.first_frame),
+                "role": "first_frame",
+            }
+        )
+        if request.last_frame is not None:
+            content.append(
+                {
+                    "type": "image_url",
+                    "assetId": self._upload_platform_asset(request.last_frame),
+                    "role": "last_frame",
+                }
+            )
+        return {
+            "idemKey": new_idem_key(),
+            "model": platform_model_id(request.model),
+            "content": content,
+            "resolution": request.resolution,
+            "ratio": request.ratio,
+            "duration": request.duration,
+            "generate_audio": request.generate_audio,
+        }
+
+    def _upload_platform_asset(self, path: Path) -> str:
+        assert self._platform is not None
+        asset = self._platform.upload_asset(path)
+        return str(asset["assetId"])
+
     def list_tasks(self) -> list[dict[str, Any]]:
         return [self.public_task(task) for task in self._repository.list()]
 
@@ -205,6 +306,68 @@ class SeedanceTaskManager:
         return self.public_task(task)
 
     def cancel(self, local_id: str) -> dict[str, Any]:
+        task = self._repository.get(local_id)
+        if task.source == PLATFORM_SOURCE:
+            return self._cancel_platform(local_id)
+        return self._cancel_ark(local_id)
+
+    def _cancel_platform(self, local_id: str) -> dict[str, Any]:
+        """Platform cancel: QUEUED cancels immediately; in-flight becomes a
+        cancel request that the poller confirms (CANCELLED/FAILED) later."""
+        if self._platform is None:
+            raise ValueError("Platform generation is not configured; sign in first")
+
+        def claim(current: SeedanceTask) -> None:
+            if current.remote_status in _TERMINAL_STATUSES:
+                raise ValueError("已结束的任务无法取消")
+            if current.remote_status == _CANCELLING_STATUS:
+                return
+            if current.remote_status not in _ACTIVE_STATUSES:
+                raise ValueError("Only active Seedance tasks can be cancelled")
+            current.remote_status = _CANCELLING_STATUS
+            current.sync_status = {"state": _CANCELLING_STATUS, "last_synced_at": self._iso_now()}
+
+        task = self._repository.update(local_id, claim)
+        with self._scheduler_lock:
+            self._cancelling_inflight.add(local_id)
+        self._emit("seedance-task-updated", task)
+
+        try:
+            outcome = self._platform.delete_task(task.remote_id or "")
+        except PlatformError as error:
+
+            def restore(current: SeedanceTask, caught: Exception = error) -> None:
+                if current.remote_status != _CANCELLING_STATUS:
+                    return
+                current.remote_status = "queued"
+                current.sync_status = {
+                    "state": "error",
+                    "last_synced_at": self._iso_now(),
+                    "error": self._error_dict(caught),
+                }
+
+            restored = self._repository.update(local_id, restore)
+            self._emit("seedance-task-updated", restored)
+            raise
+        finally:
+            with self._scheduler_lock:
+                self._cancelling_inflight.discard(local_id)
+
+        if outcome.get("status") == "cancelled":
+            task = self._repository.update(local_id, self._mark_cancelled_after_recovery)
+            self._unschedule(local_id)
+            self._emit("seedance-task-updated", task)
+            return self.public_task(task)
+        # CANCEL_REQUESTED: keep polling until the platform confirms the cancel.
+        task = self._repository.update(
+            local_id,
+            lambda current: setattr(current, "sync_status", {"state": "ok", "last_synced_at": self._iso_now()}),
+        )
+        self._schedule(local_id, _SUCCESS_INTERVAL_SECONDS)
+        self._emit("seedance-task-updated", task)
+        return self.public_task(task)
+
+    def _cancel_ark(self, local_id: str) -> dict[str, Any]:
         def claim(current: SeedanceTask) -> None:
             if current.remote_status != "queued":
                 raise ValueError("Only queued Seedance tasks can be cancelled")
@@ -229,6 +392,7 @@ class SeedanceTaskManager:
             with audit_context(task_id=local_id, remote_id=task.remote_id):
                 self._client.delete_task(task.remote_id)
         except Exception as error:
+
             def restore(current: SeedanceTask, caught: Exception = error) -> None:
                 if current.remote_status != _CANCELLING_STATUS:
                     return
@@ -264,6 +428,8 @@ class SeedanceTaskManager:
                 raise ValueError("Only downloaded successful tasks can continue from a returned frame")
             if task.cache_status != "complete":
                 raise ValueError("Cannot continue after task cache has been cleared")
+            if task.source == PLATFORM_SOURCE:
+                return self._continue_platform_unlocked(task)
             returned_relative_path = task.output_paths.get("returned_last_frame")
             if not isinstance(returned_relative_path, str):
                 raise ValueError("Task does not have a returned last frame")
@@ -273,30 +439,84 @@ class SeedanceTaskManager:
                 raise ValueError("Task returned last frame is unavailable") from error
             if not returned_frame.is_file():
                 raise ValueError("Task returned last frame is unavailable")
-            request = SeedanceRequest.from_dict({
-                **task.request,
-                "first_frame": str(returned_frame),
-                "last_frame": None,
-            })
+            request = SeedanceRequest.from_dict(
+                {
+                    **task.request,
+                    "first_frame": str(returned_frame),
+                    "last_frame": None,
+                }
+            )
             validate_request(request)
             return self._create(request, retry_of=task.local_id)
+
+    def _continue_platform_unlocked(self, task: SeedanceTask) -> dict[str, Any]:
+        """Derive the next segment's first frame locally (the platform does not
+        return last frames), record it for preview, and create the follow-up job."""
+        frame_path = self._extract_continuation_frame(task)
+        task.output_paths["continuation_frame"] = "output/continuation_frame.png"
+        task.updated_at = self._iso_now()
+        self._repository._write_unlocked(task)
+        request = SeedanceRequest.from_dict(
+            {
+                **task.request,
+                "first_frame": str(frame_path),
+                "last_frame": None,
+                "source": PLATFORM_SOURCE,
+            }
+        )
+        validate_request(request)
+        return self._create(request, retry_of=task.local_id)
+
+    def ensure_continuation_frame(self, local_id: str) -> Path:
+        """Return the locally extracted continuation frame, deriving it on demand."""
+        with self._repository.task_lock(local_id):
+            task = self._repository._read_unlocked(local_id)
+            existing = task.output_paths.get("continuation_frame")
+            if isinstance(existing, str):
+                try:
+                    existing_path = self._repository.resolve_asset(local_id, existing)
+                except (FileNotFoundError, ValueError):
+                    existing_path = None
+                if existing_path is not None and existing_path.is_file():
+                    return existing_path
+            frame_path = self._extract_continuation_frame(task)
+            task.output_paths["continuation_frame"] = "output/continuation_frame.png"
+            task.updated_at = self._iso_now()
+            self._repository._write_unlocked(task)
+            return frame_path
+
+    def _extract_continuation_frame(self, task: SeedanceTask) -> Path:
+        video_relative = task.output_paths.get("video")
+        if not isinstance(video_relative, str):
+            raise ValueError("任务没有可续跑的本地视频")
+        try:
+            video_path = self._repository.resolve_asset(task.local_id, video_relative)
+        except (FileNotFoundError, ValueError) as error:
+            raise ValueError("上一段成品不在本地缓存，无法续跑") from error
+        if not video_path.is_file():
+            raise ValueError("上一段成品不在本地缓存，无法续跑")
+        frame_path = self._repository.resolve_asset(task.local_id, "output/continuation_frame.png")
+        try:
+            return extract_last_frame(video_path, frame_path)
+        except ValueError as error:
+            raise ValueError(f"无法从上一段视频抽取末帧：{error}") from error
 
     def retry_download(self, local_id: str) -> dict[str, Any]:
         task = self._repository.get(local_id)
         if task.remote_status != "succeeded":
             raise ValueError("Only succeeded Seedance tasks can retry downloads")
         self._require_output_urls(task)
-        if self._audit:
+        if self._audit and task.source != PLATFORM_SOURCE:
             self._audit.record("video.get", "download_started", ids={"task_id": local_id, "remote_id": task.remote_id})
         try:
-            downloaded = self._downloader.download_task(task)
+            downloaded = self._downloader_for(task).download_task(task)
         except Exception:
-            if self._audit:
+            if self._audit and task.source != PLATFORM_SOURCE:
                 self._audit.record(
                     "video.get", "download_failed", ids={"task_id": local_id, "remote_id": task.remote_id}
                 )
             raise
-        if self._audit:
+        if self._audit and task.source != PLATFORM_SOURCE:
             self._audit.record(
                 "video.get",
                 "download_succeeded",
@@ -393,28 +613,31 @@ class SeedanceTaskManager:
             for key, value in task.request.items()
             if key not in {"first_frame", "last_frame", "api_key", "authorization"}
         }
-        return deepcopy({
-            "local_id": task.local_id,
-            "remote_id": task.remote_id,
-            "remote_status": task.remote_status,
-            "sync_status": task.sync_status,
-            "download_status": task.download_status,
-            "cache_status": task.cache_status,
-            "protected": bool(task.handoffs),
-            "request": request,
-            "input_urls": {},
-            "output_urls": output_urls,
-            "file_size_bytes": self._video_file_size(task),
-            "created_at": task.created_at,
-            "updated_at": task.updated_at,
-            "finished_at": task.finished_at,
-            "download_url_received_at": task.download_url_received_at,
-            "elapsed_seconds": self._elapsed_seconds(task),
-            "remote": remote,
-            "error": task.error,
-            "retry_of": task.retry_of,
-            "handoffs": task.handoffs,
-        })
+        return deepcopy(
+            {
+                "local_id": task.local_id,
+                "remote_id": task.remote_id,
+                "remote_status": task.remote_status,
+                "source": task.source,
+                "sync_status": task.sync_status,
+                "download_status": task.download_status,
+                "cache_status": task.cache_status,
+                "protected": bool(task.handoffs),
+                "request": request,
+                "input_urls": {},
+                "output_urls": output_urls,
+                "file_size_bytes": self._video_file_size(task),
+                "created_at": task.created_at,
+                "updated_at": task.updated_at,
+                "finished_at": task.finished_at,
+                "download_url_received_at": task.download_url_received_at,
+                "elapsed_seconds": self._elapsed_seconds(task),
+                "remote": remote,
+                "error": task.error,
+                "retry_of": task.retry_of,
+                "handoffs": task.handoffs,
+            }
+        )
 
     def _video_file_size(self, task: SeedanceTask) -> int | None:
         video_asset = task.output_paths.get("video")
@@ -467,6 +690,18 @@ class SeedanceTaskManager:
         self._failure_counts[local_id] = failures
         return task, min(10 * (2 ** (failures - 1)), _MAX_FAILURE_INTERVAL_SECONDS)
 
+    def _remote_client_for(self, task: SeedanceTask):
+        if task.source == PLATFORM_SOURCE:
+            if self._platform is None:
+                raise ValueError("Platform generation is not configured; sign in first")
+            return self._platform
+        return self._client
+
+    def _downloader_for(self, task: SeedanceTask) -> ResultDownloader:
+        if task.source == PLATFORM_SOURCE and self._platform_downloader is not None:
+            return self._platform_downloader
+        return self._downloader
+
     def _sync(self, local_id: str) -> tuple[SeedanceTask, bool]:
         task = self._repository.get(local_id)
         if task.remote_status not in _POLLABLE_STATUSES or task.remote_id is None:
@@ -476,7 +711,13 @@ class SeedanceTaskManager:
                 return task, True
         try:
             with audit_context(task_id=local_id, remote_id=task.remote_id) as call_ids:
-                response = self._client.get_task(task.remote_id)
+                response = self._remote_client_for(task).get_task(task.remote_id)
+        except PlatformError as error:
+            updated = self._repository.update(
+                local_id, lambda current, caught=error: self._mark_sync_error(current, caught)
+            )
+            self._emit("seedance-task-updated", updated)
+            return updated, False
         except ArkAPIError as error:
             if error.status == 404 and task.remote_status == _CANCELLING_STATUS:
                 updated = self._repository.update(local_id, self._mark_cancelled_after_recovery)
@@ -501,7 +742,7 @@ class SeedanceTaskManager:
             return updated, False
 
         updated = self._repository.update(local_id, lambda current: self._apply_remote(current, response))
-        if self._audit:
+        if self._audit and task.source != PLATFORM_SOURCE:
             self._audit.record(
                 "video.get",
                 "task_persisted",
@@ -527,7 +768,7 @@ class SeedanceTaskManager:
                     ),
                 )
                 self._emit("seedance-task-updated", task)
-                if self._audit:
+                if self._audit and task.source != PLATFORM_SOURCE:
                     self._audit.record(
                         "video.create",
                         "recovered",
@@ -540,7 +781,7 @@ class SeedanceTaskManager:
                 self._schedule(task.local_id, 0)
 
     def _recover_succeeded_download(self, task: SeedanceTask) -> SeedanceTask:
-        if task.download_status == "failed" or self._downloader.is_download_confirmed(task):
+        if task.download_status == "failed" or self._downloader_for(task).is_download_confirmed(task):
             return task
         task = self._repository.update(
             task.local_id,
@@ -628,7 +869,7 @@ class SeedanceTaskManager:
     def _mark_created(self, task: SeedanceTask, response: dict[str, Any]) -> None:
         task.remote_id = response["id"]
         task.remote_status = self._remote_status(response.get("status"))
-        task.remote = self._mapped_remote(response)
+        task.remote = self._mapped_remote(task, response)
         self._record_download_url_received_at(task)
         task.error = None
         task.sync_status = {"state": "ok", "last_synced_at": self._iso_now()}
@@ -666,20 +907,20 @@ class SeedanceTaskManager:
 
     def _download_succeeded(self, task: SeedanceTask) -> SeedanceTask:
         ids = {"task_id": task.local_id, "remote_id": task.remote_id}
-        if self._audit:
+        if self._audit and task.source != PLATFORM_SOURCE:
             self._audit.record("video.get", "download_started", ids=ids)
         try:
-            downloaded = self._downloader.download_task(task)
+            downloaded = self._downloader_for(task).download_task(task)
         except Exception:
-            if self._audit:
+            if self._audit and task.source != PLATFORM_SOURCE:
                 self._audit.record("video.get", "download_failed", ids=ids)
             return self._repository.get(task.local_id)
-        if self._audit:
+        if self._audit and task.source != PLATFORM_SOURCE:
             self._audit.record("video.get", "download_succeeded", ids=ids, fields={"downloaded": True})
         return downloaded
 
     def _apply_remote(self, task: SeedanceTask, response: dict[str, Any]) -> None:
-        task.remote = self._mapped_remote(response)
+        task.remote = self._mapped_remote(task, response)
         self._record_download_url_received_at(task)
         task.remote_status = self._remote_status(response.get("status"))
         remote_error = task.remote.get("error")
@@ -699,15 +940,24 @@ class SeedanceTaskManager:
         return value if value in _REMOTE_STATUSES else "queued"
 
     @staticmethod
-    def _mapped_remote(response: dict[str, Any]) -> dict[str, Any]:
+    def _mapped_remote(task: SeedanceTask, response: dict[str, Any]) -> dict[str, Any]:
         remote = {key: response[key] for key in _REMOTE_FIELDS if key in response}
         remote.update({key: response[key] for key in _OUTPUT_FIELDS if key in response})
+        if task.source == PLATFORM_SOURCE:
+            # Platform facts the UI surfaces (状态确认中 / 服务端报价).
+            for key in ("platform_status", "remote_status", "quote"):
+                value = response.get(key)
+                if value is not None:
+                    remote[key] = value
         return remote
 
     @staticmethod
     def _error_dict(error: Exception) -> dict[str, Any]:
         if isinstance(error, ArkAPIError):
             return {"code": error.code, "message": error.message, "status": error.status}
+        if isinstance(error, PlatformError):
+            code = "UNAUTHORIZED" if isinstance(error, PlatformUnauthorizedError) else error.code
+            return {"code": code, "message": error.message, "status": error.status}
         return {"code": type(error).__name__, "message": str(error)}
 
     def _elapsed_seconds(self, task: SeedanceTask) -> int:
@@ -750,9 +1000,7 @@ class SeedanceTaskManager:
         if self._event_worker is not None and self._event_worker.is_alive():
             return
         self._event_stop.clear()
-        self._event_worker = threading.Thread(
-            target=self._event_loop, name="seedance-event-dispatcher", daemon=True
-        )
+        self._event_worker = threading.Thread(target=self._event_loop, name="seedance-event-dispatcher", daemon=True)
         self._event_worker.start()
 
     def _event_loop(self) -> None:

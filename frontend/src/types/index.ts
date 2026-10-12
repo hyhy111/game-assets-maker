@@ -271,6 +271,12 @@ export interface LoggerConfig {
  * emitted by backend.api.seedance_api, never the persisted API key.
  */
 export type SeedanceModel = 'standard' | 'fast' | 'mini';
+/**
+ * 请求里携带的模型标识：直连模式是本地短键（SeedanceModel），
+ * 平台源是能力清单下发的上游模型 ID。用 `(string & {})` 保留短键的字面量补全，
+ * 同时允许任意上游 ID —— 后者必须能原样透传，否则运营上新模型时客户端会先失败。
+ */
+export type SeedanceModelRef = SeedanceModel | (string & {});
 export type SeedanceResolution = '480p' | '720p' | '1080p';
 export type SeedanceRatio = 'adaptive' | '16:9' | '1:1' | '4:3';
 export type SeedanceDuration = -1 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15;
@@ -291,7 +297,7 @@ export interface SeedanceCreateRequest {
   first_frame: string;
   last_frame?: string | null;
   prompt?: string;
-  model?: SeedanceModel;
+  model?: SeedanceModelRef;
   resolution?: SeedanceResolution;
   ratio?: SeedanceRatio;
   duration?: SeedanceDuration;
@@ -380,6 +386,8 @@ export interface SeedanceTask {
   error: SeedanceTaskError | null;
   retry_of: string | null;
   handoffs: SeedanceHandoff[];
+  /** 生成来源：api-key=直连 Ark；forfuner-ai=平台代生成 */
+  source?: string;
 }
 
 export interface SeedanceStaleTaskResult {
@@ -555,6 +563,8 @@ export interface BatchTrimParams {
  * Seedream image-generation public PyWebView contracts.
  */
 export type SeedreamModel = 'pro' | 'flash';
+/** 见 SeedanceModelRef：平台源的 model 是上游 ID。 */
+export type SeedreamModelRef = SeedreamModel | (string & {});
 export type SeedreamResolution = '1K' | '1.5K' | '2K';
 export type SeedreamRatio = '1:1' | '16:9' | '9:16' | '4:3' | '3:4';
 export type SeedreamAttemptStatus = 'queued' | 'generating' | 'downloading' | 'succeeded' | 'failed' | 'unknown' | 'download_failed';
@@ -575,7 +585,7 @@ export interface GenerationLayout {
 
 export interface SeedreamCreateRequest {
   prompt: string;
-  model?: SeedreamModel;
+  model?: SeedreamModelRef;
   resolution?: SeedreamResolution;
   ratio?: SeedreamRatio;
   count?: number;
@@ -584,11 +594,13 @@ export interface SeedreamCreateRequest {
 
 export interface SeedreamAttemptRequest {
   prompt: string;
-  model: SeedreamModel;
+  model: SeedreamModelRef;
   resolution: SeedreamResolution;
   ratio: SeedreamRatio;
   count: number;
   reference_image?: string | null;
+  /** 生成来源：api-key=直连 Ark；forfuner-ai=平台代生成 */
+  source?: string;
 }
 
 export interface SeedreamApiError {
@@ -701,3 +713,43 @@ export type SeedreamActiveCountResult =
 export type SeedreamExitConfirmResult =
   | { success: true }
   | { success: false; error: SeedreamApiError };
+
+/**
+ * 平台可售能力清单（ForFuner AI 源）。
+ *
+ * 平台源下的模型与参数选项以此为唯一来源，取代客户端预设模型表——
+ * 使"能选的"恒等于"平台能卖的"。见 openspec: gen-capabilities。
+ */
+export interface PlatformModelCapability {
+  /** 上游模型标识（如 doubao-seedance-2-0-260128），可直接用于建单 */
+  model: string;
+  /** 用户在客户端看到的模型名（服务端下发）；为空时回退 model */
+  displayName?: string;
+  /** 视频：该模型有定价的分辨率档 */
+  resolutions?: string[];
+  /**
+   * 视频：**每个分辨率各自**有定价的时长档。
+   *
+   * 刻意不是模型级的时长并集——可售单位是"分辨率 × 时长"的组合：
+   * 480p 有 4s/5s、720p 只有 4s 时，并集会放出 720p+5s 这种没定价的搭配。
+   */
+  durationsByResolution?: Record<string, number[]>;
+  /** 图片：该模型有定价的尺寸档（1K/1.5K/2K） */
+  sizes?: string[];
+}
+
+export interface PlatformCapabilities {
+  video: {
+    models: PlatformModelCapability[];
+    /** 平台固定接受的画面比例枚举（不影响定价） */
+    ratios: string[];
+  };
+  image: {
+    models: PlatformModelCapability[];
+  };
+}
+
+/** 平台源级操作的统一返回信封（与 Seedance/Seedream 的 DataResult 同形）。 */
+export type PlatformDataResult<T> =
+  | { success: true; data: T }
+  | { success: false; error: SeedanceApiError };

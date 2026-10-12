@@ -94,11 +94,13 @@ import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 import { RefreshCw } from 'lucide-vue-next';
 import SeedreamPanel from '@/components/seedream/SeedreamPanel.vue';
-import { batchStatus, duplicateBatchSequence, MODEL_LABELS } from '@/seedream-ui';
+import { useModelDisplayName } from '@/composables/useModelDisplayName';
+import { batchStatus, duplicateBatchSequence } from '@/seedream-ui';
 import { useSeedreamStore } from '@/stores/seedream';
 import type { SeedreamAttempt, SeedreamBatch, SeedreamBatchStatus } from '@/types';
 
 const { t, locale } = useI18n();
+const { modelName } = useModelDisplayName();
 const router = useRouter();
 const store = useSeedreamStore();
 const batches = computed(() => store.batches);
@@ -118,7 +120,7 @@ function sequenceOf(batch: SeedreamBatch): string {
 }
 
 function modelLabel(batch: SeedreamBatch): string {
-  return MODEL_LABELS[batch.request.model] ?? batch.request.model;
+  return modelName(batch.request.model, 'image');
 }
 
 function thumbnailAttempts(batch: SeedreamBatch): SeedreamAttempt[] {

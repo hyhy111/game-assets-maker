@@ -6,6 +6,7 @@
     <header class="flex min-h-14 items-center gap-3 px-4 py-3">
       <h2 class="text-sm font-semibold text-white">{{ t('seedance.tasks.title') }}</h2>
       <SeedanceStatusBadge :task="task" />
+      <PlatformSourceBadge :source="task.source" />
       <button
         type="button"
         class="ml-auto grid h-8 w-8 shrink-0 place-items-center rounded-lg text-gray-400 transition-colors hover:bg-white/[0.06] hover:text-white"
@@ -53,6 +54,7 @@
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import Button from '@/components/common/Button.vue';
+import PlatformSourceBadge from '@/components/ai-creation/PlatformSourceBadge.vue';
 import SeedanceStatusBadge from '@/components/seedance/SeedanceStatusBadge.vue';
 import SeedanceVideoStage from '@/components/seedance/SeedanceVideoStage.vue';
 import { downloadUrlMayBeExpired, seedanceTaskActions, seedanceTaskPhase } from '@/seedance-ui';

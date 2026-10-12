@@ -41,6 +41,7 @@
 import { computed, ref } from 'vue';
 import { Check, Copy } from 'lucide-vue-next';
 import { useI18n } from 'vue-i18n';
+import { useModelDisplayName } from '@/composables/useModelDisplayName';
 import { formatBytes, formatElapsed } from '@/seedance-ui';
 import type { SeedanceTask } from '@/types';
 import SeedancePanel from './SeedancePanel.vue';
@@ -50,6 +51,7 @@ const props = defineProps<{
   output: Record<'resolution' | 'ratio' | 'duration' | 'fps', string>;
 }>();
 const { t, locale } = useI18n();
+const { modelName } = useModelDisplayName();
 const copied = ref(false);
 const copyFailed = ref(false);
 const safeError = computed(() => (
@@ -65,7 +67,7 @@ const items = computed(() => {
     label: t('seedance.preview.mode'),
     value: props.task.input_urls.last_frame ? t('seedance.preview.firstLastMode') : t('seedance.preview.firstFrameMode'),
   },
-  { label: t('seedance.create.model'), value: t(`seedance.models.${props.task.request.model}`) },
+  { label: t('seedance.create.model'), value: modelName(props.task.request.model, 'video') },
   { label: t('seedance.create.resolution'), value: props.output.resolution },
   { label: t('seedance.create.ratio'), value: props.output.ratio },
   { label: t('seedance.create.duration'), value: props.output.duration },
