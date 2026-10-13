@@ -23,12 +23,12 @@ export function defaultVideoDraft(): SeedanceCreateForm {
     first_frame: '',
     last_frame: null,
     prompt: '',
-    model: 'standard',
+    model: 'mini',
     resolution: '720p',
-    ratio: 'adaptive',
+    ratio: '16:9',
     duration: 4,
-    generate_audio: false,
-    return_last_frame: false,
+    generate_audio: true,
+    return_last_frame: true,
   };
 }
 

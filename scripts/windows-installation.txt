@@ -1,0 +1,15 @@
+Game Assets Maker - Windows 安装说明
+
+从开始菜单或桌面快捷方式启动应用。更新前请先退出旧版本。
+用户项目、配置、缓存和模型默认保存在 %USERPROFILE%\.gam；卸载保留这些数据。
+CLI 固定入口为 %USERPROFILE%\.gam\gam-agent.cmd，无需配置 PATH。
+设置 GAM_DATA_ROOT 时，用户数据和 CLI 固定入口使用该目录。
+首次移除背景时，在应用内下载 U2Net 模型；模型就绪后可离线处理。
+缺少 WebView2 运行库时，安装器会通过微软安装程序联网安装。
+
+Launch the app from the Start menu or desktop shortcut. Quit the old version before updating.
+Projects, configuration, cache, and models default to %USERPROFILE%\.gam and survive uninstall.
+The stable CLI entry is %USERPROFILE%\.gam\gam-agent.cmd; no PATH change is required.
+GAM_DATA_ROOT overrides the location of user data and the stable CLI entry.
+Download U2Net in the app before removing backgrounds; local processing then works offline.
+If WebView2 is missing, setup installs it online using Microsoft's installer.

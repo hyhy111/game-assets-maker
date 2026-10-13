@@ -46,18 +46,17 @@ test('unpriced combinations are unknown rather than free or extrapolated', () =>
   }
 });
 
-test('image composer shows credits only for a logged-in account without a custom key', async () => {
+test('custom key source hides image credits while key settings are not loaded', async () => {
   const html = await renderSfc('views/SeedreamCreate.vue', {
     route: '/image-generation/create',
     piniaState: {
       auth: { status: 'authenticated' },
-      'ai-creation': { imageDraft: {
+      'ai-creation': { generationSource: 'api-key', imageDraft: {
         model: 'pro', resolution: '2K', count: 3, prompt: '', ratio: '16:9', reference_image: '',
       } },
     },
   });
-  assert.match(html, /预计消耗 180 积分/);
-  assert.doesNotMatch(html, /1 元|100 积分|¥/);
+  assert.doesNotMatch(html, /data-test="generation-credits"/);
 });
 
 test('custom key hides the image credit estimate even when the account is logged in', async () => {
@@ -66,24 +65,25 @@ test('custom key hides the image credit estimate even when the account is logged
     piniaState: {
       auth: { status: 'authenticated' },
       seedance: { settings: { api_key_configured: true } },
+      'ai-creation': { generationSource: 'api-key' },
     },
   });
   assert.doesNotMatch(html, /data-test="generation-credits"/);
 });
 
-test('video composer shows the selected price only for a logged-in account without a custom key', async () => {
+test('custom key source hides video credits while key settings are not loaded', async () => {
   const html = await renderSfc('views/SeedanceCreate.vue', {
     route: '/video-generation/create',
     props: { showTaskList: false },
     piniaState: {
       auth: { status: 'authenticated' },
-      'ai-creation': { videoDraft: {
+      'ai-creation': { generationSource: 'api-key', videoDraft: {
         model: 'mini', resolution: '480p', duration: 5, prompt: '', ratio: 'adaptive',
         first_frame: '', last_frame: null, generate_audio: false, return_last_frame: false,
       } },
     },
   });
-  assert.match(html, /预计消耗 112 积分/);
+  assert.doesNotMatch(html, /data-test="generation-credits"/);
 });
 
 test('custom key hides the video credit estimate', async () => {
@@ -93,6 +93,7 @@ test('custom key hides the video credit estimate', async () => {
     piniaState: {
       auth: { status: 'authenticated' },
       seedance: { settings: { api_key_configured: true } },
+      'ai-creation': { generationSource: 'api-key' },
     },
   });
   assert.doesNotMatch(html, /data-test="generation-credits"/);

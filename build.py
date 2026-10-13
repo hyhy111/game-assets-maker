@@ -149,6 +149,22 @@ def verify_packaged_cli(dist_dir: Path = Path("dist")) -> None:
             raise RuntimeError("Packaged Agent CLI did not use the isolated user-data root")
         if not payload["data"]["checks"]["frontend_dist"]:
             raise RuntimeError("Packaged frontend resources are missing")
+        launcher = user_data / ("gam-agent.cmd" if sys.platform == "win32" else "gam-agent")
+        if not launcher.is_file():
+            raise RuntimeError("Packaged Agent CLI did not register its stable user-data launcher")
+        launched = subprocess.run(
+            [str(launcher), "doctor"],
+            shell=sys.platform == "win32",
+            cwd=workspace,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=True,
+        )
+        launched_payload = json.loads(launched.stdout)
+        if not launched_payload.get("ok") or Path(launched_payload["data"]["project_root"]).resolve() != user_data:
+            raise RuntimeError("The stable Agent CLI launcher did not preserve installed data isolation")
     print(f"Packaged Agent CLI verified: {cli_path}")
 
 
@@ -203,6 +219,43 @@ def create_macos_dmg(dist_dir: Path) -> Path:
     return output
 
 
+def create_windows_installer(dist_dir: Path, iscc: Path, webview2_bootstrapper: Path) -> Path:
+    """Wrap the verified Windows bundle in a per-user Inno Setup installer."""
+    bundle = (dist_dir / "game-assets-maker").resolve()
+    iscc = iscc.resolve()
+    webview2_bootstrapper = webview2_bootstrapper.resolve()
+    for required in (
+        bundle / "game-assets-maker.exe",
+        bundle / "gam-agent.exe",
+        bundle / "_internal" / "frontend" / "dist" / "index.html",
+        iscc,
+        webview2_bootstrapper,
+    ):
+        if not required.is_file():
+            raise FileNotFoundError(f"Windows installer input is missing: {required}")
+    output = dist_dir / f"GameAssetsMaker-{app_version()}-windows-x64-Setup.exe"
+    # Fail rather than mistaking an old installer for successful compiler output.
+    if output.exists():
+        raise FileExistsError(f"Installer already exists; choose a fresh --dist-dir: {output}")
+    subprocess.run(
+        [
+            str(iscc),
+            f"/DAppVersion={app_version()}",
+            f"/DRepoRoot={REPO_ROOT}",
+            f"/DBundleDir={bundle}",
+            f"/DOutputDir={dist_dir.resolve()}",
+            f"/DWebViewBootstrapper={webview2_bootstrapper}",
+            str(REPO_ROOT / "scripts" / "windows_installer.iss"),
+        ],
+        check=True,
+    )
+    with output.open("rb") as stream:
+        checksum = hashlib.file_digest(stream, "sha256").hexdigest()
+    output.with_suffix(".exe.sha256").write_text(f"{checksum}  {output.name}\n", encoding="utf-8")
+    print(f"Windows installer created: {output}")
+    return output
+
+
 def main():
     parser = argparse.ArgumentParser(description="Build and verify the desktop application and Agent CLI.")
     parser.add_argument(
@@ -219,8 +272,16 @@ def main():
     parser.add_argument("--dist-dir", type=Path, default=REPO_ROOT / "dist", help="Package output directory")
     parser.add_argument("--work-dir", type=Path, default=REPO_ROOT / "build", help="PyInstaller work directory")
     parser.add_argument("--skip-dmg", action="store_true", help="Build only the app bundle on macOS")
+    parser.add_argument("--windows-installer", action="store_true", help="Create a Windows EXE installer")
+    parser.add_argument("--iscc", type=Path, help="Path to the Inno Setup 6.3+ ISCC.exe compiler")
+    parser.add_argument("--webview2-bootstrapper", type=Path, help="Path to Microsoft's WebView2 bootstrapper")
     parser.add_argument("--channel-code", default="", help="Embed this channel code in the package (default: empty)")
     args = parser.parse_args()
+    if args.windows_installer:
+        if sys.platform != "win32":
+            parser.error("--windows-installer requires Windows")
+        if args.iscc is None or args.webview2_bootstrapper is None:
+            parser.error("--windows-installer requires --iscc and --webview2-bootstrapper")
     try:
         channel_code = validate_channel_code(args.channel_code)
     except ValueError as error:
@@ -241,6 +302,8 @@ def main():
         verify_packaged_cli(dist_dir)
         if sys.platform == "darwin" and not args.skip_dmg:
             create_macos_dmg(dist_dir)
+        if args.windows_installer:
+            create_windows_installer(dist_dir, args.iscc, args.webview2_bootstrapper)
 
     print("=" * 60)
     print("All done!")

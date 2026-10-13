@@ -1,0 +1,104 @@
+name: Build installers
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: ${{ matrix.platform }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-x64
+            runner: windows-2022
+            shell: pwsh
+            arch: amd64
+            artifacts: |
+              dist/installers/*-windows-x64-Setup.exe
+              dist/installers/*-windows-x64-Setup.exe.sha256
+          - platform: macos-arm64
+            runner: macos-15
+            shell: bash
+            arch: arm64
+            artifacts: |
+              dist/installers/*-macos-arm64.dmg
+              dist/installers/*-macos-arm64.dmg.sha256
+    defaults:
+      run:
+        shell: ${{ matrix.shell }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python and uv
+        uses: astral-sh/setup-uv@v10.1.0
+        with:
+          python-version: '3.12'
+          enable-cache: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Python dependencies
+        run: uv sync --locked --dev
+
+      - name: Verify Python architecture
+        run: uv run --locked python -c "import platform; assert platform.machine().lower() == '${{ matrix.arch }}', platform.machine()"
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Prepare Windows installer tools
+        if: runner.os == 'Windows'
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $isccPath = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6/ISCC.exe'
+          if (-not (Test-Path -LiteralPath $isccPath)) {
+            throw 'Inno Setup 6 is missing from the Windows runner.'
+          }
+          $languagePath = Join-Path (Split-Path -Parent $isccPath) 'Languages/ChineseSimplified.isl'
+          if (-not (Test-Path -LiteralPath $languagePath)) {
+            Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/jrsoftware/issrc/is-6_7_1/Files/Languages/Unofficial/ChineseSimplified.isl' -OutFile $languagePath -TimeoutSec 180
+          }
+          $bootstrapperPath = Join-Path $env:RUNNER_TEMP 'MicrosoftEdgeWebview2Setup.exe'
+          Invoke-WebRequest -Uri 'https://go.microsoft.com/fwlink/p/?LinkId=2124703' -OutFile $bootstrapperPath -TimeoutSec 180
+          $signature = Get-AuthenticodeSignature -LiteralPath $bootstrapperPath
+          if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch 'Microsoft Corporation') {
+            throw 'The WebView2 bootstrapper must have a valid Microsoft signature.'
+          }
+          "ISCC_PATH=$isccPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "WEBVIEW2_BOOTSTRAPPER=$bootstrapperPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Build Windows installer
+        if: runner.os == 'Windows'
+        run: >-
+          uv run --locked python build.py --windows-installer
+          --iscc "$env:ISCC_PATH"
+          --webview2-bootstrapper "$env:WEBVIEW2_BOOTSTRAPPER"
+          --dist-dir dist/installers --work-dir build/installers
+
+      - name: Build macOS Apple Silicon installer
+        if: runner.os == 'macOS'
+        run: uv run --locked python build.py --dist-dir dist/installers --work-dir build/installers
+
+      - name: Upload installer and checksum
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.platform }}-installer
+          path: ${{ matrix.artifacts }}
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0

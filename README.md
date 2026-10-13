@@ -85,14 +85,31 @@ uv run python build.py
 uv run python build.py --dist-dir dist/local-1.0.0 --work-dir build/local-1.0.0
 ```
 
-可用 `--skip-dmg` 仅构建应用。Windows 当前只生成 PyInstaller 目录，EXE 安装器暂缓。
+可用 `--skip-dmg` 仅构建应用。Windows 可使用 Inno Setup 6.3+（含简体中文语言文件）和微软官方 WebView2 引导安装程序生成单个 EXE 安装包：
+
+```powershell
+uv run python build.py --windows-installer --iscc "C:/Tools/Inno Setup/ISCC.exe" --webview2-bootstrapper "C:/Tools/MicrosoftEdgeWebview2Setup.exe" --dist-dir dist/windows-setup --work-dir build/windows-setup
+```
+
+输出 `GameAssetsMaker-<版本>-windows-x64-Setup.exe` 和 `.exe.sha256`。安装器按当前用户安装，支持开始菜单、可选桌面快捷方式及卸载；升级沿用原安装目录。卸载保留 `.gam` 用户数据。缺少 WebView2 时联网安装微软运行库。重复构建请选新的输出目录，避免覆盖已有安装包。
+
+GitHub Actions 工作流 [Build installers](.github/workflows/build-installers.yml) 支持手动同时构建 Windows x64 与 macOS Apple Silicon（ARM64），不生成 Intel Mac 安装包：
+
+1. 将工作流、打包脚本及所需源码提交并推送到仓库默认分支；`dist/` 和 `build/` 不需要上传。
+2. 打开仓库 **Actions → Build installers → Run workflow**，选择要打包的分支并运行。
+3. 成功后打开该次运行，在 **Artifacts** 下载 `windows-x64-installer` 和 `macos-arm64-installer`，解压得到安装包及 `.sha256` 校验文件。
+4. 安装验证后，可将 EXE、DMG 及对应校验文件上传到 GitHub Release。工作流只保存构建产物（14 天），不会自动发布 Release。
+
+版本号来自 `pyproject.toml`，生产 API 地址沿用 `frontend/.env.production`。工作流调用现有打包脚本并执行包内 CLI 自检；Mac 安装包暂未配置 Developer ID 签名或 Apple 公证。
 
 发行包同时包含 gam 桌面程序与 `gam-agent` CLI，共享运行库，用户无需安装 Python 或 uv。构建完成后自动在临时数据目录运行 CLI 自检；任一步失败都会使构建命令失败。
 
 - macOS：`dist/Game Assets Maker.app/Contents/MacOS/gam-agent`
 - Windows：`dist/game-assets-maker/gam-agent.exe`（与桌面程序及 `_internal` 一起交付）
 
-插件可通过已安装 gam 的绝对路径调用 CLI，无须配置 PATH。界面导航与草稿操作需要 gam 已启动；用户数据默认位于 `~/.gam`，模型及本地配置不包含在发行包中。
+安装版 gam 或随包 CLI 启动时，会在用户数据目录注册固定 CLI 入口：macOS 为 `~/.gam/gam-agent`，Windows 为 `%USERPROFILE%\.gam\gam-agent.cmd`（同目录的 `gam-agent.ps1` 为配套文件）。入口转发到安装包内的 CLI，保留共享运行库，无须配置 PATH；应用移动或升级后重新启动一次即可刷新。设置 `GAM_DATA_ROOT` 时，入口改为写入该目录。普通源码开发启动不会注册入口。
+
+插件和 Agent 应优先通过上述绝对路径调用 CLI，入口缺失时再查安装目录。界面导航与草稿操作需要 gam 已启动；用户数据默认位于 `~/.gam`，模型及本地配置不包含在发行包中。
 
 ### 说明
 
@@ -175,14 +192,31 @@ Supply a package channel with `uv run python build.py --channel-code douyin` (em
 
 The canonical version is in `pyproject.toml`; the build synchronizes frontend package versions. On macOS it also creates `dist/GameAssetsMaker-<version>-macos-<architecture>.dmg` and `.dmg.sha256`, containing the app, an Applications shortcut, and installation instructions. Quit the old app before replacing it. Test builds have no Developer ID signature or Apple notarization; if blocked, follow the included Privacy & Security > Open Anyway instructions.
 
-To preserve previous output, use `uv run python build.py --dist-dir dist/local-1.0.0 --work-dir build/local-1.0.0`. Use `--skip-dmg` for the app bundle only. Windows currently produces a PyInstaller directory; its EXE installer is deferred.
+To preserve previous output, use `uv run python build.py --dist-dir dist/local-1.0.0 --work-dir build/local-1.0.0`. Use `--skip-dmg` for the app bundle only. On Windows, use Inno Setup 6.3+ (including the Simplified Chinese language file) and Microsoft's official WebView2 bootstrapper to create a single EXE installer:
+
+```powershell
+uv run python build.py --windows-installer --iscc "C:/Tools/Inno Setup/ISCC.exe" --webview2-bootstrapper "C:/Tools/MicrosoftEdgeWebview2Setup.exe" --dist-dir dist/windows-setup --work-dir build/windows-setup
+```
+
+This produces `GameAssetsMaker-<version>-windows-x64-Setup.exe` and `.exe.sha256`. Setup installs for the current user, adds Start menu and optional desktop shortcuts, and reuses the previous installation directory on upgrade. Uninstall preserves `.gam` user data. A missing WebView2 runtime is installed online using Microsoft's installer. Use a fresh output directory to preserve existing installers.
+
+The [Build installers](.github/workflows/build-installers.yml) GitHub Actions workflow manually builds Windows x64 and macOS Apple Silicon (ARM64) together. It does not produce Intel Mac installers:
+
+1. Commit and push the workflow, packaging scripts, and required source to the repository's default branch. Do not upload `dist/` or `build/`.
+2. Open **Actions → Build installers → Run workflow**, select the branch to package, and start the run.
+3. After success, open the run and download `windows-x64-installer` and `macos-arm64-installer` from **Artifacts**. Extract the archives to obtain the installers and their `.sha256` files.
+4. After installation testing, upload the EXE, DMG, and corresponding checksums to a GitHub Release. The workflow stores build artifacts for 14 days and does not publish releases automatically.
+
+The version comes from `pyproject.toml`; the production API URL uses `frontend/.env.production`. The workflow calls the existing build script, including its bundled CLI checks. Mac installers currently have no Developer ID signing or Apple notarization.
 
 The release includes both the gam desktop application and `gam-agent`, sharing runtime libraries. Users need neither Python nor uv. After packaging, the build runs the bundled CLI against temporary user data and fails if its smoke check fails.
 
 - macOS: `dist/Game Assets Maker.app/Contents/MacOS/gam-agent`
 - Windows: `dist/game-assets-maker/gam-agent.exe` (distribute it with the desktop executable and `_internal`)
 
-Plugins can invoke the installed CLI by absolute path without modifying PATH. Navigation and draft operations require the desktop application to be running. Writable data defaults to `~/.gam`; model weights and local configuration are excluded from the release.
+Starting the packaged app or bundled CLI registers a stable entry in the user-data directory: `~/.gam/gam-agent` on macOS, or `%USERPROFILE%\.gam\gam-agent.cmd` on Windows (with its companion `gam-agent.ps1`). This entry forwards to the bundled CLI and retains its shared runtime libraries without changing PATH. Restart after moving or updating the app to refresh the entry. `GAM_DATA_ROOT` overrides its destination; ordinary source-development launches do not register it.
+
+Plugins and agents should try this absolute path before searching the installation directory. Navigation and draft operations require the desktop application to be running. Writable data defaults to `~/.gam`; model weights and local configuration are excluded from the release.
 
 ### Note
 

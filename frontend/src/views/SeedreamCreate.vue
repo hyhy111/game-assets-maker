@@ -238,13 +238,10 @@
 
           <div class="ml-auto flex min-w-0 items-center gap-3 pl-2">
             <div v-if="showCreditEstimate" class="text-right" data-test="generation-credits" aria-live="polite">
-              <template v-if="platformGenerationSelected">
-                <p v-if="quoteLoading" class="text-sm text-gray-500">{{ t('aiCreation.platformQuoteLoading') }}</p>
-                <p v-else-if="platformQuoteTotal !== null" class="text-sm text-gray-300">{{ t('aiCreation.estimatedCredits', { credits: platformQuoteTotal }) }}</p>
-                <p v-else-if="quoteError" class="max-w-[16rem] text-xs leading-5 text-warning">{{ t('aiCreation.platformQuoteFailed', { message: quoteError }) }}</p>
-                <p v-else class="text-sm text-gray-500">{{ t('aiCreation.creditsUnavailable') }}</p>
-              </template>
-              <p v-else class="text-sm text-gray-300">{{ estimatedCredits === null ? t('aiCreation.creditsUnavailable') : t('aiCreation.estimatedCredits', { credits: estimatedCredits }) }}</p>
+              <p v-if="quoteLoading" class="text-sm text-gray-500">{{ t('aiCreation.platformQuoteLoading') }}</p>
+              <p v-else-if="platformQuoteTotal !== null" class="text-sm text-gray-300">{{ t('aiCreation.estimatedCredits', { credits: platformQuoteTotal }) }}</p>
+              <p v-else-if="quoteError" class="max-w-[16rem] text-xs leading-5 text-warning">{{ t('aiCreation.platformQuoteFailed', { message: quoteError }) }}</p>
+              <p v-else class="text-sm text-gray-500">{{ t('aiCreation.creditsUnavailable') }}</p>
             </div>
             <CreationModelSelect
               v-if="showGenerationSourceSelector"
@@ -360,7 +357,6 @@ import { useRoute, useRouter } from 'vue-router';
 import DraftClearConfirmation from '@/components/ai-creation/DraftClearConfirmation.vue';
 import GenerationAccessDialog from '@/components/ai-creation/GenerationAccessDialog.vue';
 import CreationModelSelect from '@/components/ai-creation/CreationModelSelect.vue';
-import { imageGenerationCredits } from '@/generation-credits';
 import Button from '@/components/common/Button.vue';
 import SeedreamBatchList from '@/components/seedream/SeedreamBatchList.vue';
 import SeedreamShell from '@/components/seedream/SeedreamShell.vue';
@@ -428,7 +424,6 @@ const modelOptions = computed<ModelOption[]>(() => (
 ));
 
 const form: CreateForm = workspace.imageDraft;
-const estimatedCredits = computed(() => imageGenerationCredits(form.model, form.resolution, form.count));
 const showGenerationSourceSelector = computed(() => authStore.isLoggedIn);
 const generationSourceOptions = computed(() => [
   { value: 'api-key', label: t('aiCreation.customApiKey') },
@@ -442,7 +437,7 @@ const capabilitiesBlocked = computed(() => (
   && (authStore.isLoggedIn && (!workspace.capabilities || !!workspace.capabilitiesError))
 ));
 const showCreditEstimate = computed(() => (
-  authStore.isLoggedIn && (!keySettingsStore.settings?.api_key_configured || platformGenerationSelected.value)
+  authStore.isLoggedIn && platformGenerationSelected.value
 ));
 // 平台源报价：单价来自服务端（model + size），总数 = 单价 × 生成数量（N 张 = N 个平台任务）。
 const quoteLoading = ref(false);

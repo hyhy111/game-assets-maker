@@ -74,7 +74,7 @@ test('Seedance create screen uses one compact composer with collapsed parameters
   assert.match(html, /data-test="seedance-frame-strip"/);
   assert.match(html, /min-h-\[282px\]/);
   assert.doesNotMatch(html, /min-h-\[282px\][^\"]*(?:border|rounded-\[20px\]|bg-\[#191a1f\]|shadow-inner)/);
-  assert.match(html, /输入文字，描述你想创作的画面内容、运动方式等/);
+  assert.match(html, /描述角色如何运动，包括动作过程、朝向、镜头和音效/);
   assert.match(html, />\s*首帧\s*</);
   assert.match(html, />\s*尾帧\s*</);
   assert.match(html, /data-test="seedance-frame-required"[^>]*>\s*\*\s*</);

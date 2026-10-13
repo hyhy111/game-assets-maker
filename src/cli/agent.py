@@ -373,7 +373,10 @@ def main(argv: list[str] | None = None) -> int:
 
 def installed_main(argv: list[str] | None = None) -> int:
     """Run the installed CLI against the stable per-user GAM data root."""
+    from src.utils.agent_launcher import register_packaged_agent_launcher
+
     os.environ.setdefault("GAM_DATA_MODE", "installed")
+    register_packaged_agent_launcher()
     return main(argv)
 
 

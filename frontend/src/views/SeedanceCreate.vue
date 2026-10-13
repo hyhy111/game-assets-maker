@@ -307,13 +307,10 @@
 
           <div class="ml-auto flex min-w-0 items-center gap-3 pl-2">
             <div v-if="showCreditEstimate" class="text-right" data-test="generation-credits" aria-live="polite">
-              <template v-if="platformGenerationSelected">
-                <p v-if="quoteLoading" class="text-sm text-gray-500">{{ t('aiCreation.platformQuoteLoading') }}</p>
-                <p v-else-if="quoteValue !== null" class="text-sm text-gray-300">{{ t('aiCreation.estimatedCredits', { credits: quoteValue }) }}</p>
-                <p v-else-if="quoteError" class="max-w-[16rem] text-xs leading-5 text-warning">{{ t('aiCreation.platformQuoteFailed', { message: quoteError }) }}</p>
-                <p v-else class="text-sm text-gray-500">{{ t('aiCreation.creditsUnavailable') }}</p>
-              </template>
-              <p v-else class="text-sm text-gray-300">{{ estimatedCredits === null ? t('aiCreation.creditsUnavailable') : t('aiCreation.estimatedCredits', { credits: estimatedCredits }) }}</p>
+              <p v-if="quoteLoading" class="text-sm text-gray-500">{{ t('aiCreation.platformQuoteLoading') }}</p>
+              <p v-else-if="quoteValue !== null" class="text-sm text-gray-300">{{ t('aiCreation.estimatedCredits', { credits: quoteValue }) }}</p>
+              <p v-else-if="quoteError" class="max-w-[16rem] text-xs leading-5 text-warning">{{ t('aiCreation.platformQuoteFailed', { message: quoteError }) }}</p>
+              <p v-else class="text-sm text-gray-500">{{ t('aiCreation.creditsUnavailable') }}</p>
             </div>
             <CreationModelSelect
               v-if="showGenerationSourceSelector"
@@ -431,7 +428,6 @@ import { useRoute, useRouter } from 'vue-router';
 import DraftClearConfirmation from '@/components/ai-creation/DraftClearConfirmation.vue';
 import GenerationAccessDialog from '@/components/ai-creation/GenerationAccessDialog.vue';
 import CreationModelSelect from '@/components/ai-creation/CreationModelSelect.vue';
-import { videoGenerationCredits } from '@/generation-credits';
 import Button from '@/components/common/Button.vue';
 import { api } from '@/api';
 import Switch from '@/components/common/Switch.vue';
@@ -523,7 +519,6 @@ const modelOptions = computed<ModelOption[]>(() => (
     : localVideoModelOptions()
 ));
 const form: CreateForm = workspace.videoDraft;
-const estimatedCredits = computed(() => videoGenerationCredits(form.model, form.resolution, form.duration));
 // 平台源只需要登录；api-key 源还需要已配置 Ark Key。
 const showGenerationSourceSelector = computed(() => authStore.isLoggedIn);
 const generationSourceOptions = computed(() => [
@@ -538,7 +533,7 @@ const capabilitiesBlocked = computed(() => (
   && (authStore.isLoggedIn && (!workspace.capabilities || !!workspace.capabilitiesError))
 ));
 const showCreditEstimate = computed(() => (
-  authStore.isLoggedIn && (!store.settings?.api_key_configured || platformGenerationSelected.value)
+  authStore.isLoggedIn && platformGenerationSelected.value
 ));
 // 平台源报价（quote-preview）：编辑页参数一变就刷新，弹窗确认前必须有值。
 const quoteLoading = ref(false);
@@ -1007,9 +1002,6 @@ async function createPendingTask() {
     const recovered = await authStore.silentRelogin();
     if (recovered) task = await store.createTask(request, source);
   }
-  quoteLoading.value = false;
-  quoteError.value = '';
-  quoteValue.value = null;
   if (task) {
     workspace.setCurrentGeneration({ kind: 'video', localId: task.local_id });
     return;
@@ -1024,9 +1016,6 @@ async function createPendingTask() {
 function cancelPaidAction() {
   paidConfirmModal.value = false;
   pendingRequest = null;
-  quoteLoading.value = false;
-  quoteError.value = '';
-  quoteValue.value = null;
   paidConfirmTrigger?.focus();
   paidConfirmTrigger = null;
 }

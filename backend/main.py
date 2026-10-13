@@ -1390,6 +1390,9 @@ class MainApp:
 
 def main():
     """Entry point"""
+    from src.utils.agent_launcher import register_packaged_agent_launcher
+
+    register_packaged_agent_launcher()
     app = MainApp()
     app.run()
 

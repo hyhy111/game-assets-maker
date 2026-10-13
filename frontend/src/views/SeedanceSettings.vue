@@ -543,12 +543,12 @@ const seedreamDraft = reactive<SeedreamSettings>({
 });
 const draft = reactive<Omit<SeedanceSettings, 'api_key_configured' | 'last_cleanup_at' | 'default_priority' | 'default_expires_after'>>({
   cache_dir: '',
-  default_model: 'standard',
+  default_model: 'mini',
   default_resolution: '720p',
-  default_ratio: 'adaptive',
+  default_ratio: '16:9',
   default_duration: 4,
-  default_generate_audio: false,
-  default_return_last_frame: false,
+  default_generate_audio: true,
+  default_return_last_frame: true,
   retention_days: 0,
 });
 // Storage-location drafts hold the *configured* values; the inputs display
