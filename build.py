@@ -38,29 +38,16 @@ def sync_frontend_version(frontend_dir: Path = Path(FRONTEND_DIR)) -> None:
         path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
-def validate_channel_code(value: str) -> str:
-    """Preserve the supplied code exactly; keep wire and database limits aligned."""
-    if len(value.encode("utf-16-le")) // 2 > 64 or any(ord(char) < 32 or ord(char) == 127 for char in value):
-        raise ValueError("Channel code must contain at most 64 characters and no control characters")
-    return value
-
-
-def verify_frontend_channel(channel_code: str, frontend_dir: Path = Path(FRONTEND_DIR)) -> None:
-    manifest = frontend_dir / "dist" / "channel-code.json"
-    if not manifest.is_file() or json.loads(manifest.read_text(encoding="utf-8")).get("channelCode") != channel_code:
-        raise ValueError("Frontend channel code does not match --channel-code; rebuild without --skip-frontend")
-
-
-def run(cmd: list[str], cwd: str | None = None, check: bool = True, env: dict[str, str] | None = None):
+def run(cmd: list[str], cwd: str | None = None, check: bool = True):
     """Run a shell command and stream output."""
     print(f">>> {' '.join(cmd)}")
     kwargs = {}
     if sys.platform == "win32":
         kwargs["shell"] = True
-    subprocess.run(cmd, cwd=cwd, check=check, env=env, **kwargs)
+    subprocess.run(cmd, cwd=cwd, check=check, **kwargs)
 
 
-def build_frontend(channel_code: str = ""):
+def build_frontend():
     """Build Vue3 frontend to frontend/dist/."""
     print("=" * 60)
     print("Building frontend...")
@@ -75,7 +62,7 @@ def build_frontend(channel_code: str = ""):
         print("node_modules not found, running npm install...")
         run(["npm", "install"], cwd=FRONTEND_DIR)
 
-    run(["npm", "run", "build"], cwd=FRONTEND_DIR, env={**os.environ, "GAM_BUILD_CHANNEL_CODE": channel_code})
+    run(["npm", "run", "build"], cwd=FRONTEND_DIR)
     print("Frontend build complete. Output: frontend/dist/\n")
 
 
@@ -275,27 +262,20 @@ def main():
     parser.add_argument("--windows-installer", action="store_true", help="Create a Windows EXE installer")
     parser.add_argument("--iscc", type=Path, help="Path to the Inno Setup 6.3+ ISCC.exe compiler")
     parser.add_argument("--webview2-bootstrapper", type=Path, help="Path to Microsoft's WebView2 bootstrapper")
-    parser.add_argument("--channel-code", default="", help="Embed this channel code in the package (default: empty)")
     args = parser.parse_args()
     if args.windows_installer:
         if sys.platform != "win32":
             parser.error("--windows-installer requires Windows")
         if args.iscc is None or args.webview2_bootstrapper is None:
             parser.error("--windows-installer requires --iscc and --webview2-bootstrapper")
-    try:
-        channel_code = validate_channel_code(args.channel_code)
-    except ValueError as error:
-        parser.error(str(error))
     dist_dir = args.dist_dir.resolve()
     work_dir = args.work_dir.resolve()
     sync_frontend_version()
 
     if not args.skip_frontend:
-        build_frontend(channel_code)
+        build_frontend()
     else:
         print("Skipping frontend rebuild as requested.\n")
-
-    verify_frontend_channel(channel_code)
 
     if args.target == "webview":
         pyinstaller("GameAssetsMaker.spec", dist_dir, work_dir)

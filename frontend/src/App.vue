@@ -29,7 +29,6 @@
 
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from 'vue';
-import { reportStartup } from '@/api/channel';
 import { useConfigStore } from '@/stores/config';
 import { useAuthStore } from '@/stores/auth';
 import { useAgentControl } from '@/composables/useAgentControl';
@@ -74,7 +73,6 @@ async function confirmExit() {
 }
 
 onMounted(() => {
-  reportStartup();
   configStore.loadConfig();
   authStore.init();
   window.addEventListener('seedream-close-requested', handleCloseRequested);

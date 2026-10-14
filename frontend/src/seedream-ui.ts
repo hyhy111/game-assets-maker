@@ -6,6 +6,7 @@ import type {
   SeedreamModelRef,
   SeedreamRatio,
   SeedreamResolution,
+  PlatformModelCapability,
 } from '@/types';
 export const MODEL_RESOLUTIONS: Record<SeedreamModel, SeedreamResolution[]> = {
   pro: ['1K', '1.5K', '2K'],
@@ -47,6 +48,20 @@ export function correctResolution(model: SeedreamModelRef, resolution: SeedreamR
   const allowed = localModelResolutions(model);
   if (!allowed.length) return resolution;
   return allowed.includes(resolution) ? resolution : allowed[0];
+}
+
+export function correctPlatformImageParameters(
+  model: SeedreamModelRef,
+  resolution: SeedreamResolution,
+  models: readonly PlatformModelCapability[],
+): Pick<CreateForm, 'model' | 'resolution'> {
+  const entry = models.find(candidate => candidate.model === model) ?? models[0];
+  if (!entry) return { model, resolution };
+  const sizes = (entry.sizes ?? []) as SeedreamResolution[];
+  return {
+    model: entry.model,
+    resolution: sizes.length && !sizes.includes(resolution) ? sizes[0] : resolution,
+  };
 }
 
 /** 模型展示名：认识的用本地文案，不认识的（运营新上的）直接显示上游 ID。 */

@@ -7,12 +7,19 @@ import json
 import os
 import sys
 from contextlib import redirect_stdout
+from pathlib import Path
 from typing import Any
 
 from backend.agent_control.drafts import CLI_VIDEO_DURATIONS
 from src.agent_tools.schemas import AgentErrorCode, error_response
 from src.agent_tools.service import AgentWorkflowService
 from src.utils.app_version import app_version
+
+_COMMON_DRAFT_FIELDS = ("prompt", "model", "resolution", "ratio")
+_DRAFT_FIELDS = {
+    "image": (*_COMMON_DRAFT_FIELDS, "count", "reference_image"),
+    "video": (*_COMMON_DRAFT_FIELDS, "first_frame", "last_frame", "duration", "generate_audio", "return_last_frame"),
+}
 
 
 class ParamParseError(ValueError):
@@ -44,6 +51,33 @@ def _parse_params(raw_params: list[str] | None) -> dict[str, Any]:
                 value = raw_value
         params[key] = value
     return params
+
+
+def _parse_draft_patch(args: argparse.Namespace) -> dict[str, Any]:
+    fields = set(_DRAFT_FIELDS["image"]) | set(_DRAFT_FIELDS["video"])
+    patch = {field: getattr(args, field) for field in sorted(fields) if hasattr(args, field)}
+    prompt_file = getattr(args, "prompt_file", None)
+    if args.patch_json is not None:
+        if patch or prompt_file is not None:
+            raise ValueError("Use either --patch-json or individual draft parameters")
+        try:
+            patch = json.loads(Path(args.patch_json).read_text(encoding="utf-8-sig"))
+        except (OSError, ValueError) as error:
+            raise ValueError("Provide a readable JSON object patch file") from error
+        if not isinstance(patch, dict):
+            raise ValueError("Provide a readable JSON object patch file")
+        return patch
+    if prompt_file is not None:
+        try:
+            patch["prompt"] = Path(prompt_file).read_text(encoding="utf-8-sig")
+        except (OSError, UnicodeError) as error:
+            raise ValueError("Provide a readable UTF-8 prompt file") from error
+    if not patch:
+        raise ValueError("Provide at least one draft parameter or --patch-json")
+    unsupported = set(patch) - set(_DRAFT_FIELDS[args.kind])
+    if unsupported:
+        raise ValueError(f"Unsupported {args.kind} draft fields: {', '.join(sorted(unsupported))}")
+    return patch
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -149,7 +183,45 @@ def _build_parser() -> argparse.ArgumentParser:
         command_parser.add_argument("--kind", choices=["image", "video"], required=True)
         command_parser.add_argument("--request-id")
         if command == "patch":
-            command_parser.add_argument("--patch-json", required=True)
+            command_parser.add_argument("--patch-json", help="兼容 JSON 补丁文件，与独立参数二选一")
+            prompt = command_parser.add_mutually_exclusive_group()
+            prompt.add_argument("--prompt", default=argparse.SUPPRESS, help="填写提示词，空字符串清空")
+            prompt.add_argument("--prompt-file", default=argparse.SUPPRESS, help="从 UTF-8 文本文件读取提示词")
+            for field, label in (
+                ("model", "模型"),
+                ("resolution", "分辨率"),
+                ("ratio", "宽高比（图片）／画面比例（视频）"),
+            ):
+                command_parser.add_argument(f"--{field}", default=argparse.SUPPRESS, help=f"修改{label}，省略则保留")
+            command_parser.add_argument(
+                "--count", type=int, choices=range(1, 5), default=argparse.SUPPRESS, help="图片生成数量"
+            )
+            command_parser.add_argument(
+                "--duration", type=int, choices=CLI_VIDEO_DURATIONS, default=argparse.SUPPRESS, help="视频时长（秒）"
+            )
+            for field, label, empty in (
+                ("reference_image", "参考图", ""),
+                ("first_frame", "首帧图片", ""),
+                ("last_frame", "尾帧图片", None),
+            ):
+                option = field.replace("_", "-")
+                image = command_parser.add_mutually_exclusive_group()
+                image.add_argument(f"--{option}", default=argparse.SUPPRESS, help=f"本地{label}路径")
+                image.add_argument(
+                    f"--clear-{option}",
+                    dest=field,
+                    action="store_const",
+                    const=empty,
+                    default=argparse.SUPPRESS,
+                    help=f"清空{label}",
+                )
+            for field, label in (("generate_audio", "生成音频"), ("return_last_frame", "返回尾帧")):
+                command_parser.add_argument(
+                    f"--{field.replace('_', '-')}",
+                    action=argparse.BooleanOptionalAction,
+                    default=argparse.SUPPRESS,
+                    help=f"开启／关闭{label}，省略则保留",
+                )
 
     restore = draft_commands.add_parser("restore", help="恢复历史草稿，不重新提交")
     restore.add_argument("--kind", choices=["image", "video"], required=True)
@@ -299,21 +371,15 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                 return service.reuse_draft(args.kind, path=args.path, field=args.field)
             patch = None
             if args.draft_command == "patch":
-                from pathlib import Path
-
                 try:
-                    patch = json.loads(Path(args.patch_json).read_text(encoding="utf-8"))
-                    if not isinstance(patch, dict):
-                        raise ValueError("Patch must be an object")
-                except (OSError, ValueError):
-                    return error_response("draft.patch", "INPUT_INVALID", "Provide a readable JSON object patch file")
+                    patch = _parse_draft_patch(args)
+                except ValueError as error:
+                    return error_response("draft.patch", "INPUT_INVALID", str(error))
             return service.draft_operation(args.kind, patch, args.request_id)
 
         if args.command == "generation" and args.generation_command == "permission":
             return service.generation_permission()
         if args.command in {"generation", "seedream"}:
-            from pathlib import Path
-
             try:
                 request = json.loads(Path(args.request_json).read_text(encoding="utf-8"))
                 if not isinstance(request, dict):

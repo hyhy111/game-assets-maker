@@ -57,8 +57,6 @@ interface AjaxBody {
 export interface RequestOptions {
   /** 跳过静默恢复。认证接口（登录/取用户信息）用：用"重登"去救一次登录，定义上就是错的 */
   noRecovery?: boolean;
-  anonymous?: boolean;
-  timeoutMs?: number;
 }
 
 interface InternalOptions extends RequestOptions {
@@ -72,18 +70,15 @@ async function request<T>(path: string, init: RequestInit, options: InternalOpti
   const label = `${method} ${path}${retried ? ' (重放)' : ''}`;
   const headers = new Headers(init.headers);
   headers.set('Content-Type', 'application/json');
-  const token = options.anonymous ? null : getToken();
+  const token = getToken();
   if (token) {
     headers.set('Authorization', `Bearer ${token}`);
   }
 
-  const controller = options.timeoutMs ? new AbortController() : null;
-  const timeout = controller ? setTimeout(() => controller.abort(), options.timeoutMs) : null;
   let res: Response;
   try {
-    res = await fetch(`${BASE_URL}${path}`, { ...init, headers, ...(controller ? { signal: controller.signal } : {}) });
+    res = await fetch(`${BASE_URL}${path}`, { ...init, headers });
   } catch {
-    if (timeout !== null) clearTimeout(timeout);
     logEvent(`${label} → 网络错误`, 'error');
     throw new Error(NETWORK_ERROR);
   }
@@ -94,12 +89,10 @@ async function request<T>(path: string, init: RequestInit, options: InternalOpti
   } catch {
     logEvent(`${label} → 响应非 JSON`, 'error');
     throw new Error(NETWORK_ERROR);
-  } finally {
-    if (timeout !== null) clearTimeout(timeout);
   }
 
   if (res.status === 401 || body.code === 401) {
-    if (!options.anonymous) setToken(null);
+    setToken(null);
 
     // 两道防递归：认证接口显式豁免（noRecovery），且只对"确实带着 token 发出"的
     // 请求尝试恢复 —— 重登本身走的是登录接口且此时 token 已被清空，两重都够不着。
@@ -116,7 +109,7 @@ async function request<T>(path: string, init: RequestInit, options: InternalOpti
       logEvent(`${label} → 401${noRecovery ? '（认证接口，不尝试恢复）' : ''}`, 'warn');
     }
 
-    if (!options.anonymous) unauthorizedCallback?.();
+    unauthorizedCallback?.();
     throw new Error(body.msg || 'Unauthorized');
   }
 

@@ -367,6 +367,7 @@ import {
   ALLOWED_RATIOS,
   DEFAULT_COUNT,
   correctResolution,
+  correctPlatformImageParameters,
   localModelResolutions,
   createRequest,
   defaultForm,
@@ -539,17 +540,7 @@ const supportedResolutions = computed<SeedreamResolution[]>(() => {
  * lite 只有 2K 这类单档情形就靠这里回退。
  */
 function clampToPlatformModel() {
-  const models = platformImageModels.value;
-  if (!models.length) return;
-  let entry = models.find((candidate) => candidate.model === form.model);
-  if (!entry) {
-    entry = models[0];
-    form.model = entry.model;
-  }
-  const sizes = (entry.sizes ?? []) as SeedreamResolution[];
-  if (sizes.length && !sizes.includes(form.resolution)) {
-    form.resolution = sizes[0];
-  }
+  Object.assign(form, correctPlatformImageParameters(form.model, form.resolution, platformImageModels.value));
 }
 const paidConfirmationEnabled = computed(() => configStore.config?.paid_generation_confirmation_enabled !== false);
 

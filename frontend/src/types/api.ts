@@ -49,7 +49,7 @@ export interface PyWebViewWindow extends Window {
   pywebview?: {
     api: {
       save_cli_generation_enabled: (enabled: boolean, confirmed: boolean) => Promise<{ success: boolean; cli_generation_enabled?: boolean }>;
-      agent_validate_draft: (kind: string, values: Record<string, unknown>) => Promise<{ success: boolean; error?: string }>;
+      agent_validate_draft: (kind: string, values: Record<string, unknown>) => Promise<{ success: boolean; draft?: Record<string, unknown>; error?: string }>;
       agent_submit_generation: (request_id: string, source: string) => Promise<{ success: boolean; task?: SeedanceTask; batch?: SeedreamBatch; error?: { code: string } }>;
       agent_acknowledge: (request_id: string, result: { ok: boolean; data?: unknown; error?: string }) => Promise<boolean>;
       // Project API

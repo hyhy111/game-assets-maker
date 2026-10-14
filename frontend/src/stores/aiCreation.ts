@@ -1,9 +1,9 @@
 import { defineStore } from 'pinia';
-import { reactive, ref } from 'vue';
+import { nextTick, reactive, ref } from 'vue';
 import { api } from '@/api';
 import type { PyWebViewWindow } from '@/types/api';
 import { readImageFile } from '@/seedream-image-drag';
-import { defaultForm, type CreateForm as SeedreamCreateForm } from '@/seedream-ui';
+import { correctPlatformImageParameters, defaultForm, type CreateForm as SeedreamCreateForm } from '@/seedream-ui';
 import type { CreateForm as SeedanceCreateForm } from '@/seedance-ui';
 import type { PlatformCapabilities } from '@/types';
 
@@ -69,8 +69,8 @@ export const useAICreationStore = defineStore('ai-creation', () => {
    * 的组合重新放出来；调用方据此阻断平台源提交。
    */
   async function ensureCapabilities(force = false): Promise<boolean> {
-    if (!force && capabilities.value) return true;
     if (capabilitiesInFlight) return capabilitiesInFlight;
+    if (!force && capabilities.value) return true;
     capabilitiesLoading.value = true;
     capabilitiesError.value = '';
     capabilitiesInFlight = (async () => {
@@ -122,14 +122,43 @@ export const useAICreationStore = defineStore('ai-creation', () => {
   }
 
   async function patchAgentDraft(kind: CreationMode, patch: Record<string, unknown>) {
+    const source = generationSource.value;
+    if (kind === 'image' && source === 'forfuner-ai') {
+      const usedCachedCapabilities = capabilities.value !== null && capabilitiesInFlight === null;
+      if (!await ensureCapabilities()) throw new Error(capabilitiesError.value || 'CAPABILITIES_UNAVAILABLE');
+      // Let the mounted form apply newly loaded options before reading its selection.
+      await nextTick();
+      const desired = { ...imageDraft, ...patch };
+      const entry = capabilities.value?.image.models.find(model => model.model === desired.model);
+      if (usedCachedCapabilities && (!entry || !entry.sizes?.includes(desired.resolution))) {
+        if (!await ensureCapabilities(true)) throw new Error(capabilitiesError.value || 'CAPABILITIES_UNAVAILABLE');
+        await nextTick();
+      }
+      if (generationSource.value !== source) throw new Error('DRAFT_CHANGED');
+    }
     const draft = kind === 'image' ? imageDraft : videoDraft;
     const snapshot = JSON.stringify(draft);
+    const capabilitySnapshot = capabilities.value;
     const normalized = { ...patch };
     if (kind === 'image' && normalized.reference_image === null) normalized.reference_image = '';
     if (kind === 'video' && normalized.last_frame === '') normalized.last_frame = null;
     const candidate = { ...draft, ...normalized };
-    const validated = await (window as PyWebViewWindow).pywebview?.api.agent_validate_draft(kind, candidate);
+    if (kind === 'image' && source === 'forfuner-ai') {
+      const models = capabilities.value?.image.models ?? [];
+      if (!models.length) throw new Error('NO_AVAILABLE_MODELS');
+      const entry = models.find(model => model.model === candidate.model);
+      if (!entry && Object.prototype.hasOwnProperty.call(patch, 'model')) throw new Error('UNSUPPORTED_MODEL');
+      const selected = entry ?? models[0];
+      if (!selected.sizes?.length) throw new Error('UNSUPPORTED_RESOLUTION');
+      if (Object.prototype.hasOwnProperty.call(patch, 'resolution') && !selected.sizes.includes(candidate.resolution)) {
+        throw new Error('UNSUPPORTED_RESOLUTION');
+      }
+      Object.assign(candidate, correctPlatformImageParameters(candidate.model, candidate.resolution as SeedreamCreateForm['resolution'], models));
+    }
+    const validationValues = kind === 'image' ? { ...candidate, source } : candidate;
+    const validated = await (window as PyWebViewWindow).pywebview?.api.agent_validate_draft(kind, validationValues);
     if (!validated?.success) throw new Error(validated?.error || 'INPUT_INVALID');
+    if (kind === 'image' && typeof validated.draft?.model === 'string') candidate.model = validated.draft.model;
     const previews: Record<string, string> = {};
     const imageFields = kind === 'image' ? ['reference_image'] : ['first_frame', 'last_frame'];
     for (const field of imageFields) {
@@ -142,7 +171,10 @@ export const useAICreationStore = defineStore('ai-creation', () => {
         previews[field] = `data:image/png;base64,${thumbnail}`;
       }
     }
-    if (JSON.stringify(draft) !== snapshot) throw new Error('DRAFT_CHANGED');
+    if (JSON.stringify(draft) !== snapshot || generationSource.value !== source
+      || (kind === 'image' && source === 'forfuner-ai' && capabilities.value !== capabilitySnapshot)) {
+      throw new Error('DRAFT_CHANGED');
+    }
     Object.assign(draft, candidate);
     if (kind === 'image') {
       imageInitialized.value = true;

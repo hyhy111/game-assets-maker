@@ -740,8 +740,8 @@ class API:
         from backend.agent_control.drafts import validate_draft
 
         try:
-            validate_draft(kind, values)
-            return {"success": True}
+            draft = validate_draft(kind, values)
+            return {"success": True, "draft": draft}
         except (ValueError, TypeError, OSError) as error:
             return {"success": False, "error": str(error)}
 

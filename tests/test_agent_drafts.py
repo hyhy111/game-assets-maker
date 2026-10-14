@@ -27,6 +27,45 @@ def test_draft_validation_rejects_unknown_fields_and_invalid_mixed_update(tmp_pa
         assert api.agent_validate_draft(kind, value)["success"] is False
 
 
+@pytest.mark.parametrize(
+    ("model_id", "short_key"),
+    [
+        ("doubao-seedream-5-0-pro-260628", "pro"),
+        ("doubao-seedream-5-0-flash-260915", "flash"),
+    ],
+)
+def test_image_draft_normalizes_equivalent_api_key_model_ids(model_id, short_key):
+    values = {"prompt": "updated", "model": model_id, "resolution": "1.5K", "count": 3}
+    result = API().agent_validate_draft("image", values)
+    assert result["success"] is True
+    assert result["draft"] == {**values, "model": short_key}
+    assert values["model"] == model_id
+
+
+def test_image_draft_preserves_platform_model_ids():
+    values = {"prompt": "updated", "model": "new-platform-model", "source": "forfuner-ai"}
+    result = API().agent_validate_draft("image", values)
+    assert result["success"] is True
+    assert result["draft"] == values
+
+
+def test_image_draft_validation_does_not_insert_a_default_model():
+    values = {"prompt": "updated"}
+    result = API().agent_validate_draft("image", values)
+    assert result["success"] is True
+    assert result["draft"] == values
+
+
+@pytest.mark.parametrize("model", ["lite", "doubao-seedream-5-0-lite-260128", "unknown-model"])
+def test_image_draft_rejects_non_equivalent_api_key_models(model):
+    assert API().agent_validate_draft("image", {"prompt": "updated", "model": model})["success"] is False
+
+
+def test_image_draft_still_validates_resolution_after_model_normalization():
+    result = API().agent_validate_draft("image", {"model": "doubao-seedream-5-0-pro-260628", "resolution": "4K"})
+    assert result == {"success": False, "error": "Resolution is unsupported for this model"}
+
+
 def test_history_restore_rejects_missing_reference_without_submission(tmp_path, monkeypatch):
     from backend.agent_control.drafts import restore_draft
     from backend.seedream.models import SeedreamRequest

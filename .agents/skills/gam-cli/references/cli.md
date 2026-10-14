@@ -1,5 +1,29 @@
 # gam Agent CLI
 
+## 固定 CLI 入口
+
+操作安装版 gam 时，先查用户数据目录中的固定入口，直接按绝对路径调用。默认目录为 `~/.gam`；明确设置 `GAM_DATA_ROOT` 时优先查该目录。PATH 中没有 `gam-agent` 不代表应用或 CLI 未安装。
+
+Windows（PowerShell）：
+
+```powershell
+& "$env:USERPROFILE\.gam\gam-agent.cmd" doctor
+```
+
+macOS（shell）：
+
+```sh
+"$HOME/.gam/gam-agent" doctor
+```
+
+本文其余示例中的 `gam-agent` 是占位命令，执行时替换为已核实入口的绝对路径；不要因示例使用短命令而重复检查 PATH 或全盘搜索。
+
+安装版 gam 或随包 CLI 启动时自动注册入口，应用移动或升级后重新启动一次即可刷新。Windows 的 `gam-agent.cmd` 与同目录的 `gam-agent.ps1` 配套；macOS 的 `gam-agent` 是可执行 shell 启动脚本。入口转发到当前安装包内的 CLI，共享运行库留在安装包中；它继承调用方环境，不自动切换数据根或配置。
+
+固定入口不存在或报告安装目标缺失时，先使用已知安装位置：Windows 为安装目录内的 `gam-agent.exe`；macOS 常见路径为 `/Applications/Game Assets Maker.app/Contents/MacOS/gam-agent` 或 `~/Applications/Game Assets Maker.app/Contents/MacOS/gam-agent`，以实际位置为准。调用新版随包 CLI 或启动新版 gam 可注册固定入口；旧版本可能没有注册功能，应继续使用实际随包 CLI 的绝对路径。不要单独搬走 EXE 或复制 `.app` 中的 CLI，它们依赖同包的运行库。
+
+开发应用使用仓库内 Python 模块入口，与安装版固定入口区分；启动前沿用明确的 `GAM_DATA_ROOT`、`GAM_DATA_MODE`、`GAM_CONFIG`，用 `doctor` 核对根目录。普通源码开发不会注册或覆盖安装版入口。
+
 ## 界面导航与请求回执
 
 应用运行时使用 `gam-agent ui navigate --target settings` 打开设置。`--target` 支持 projects、project-create、editor、batch-trim、image-create、video-create、image-detail、video-detail、settings。
@@ -28,11 +52,17 @@ UI_NOT_RUNNING 表示界面未就绪；UI_SYNC_TIMEOUT 表示等待前端；UI_A
 
 ## 草稿与历史复用
 
-先查看 `gam-agent draft --help`。读取：`gam-agent draft get --kind video`。补丁：`gam-agent draft patch --kind video --patch-json /绝对路径/补丁.json --request-id 唯一标识`。图片 kind 为 image，字段为 prompt、model、resolution、ratio、count、reference_image；视频字段为 prompt、first_frame、last_frame、model、resolution、ratio、duration、generate_audio、return_last_frame。
+先查看 `gam-agent draft patch --help`，优先使用独立参数，只传要改变的内容。读取草稿：`gam-agent draft get --kind video`。填写视频：`gam-agent draft patch --kind video --prompt '原地行走' --first-frame '/素材/角色.png' --duration 5 --request-id 唯一标识`。填写图片：`gam-agent draft patch --kind image --prompt '角色设定图' --reference-image '/素材/参考图.png'`。仅修改提示词时只传 `--prompt`；没有新参考图时省略图片参数，保持已有图片。
+
+通用参数：`--prompt`、`--prompt-file`、`--model`、`--resolution`、`--ratio`。图片专用：`--count`、`--reference-image`。视频专用：`--first-frame`、`--last-frame`、`--duration`、`--generate-audio`／`--no-generate-audio`、`--return-last-frame`／`--no-return-last-frame`。音频及尾帧开关省略时保持原值，显式的 `--no-...` 表示关闭。字段、参数与 UI 显示名称见 [映射表](ui-field-names.md)，向用户说明时使用界面名称。
+
+提示词和路径按当前 shell 安全引用。可用 `--prompt-file /绝对路径/提示词.txt` 保留 UTF-8 纯文本中的多行、引号和特殊字符，它与 `--prompt` 二选一，可与参考图、时长等参数组合。清空参考图、首帧或尾帧分别用 `--clear-reference-image`、`--clear-first-frame`、`--clear-last-frame`；同一图片的填入与清空参数不能同时传入。
+
+保留 `--patch-json /绝对路径/补丁.json` 兼容已有调用；它与独立参数二选一，不合并两种输入。旧安装版没有新参数时先根据 help 确认，再回退到 JSON 文件。普通草稿填写无需创建 JSON。
 
 视频时长 `duration` 仅接受整数 4、5、6，草稿填写及直接提交都遵循此限制；`-1` 智能时长和其他秒数会返回 INVALID_DURATION。旧 `seedance create --duration` 同样只接受这三个值。
 
-补丁 JSON 只包含要改变的字段，例如 `{"prompt":"原地行走","first_frame":"/素材/角色.png"}`。prompt 用空字符串清空；reference_image 用空字符串或 null 清空；first_frame 用空字符串清空；last_frame 用 null 清空。无效图片或字段会整体拒绝。草稿需要运行中的应用，返回实际应用状态；相同请求 ID 不重复更新。填写后再用 `draft get` 核对所改字段，并确认 `data.ui_sync=applied`，向用户展示可检查内容，由用户手动点击发送。
+独立参数与 JSON 补丁均只更新明确提供的字段。提示词可用 `--prompt` 传空字符串清空；图片优先用上方的显式清空参数。兼容 JSON 调用中，prompt 用空字符串清空，reference_image 用空字符串或 null 清空，first_frame 用空字符串清空，last_frame 用 null 清空。无效图片或字段会整体拒绝。草稿需要运行中的应用，返回实际应用状态；相同请求 ID 不重复更新。填写后再用 `draft get` 核对所改字段，并确认 `data.ui_sync=applied`，向用户展示可检查内容，由用户手动点击发送。
 
 `gam-agent draft restore --kind image --id 批次ID` 或 kind video 恢复历史草稿。历史引用缺失会拒绝恢复，保持原草稿。`gam-agent draft reuse --kind video --field first_frame --path /真实过程目录/帧.png` 将已有过程或缓存图片填入指定字段，保留溯源；图片参考字段为 reference_image。
 

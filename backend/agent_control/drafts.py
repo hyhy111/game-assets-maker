@@ -6,7 +6,7 @@ from typing import Any
 from backend.seedance.models import SeedanceRequest
 from backend.seedance.validation import ValidationError
 from backend.seedance.validation import validate_request as validate_video
-from backend.seedream.models import SeedreamRequest
+from backend.seedream.models import MODEL_CAPABILITIES, SeedreamRequest
 from backend.seedream.validation import validate_request as validate_image
 
 CLI_VIDEO_DURATIONS = (4, 5, 6)
@@ -18,7 +18,7 @@ def validate_video_duration(duration: Any) -> None:
         raise ValidationError("duration", "INVALID_DURATION", "CLI video duration must be 4, 5 or 6 seconds")
 
 
-def validate_draft(kind: str, values: dict[str, Any]) -> None:
+def validate_draft(kind: str, values: dict[str, Any]) -> dict[str, Any]:
     if kind not in ("image", "video") or not isinstance(values, dict):
         raise ValueError("INPUT_INVALID")
     model = SeedanceRequest if kind == "video" else SeedreamRequest
@@ -40,8 +40,16 @@ def validate_draft(kind: str, values: dict[str, Any]) -> None:
             valid = isinstance(value, str)
         if not valid:
             raise ValueError(f"Invalid field type: {key}")
-    request = model.from_dict(values)
+    normalized = dict(values)
+    if kind == "image" and normalized.get("source", "api-key") == "api-key":
+        # Preserve the selected model when a draft contains its equivalent provider ID.
+        for key, capability in MODEL_CAPABILITIES.items():
+            if normalized.get("model") == capability["id"]:
+                normalized["model"] = key
+                break
+    request = model.from_dict(normalized)
     (validate_video if kind == "video" else validate_image)(request, draft=True)
+    return normalized
 
 
 def restore_draft(api, kind: str, local_id: str) -> dict[str, Any]:
@@ -82,5 +90,5 @@ def restore_draft(api, kind: str, local_id: str) -> dict[str, Any]:
     for field in ("reference_image", "first_frame", "last_frame"):
         if request.get(field) and not Path(request[field]).is_file():
             raise ValueError("ASSET_MISSING")
-    validate_draft(kind, request)
+    request = validate_draft(kind, request)
     return {"patch": request, "provenance": {"kind": kind, "local_id": local_id, "metadata_path": str(metadata)}}
