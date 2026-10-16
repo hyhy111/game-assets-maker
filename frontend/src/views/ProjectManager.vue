@@ -183,14 +183,7 @@
         </div>
 
         <div
-          v-else-if="!loading && filteredGroupedProjects.length === 0"
-          class="rounded-xl border border-dashed border-dark-border py-12 text-center text-gray-500"
-        >
-          {{ t('projectManager.noSearchResults') }}
-        </div>
-
-        <div
-          v-else-if="!loading && selectedGroup"
+          v-else-if="!loading"
           class="library-workbench"
           data-test="project-manager-library-workbench"
         >
@@ -279,8 +272,8 @@
                 :key="group.role"
                 type="button"
                 class="role-nav-item"
-                :class="{ active: group.role === selectedGroup.role }"
-                :aria-current="group.role === selectedGroup.role ? 'true' : undefined"
+                :class="{ active: group.role === selectedGroup?.role }"
+                :aria-current="group.role === selectedGroup?.role ? 'true' : undefined"
                 @click="selectRole(group.role)"
               >
                 <span class="role-nav-dot" />
@@ -291,6 +284,7 @@
           </aside>
 
           <section
+            v-if="selectedGroup"
             class="min-w-0"
             data-test="project-manager-role-detail"
           >
@@ -533,6 +527,13 @@
               </button>
             </nav>
           </section>
+          <div
+            v-else
+            class="rounded-xl border border-dashed border-dark-border py-12 text-center text-gray-500"
+            role="status"
+          >
+            {{ t('projectManager.noSearchResults') }}
+          </div>
         </div>
       </section>
     </main>

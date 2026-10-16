@@ -239,9 +239,9 @@ test('changing the generation source during capability loading cancels the patch
   const { useAICreationStore } = await loadFrontendModule('/src/stores/aiCreation.ts');
   const store = useAICreationStore();
   store.setGenerationSource('forfuner-ai');
-  const original = JSON.stringify(store.imageDraft);
   const patch = store.patchAgentDraft('image', { prompt: 'updated' });
   store.setGenerationSource('api-key');
+  const original = JSON.stringify(store.imageDraft);
   resolveCapabilities({ success: true, data: platformCapabilities });
   await assert.rejects(patch, /DRAFT_CHANGED/);
   assert.equal(JSON.stringify(store.imageDraft), original);

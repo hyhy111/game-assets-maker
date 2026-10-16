@@ -105,10 +105,19 @@ export async function renderSfc(path, {
   slots = {},
   route = '/',
   piniaState = {},
+  configureSetup,
 } = {}) {
   const server = await getVite();
   const module = await server.ssrLoadModule(`/src/${path}`);
-  const app = createSSRApp({ render: () => h(module.default, props, slots) });
+  const component = configureSetup ? {
+    ...module.default,
+    setup(props, context) {
+      const bindings = module.default.setup(props, context);
+      configureSetup(bindings);
+      return bindings;
+    },
+  } : module.default;
+  const app = createSSRApp({ render: () => h(component, props, slots) });
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [

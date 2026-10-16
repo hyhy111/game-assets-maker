@@ -30,6 +30,7 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from 'vue';
 import { useConfigStore } from '@/stores/config';
+import { useUpdateStore } from '@/stores/updates';
 import { useAuthStore } from '@/stores/auth';
 import { useAgentControl } from '@/composables/useAgentControl';
 import { api } from '@/api';
@@ -56,6 +57,7 @@ function handleDebugPanelShortcut(event: KeyboardEvent) {
 
 const configStore = useConfigStore();
 const authStore = useAuthStore();
+const updateStore = useUpdateStore();
 useAgentControl();
 
 const showCloseWarning = ref(false);
@@ -74,6 +76,7 @@ async function confirmExit() {
 
 onMounted(() => {
   configStore.loadConfig();
+  void updateStore.initialize();
   authStore.init();
   window.addEventListener('seedream-close-requested', handleCloseRequested);
   if (import.meta.env.DEV) window.addEventListener('keydown', handleDebugPanelShortcut);

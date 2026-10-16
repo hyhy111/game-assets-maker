@@ -46,6 +46,7 @@ export const useAICreationStore = defineStore('ai-creation', () => {
   const videoDefaults = reactive<SeedanceCreateForm>(defaultVideoDraft());
   const imageInitialized = ref(false);
   const videoInitialized = ref(false);
+  const platformModelDefaults = reactive({ image: '', video: '' });
   const currentGeneration = ref<CurrentGeneration | null>(null);
   const recentFilter = ref<RecentGenerationFilter>('image');
   const recentLoaded = reactive<Record<RecentGenerationFilter, number>>({
@@ -101,22 +102,26 @@ export const useAICreationStore = defineStore('ai-creation', () => {
     capabilitiesLoading.value = false;
   }
 
-  function initializeImageDraft(defaults: SeedreamCreateForm) {
+  function initializeImageDraft(defaults: SeedreamCreateForm, platformModel = '') {
     Object.assign(imageDefaults, defaults);
+    platformModelDefaults.image = platformModel;
     if (!imageInitialized.value) {
       const factory = defaultForm();
       const pending = Object.fromEntries(Object.entries(imageDraft).filter(([key, value]) => value !== factory[key as keyof SeedreamCreateForm]));
       Object.assign(imageDraft, defaults, pending);
+      if (generationSource.value === 'forfuner-ai' && !pending.model) imageDraft.model = platformModel;
       imageInitialized.value = true;
     }
   }
 
-  function initializeVideoDraft(defaults: SeedanceCreateForm) {
+  function initializeVideoDraft(defaults: SeedanceCreateForm, platformModel = '') {
     Object.assign(videoDefaults, defaults);
+    platformModelDefaults.video = platformModel;
     if (!videoInitialized.value) {
       const factory = defaultVideoDraft();
       const pending = Object.fromEntries(Object.entries(videoDraft).filter(([key, value]) => value !== factory[key as keyof SeedanceCreateForm]));
       Object.assign(videoDraft, defaults, pending);
+      if (generationSource.value === 'forfuner-ai' && !pending.model) videoDraft.model = platformModel;
       videoInitialized.value = true;
     }
   }
@@ -190,11 +195,13 @@ export const useAICreationStore = defineStore('ai-creation', () => {
 
   function resetImageDraft() {
     Object.assign(imageDraft, imageDefaults);
+    if (generationSource.value === 'forfuner-ai') imageDraft.model = platformModelDefaults.image;
     imagePreviewUrls.reference = '';
   }
 
   function resetVideoDraft() {
     Object.assign(videoDraft, videoDefaults);
+    if (generationSource.value === 'forfuner-ai') videoDraft.model = platformModelDefaults.video;
     videoPreviewUrls.first_frame = '';
     videoPreviewUrls.last_frame = '';
   }
@@ -223,7 +230,10 @@ export const useAICreationStore = defineStore('ai-creation', () => {
   }
 
   function setGenerationSource(source: GenerationSource) {
+    if (generationSource.value === source) return;
     generationSource.value = source;
+    imageDraft.model = source === 'forfuner-ai' ? platformModelDefaults.image : imageDefaults.model;
+    videoDraft.model = source === 'forfuner-ai' ? platformModelDefaults.video : videoDefaults.model;
   }
 
   function loadMoreRecent(filter: RecentGenerationFilter) {

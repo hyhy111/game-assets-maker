@@ -2,7 +2,6 @@ import { createApp, h, ref } from 'vue';
 import Select from './components/common/Select.vue';
 
 createApp({
-  components: { Select },
   setup() {
     const value = ref('one');
     return () => h('main', [

@@ -56,18 +56,29 @@
       >
         {{ t('steps.next') }}
       </button>
+      <button
+        v-if="currentStep === 3"
+        :disabled="isProcessing"
+        :title="isProcessing ? t('common.processing') : ''"
+        class="px-3 py-2 rounded-lg bg-primary hover:bg-primary-600 text-dark-bg disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:shadow-lg hover:shadow-primary/25"
+        @click="finishEditing"
+      >
+        {{ t('steps.finish') }}
+      </button>
     </div>
   </nav>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue';
+import { useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import { useI18n } from 'vue-i18n';
 import { Check } from 'lucide-vue-next';
 import { useProcessStore } from '@/stores/process';
 import { useProjectStore } from '@/stores/project';
 
+const router = useRouter();
 const processStore = useProcessStore();
 const projectStore = useProjectStore();
 const { t } = useI18n();
@@ -112,6 +123,12 @@ const canAccessStep = (stepId: number) => {
   }
   return false;
 };
+
+async function finishEditing() {
+  if (isProcessing.value) return;
+  const failure = await router.push('/');
+  if (!failure) projectStore.setCurrentProject(null);
+}
 
 const goToStep = (stepId: number) => {
   if (canAccessStep(stepId)) {

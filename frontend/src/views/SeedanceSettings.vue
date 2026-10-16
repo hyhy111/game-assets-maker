@@ -24,6 +24,7 @@
     </SeedancePageBar>
 
     <main class="seedance-container">
+      <AppUpdateSettings />
       <p v-if="settingsError" class="mb-5 rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-danger">
       {{ settingsError }}
       </p>
@@ -156,12 +157,12 @@
       >
         <div class="grid gap-4 sm:grid-cols-2">
           <label class="text-sm text-gray-300">
-            {{ t('seedance.settings.model') }}
+            {{ t('settings.apiKeyDefaultModel') }}
             <Select
               v-model="draft.default_model"
               class="mt-2"
               :options="seedanceModelOptions"
-              :aria-label="t('seedance.settings.model')"
+              :aria-label="t('settings.apiKeyDefaultModel')"
               @update:model-value="correctDefault"
             />
           </label>
@@ -193,6 +194,10 @@
             />
           </label>
         </div>
+        <PlatformDefaultModelSelect
+          v-model="draft.platform_default_model"
+          kind="video"
+        />
         <div class="mt-5 flex flex-wrap gap-6">
           <Switch v-model="draft.default_generate_audio" :label="t('seedance.create.generateAudio')" />
           <Switch v-model="draft.default_return_last_frame" :label="t('seedance.create.returnLastFrame')" />
@@ -206,12 +211,12 @@
       >
         <div class="grid gap-4 sm:grid-cols-2">
           <label class="text-sm text-gray-300">
-            {{ t('seedream.create.model') }}
+            {{ t('settings.apiKeyDefaultModel') }}
             <Select
               v-model="seedreamDraft.default_model"
               class="mt-2"
               :options="seedreamModelOptions"
-              :aria-label="t('seedream.create.model')"
+              :aria-label="t('settings.apiKeyDefaultModel')"
               data-test="seedream-settings-model"
               @update:model-value="fixSeedreamDefault"
             />
@@ -248,6 +253,10 @@
           </label>
         </div>
         <p class="mt-3 text-xs leading-5 text-[var(--seedance-muted)]">{{ t('seedream.settings.defaultCountHint') }}</p>
+        <PlatformDefaultModelSelect
+          v-model="seedreamDraft.platform_default_model"
+          kind="image"
+        />
       </SeedancePanel>
 
       <SeedancePanel
@@ -472,6 +481,8 @@ import Button from '@/components/common/Button.vue';
 import Select from '@/components/common/Select.vue';
 import Switch from '@/components/common/Switch.vue';
 import Header from '@/components/layout/Header.vue';
+import AppUpdateSettings from '@/components/layout/AppUpdateSettings.vue';
+import PlatformDefaultModelSelect from '@/components/settings/PlatformDefaultModelSelect.vue';
 import SeedancePageBar from '@/components/seedance/SeedancePageBar.vue';
 import SeedancePanel from '@/components/seedance/SeedancePanel.vue';
 import { trapModalTab } from '@/modal-focus';
@@ -538,12 +549,14 @@ const appDraft = reactive({
 const seedreamDraft = reactive<SeedreamSettings>({
   default_count: DEFAULT_COUNT,
   default_model: 'pro',
+  platform_default_model: '',
   default_resolution: '2K',
   default_ratio: '16:9',
 });
 const draft = reactive<Omit<SeedanceSettings, 'api_key_configured' | 'last_cleanup_at' | 'default_priority' | 'default_expires_after'>>({
   cache_dir: '',
   default_model: 'mini',
+  platform_default_model: '',
   default_resolution: '720p',
   default_ratio: '16:9',
   default_duration: 4,

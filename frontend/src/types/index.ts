@@ -400,6 +400,8 @@ export interface SeedanceSettings {
   api_key_configured: boolean;
   cache_dir: string;
   default_model: SeedanceModel;
+  platform_default_model: string;
+  readonly default_model_id?: string;
   default_resolution: SeedanceResolution;
   default_ratio: SeedanceRatio;
   default_duration: SeedanceDuration;
@@ -653,6 +655,8 @@ export interface SeedreamBatch {
 export interface SeedreamSettings {
   default_count: number;
   default_model: SeedreamModel;
+  platform_default_model: string;
+  readonly default_model_id?: string;
   default_resolution: SeedreamResolution;
   default_ratio: SeedreamRatio;
 }
@@ -753,3 +757,13 @@ export interface PlatformCapabilities {
 export type PlatformDataResult<T> =
   | { success: true; data: T }
   | { success: false; error: SeedanceApiError };
+
+/** Stable-release metadata contains no authentication credentials. */
+export interface AppUpdateInfo {
+  current_version: string;
+  latest_version: string;
+  release_notes: string;
+  release_url: string;
+  status: 'available' | 'ignored' | 'up_to_date' | 'error';
+  error: '' | 'NETWORK_ERROR' | 'NOT_FOUND_OR_PRIVATE' | 'ACCESS_DENIED' | 'RATE_LIMITED' | 'INVALID_RELEASE';
+}

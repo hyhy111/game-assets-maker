@@ -149,8 +149,8 @@ test('switching source clamps the model back to a legal value for that source', 
   // 平台源：收敛到清单给的合法域；直连源：上游 ID 回落为本地短键
   assert.match(video, /function clampToPlatformModel\(\)/);
   assert.match(image, /function clampToPlatformModel\(\)/);
-  assert.match(video, /form\.model = 'standard';/);
-  assert.match(image, /form\.model = 'pro';/);
+  assert.match(video, /form\.model = store\.settings\?\.default_model \?\? 'mini';/);
+  assert.match(image, /form\.model = store\.settings\?\.default_model \?\? 'pro';/);
 });
 
 

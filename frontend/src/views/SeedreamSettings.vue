@@ -84,6 +84,7 @@ const saveFeedback = ref('');
 const draft = reactive<SeedreamSettings>({
   default_count: DEFAULT_COUNT,
   default_model: 'pro',
+  platform_default_model: '',
   default_resolution: '2K',
   default_ratio: '16:9',
 });

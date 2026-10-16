@@ -1,11 +1,16 @@
 """Local HTTP control server for driving the PyWebView UI."""
 
+import errno
 import json
+import tempfile
 import threading
 from http.server import BaseHTTPRequestHandler
+from pathlib import Path
 from socketserver import TCPServer, ThreadingMixIn
+from uuid import uuid4
 
 from backend.agent_control.events import build_open_seedance_js, build_open_step_js
+from src.agent_tools.discovery import DEFAULT_CONTROL_PORT, control_endpoint_path, read_control_endpoint
 
 
 class ReusableTCPServer(ThreadingMixIn, TCPServer):
@@ -95,7 +100,7 @@ class AgentControlHandler(BaseHTTPRequestHandler):
 
 
 class AgentControlServer:
-    def __init__(self, window, host: str = "127.0.0.1", port: int = 8765, api=None):
+    def __init__(self, window, host: str = "127.0.0.1", port: int | None = None, api=None):
         from backend.agent_control.operations import AgentOperations
 
         self.operations = AgentOperations(window, api)
@@ -103,7 +108,10 @@ class AgentControlServer:
             api._agent_operations = self.operations
         self.window = window
         self.host = host
-        self.port = port
+        self.port = DEFAULT_CONTROL_PORT if port is None else port
+        self._auto_port = port is None
+        self._endpoint_path = control_endpoint_path() if self._auto_port else None
+        self._instance_id = uuid4().hex
         self.httpd = None
         self.thread = None
 
@@ -116,9 +124,36 @@ class AgentControlServer:
                 "operations": self.operations,
             },
         )
-        self.httpd = ReusableTCPServer((self.host, self.port), handler)
+        try:
+            self.httpd = ReusableTCPServer((self.host, self.port), handler)
+        except OSError as error:
+            if not self._auto_port or error.errno != errno.EADDRINUSE:
+                raise
+            self.httpd = ReusableTCPServer((self.host, 0), handler)
+        self.port = self.httpd.server_address[1]
         self.thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
         self.thread.start()
+        if self._endpoint_path is not None:
+            try:
+                self._publish_endpoint()
+            except OSError:
+                self.stop()
+                raise
+        print(f"Agent control server started at http://{self.host}:{self.port}")
+
+    def _publish_endpoint(self) -> None:
+        self._endpoint_path.parent.mkdir(parents=True, exist_ok=True)
+        temporary_path = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w", encoding="utf-8", dir=self._endpoint_path.parent, delete=False
+            ) as temporary:
+                temporary_path = Path(temporary.name)
+                json.dump({"port": self.port, "instance_id": self._instance_id}, temporary)
+            temporary_path.replace(self._endpoint_path)
+        finally:
+            if temporary_path is not None:
+                temporary_path.unlink(missing_ok=True)
 
     def stop(self) -> None:
         if self.httpd is None:
@@ -130,3 +165,7 @@ class AgentControlServer:
             self.thread.join(timeout=2)
         self.httpd = None
         self.thread = None
+        if self._endpoint_path is not None:
+            record = read_control_endpoint(self._endpoint_path)
+            if record.get("instance_id") == self._instance_id:
+                self._endpoint_path.unlink(missing_ok=True)

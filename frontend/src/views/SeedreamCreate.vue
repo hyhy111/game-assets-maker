@@ -425,6 +425,7 @@ const modelOptions = computed<ModelOption[]>(() => (
 ));
 
 const form: CreateForm = workspace.imageDraft;
+const modelDefaultsReady = ref(false);
 const showGenerationSourceSelector = computed(() => authStore.isLoggedIn);
 const generationSourceOptions = computed(() => [
   { value: 'api-key', label: t('aiCreation.customApiKey') },
@@ -540,7 +541,10 @@ const supportedResolutions = computed<SeedreamResolution[]>(() => {
  * lite 只有 2K 这类单档情形就靠这里回退。
  */
 function clampToPlatformModel() {
-  Object.assign(form, correctPlatformImageParameters(form.model, form.resolution, platformImageModels.value));
+  if (!modelDefaultsReady.value) return;
+  Object.assign(form, correctPlatformImageParameters(
+    form.model, form.resolution, platformImageModels.value, store.settings?.platform_default_model || store.settings?.default_model_id,
+  ));
 }
 const paidConfirmationEnabled = computed(() => configStore.config?.paid_generation_confirmation_enabled !== false);
 
@@ -557,7 +561,10 @@ onMounted(async () => {
     model: settings?.default_model ?? 'pro',
     resolution: correctResolution(settings?.default_model ?? 'pro', settings?.default_resolution ?? '2K'),
     ratio: settings?.default_ratio ?? '16:9',
-  });
+  }, settings?.platform_default_model || settings?.default_model_id);
+  modelDefaultsReady.value = true;
+  if (platformGenerationSelected.value) clampToPlatformModel();
+  else fixResolution();
   const regenerateId = typeof route.query.regenerate === 'string' ? route.query.regenerate : '';
   if (regenerateId) {
     // Restore an editable draft from a previous batch. This does NOT call
@@ -572,6 +579,7 @@ onMounted(async () => {
       form.count = request.count ?? form.count;
       form.reference_image = request.reference_image ?? '';
       workspace.imagePreviewUrls.reference = draft.reference_image_url ?? '';
+      if (platformGenerationSelected.value) clampToPlatformModel();
     }
     return;
   }
@@ -583,11 +591,13 @@ function clearDraft() {
     return;
   }
   workspace.resetImageDraft();
+  if (platformGenerationSelected.value) clampToPlatformModel();
 }
 
 function confirmClearDraft() {
   clearConfirmOpen.value = false;
   workspace.resetImageDraft();
+  if (platformGenerationSelected.value) clampToPlatformModel();
 }
 
 function fixResolution() {
@@ -629,9 +639,9 @@ function selectGenerationSource(source: string) {
   workspace.setGenerationSource(next);
   if (next === 'forfuner-ai') {
     clampToPlatformModel();
-  } else if (!localModelResolutions(form.model).length) {
-    // 切回直连：模型可能还是上游 ID，本地表不认，重置为预设默认。
-    form.model = 'pro';
+  } else {
+    // Restore the saved API-key default when the current ID belongs to the platform.
+    if (!localModelResolutions(form.model).length) form.model = store.settings?.default_model ?? 'pro';
     fixResolution();
   }
   scheduleQuoteRefresh();

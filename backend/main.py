@@ -378,6 +378,7 @@ class API:
         self._frame_api_instance = None
         self._process_api_instance = None
         self._config_api_instance = None
+        self._update_api_instance = None
         self._batch_trim_api_instance = None
         self._audio_api_instance = None
         self._seedance_api_instance = None
@@ -811,6 +812,26 @@ class API:
         except Exception as e:
             print(f"Error opening folder: {e}")
             return False
+
+    @property
+    def _update_api(self):
+        if self._update_api_instance is None:
+            from backend.api.update_api import UpdateAPI
+
+            self._update_api_instance = UpdateAPI()
+        return self._update_api_instance
+
+    def check_app_update(self) -> dict[str, Any]:
+        """Check once per application session, independently of login."""
+        return self._update_api.check()
+
+    def ignore_app_update(self, version: str) -> bool:
+        """Ignore only the newer version returned by the current release check."""
+        return self._update_api.ignore(version)
+
+    def open_app_update(self) -> bool:
+        """Open the validated release page for a manual download and installation."""
+        return self._update_api.open_release()
 
     def get_app_version(self) -> str:
         """Get application version"""

@@ -7,18 +7,29 @@ import urllib.error
 import urllib.request
 from typing import Any
 
+from src.agent_tools.discovery import DEFAULT_CONTROL_PORT, control_endpoint_path, read_control_endpoint
+
 
 class AgentUIClient:
     """Small stdlib client for the PyWebView UI control server."""
 
-    def __init__(self, host: str = "127.0.0.1", port: int = 8765, timeout: float = 1.0):
+    def __init__(self, host: str = "127.0.0.1", port: int | None = None, timeout: float = 1.0):
         self.host = host
         self.port = port
         self.timeout = timeout
 
     @property
     def base_url(self) -> str:
-        return f"http://{self.host}:{self.port}"
+        port = self.port
+        if port is None:
+            record = read_control_endpoint(control_endpoint_path()) if self.host == "127.0.0.1" else {}
+            discovered_port = record.get("port")
+            port = (
+                discovered_port
+                if type(discovered_port) is int and 0 < discovered_port < 65536
+                else DEFAULT_CONTROL_PORT
+            )
+        return f"http://{self.host}:{port}"
 
     def status(self) -> dict[str, Any]:
         try:

@@ -18,6 +18,7 @@ import type {
   Step2Params,
   Step3Params,
   AppConfig,
+  AppUpdateInfo,
   ModelStatus,
   ProjectTrimStatus,
   BatchTrimResult,
@@ -108,6 +109,9 @@ export interface PyWebViewWindow extends Window {
       select_directory: () => Promise<string | null>;
       open_project_folder: (project_path: string) => Promise<boolean>;
       get_app_version: () => Promise<string>;
+      check_app_update: () => Promise<AppUpdateInfo>;
+      ignore_app_update: (version: string) => Promise<boolean>;
+      open_app_update: () => Promise<boolean>;
       /** 打开订阅落地页隔离窗（js_api=None，token 走 postMessage） */
       open_subscription_window: (url: string) => Promise<boolean>;
 

@@ -14,13 +14,14 @@ class ConfigAPI:
 
     def save_config(self, config: dict[str, Any]) -> bool:
         """Save application configuration"""
-        # The immediate toggle has its own API; a stale settings draft must
-        # never overwrite it or persist the runtime-only availability flag.
+        # Immediate settings have dedicated APIs; stale drafts must never
+        # overwrite them or persist the runtime-only availability flag.
         save_app_config(
             {
                 key: value
                 for key, value in config.items()
-                if key not in {"ark_audit_enabled", "ark_audit_available", "cli_generation_enabled"}
+                if key
+                not in {"ark_audit_enabled", "ark_audit_available", "cli_generation_enabled", "ignored_update_version"}
             }
         )
         return True

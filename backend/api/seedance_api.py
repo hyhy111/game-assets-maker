@@ -466,6 +466,7 @@ class SeedanceAPI:
 
     def get_settings(self) -> dict[str, Any]:
         settings = public_app_config(load_app_config())["seedance"]
+        settings["default_model_id"] = platform_model_id(settings["default_model"])
         if not settings["cache_dir"]:
             settings["cache_dir"] = str(ai_cache_root(None).resolve())
         return settings

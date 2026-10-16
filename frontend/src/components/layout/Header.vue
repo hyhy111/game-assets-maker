@@ -162,10 +162,18 @@
               ? 'text-gray-600 cursor-not-allowed'
               : 'hover:bg-dark-border text-gray-400 hover:text-white'
           ]"
-          :title="isProcessing ? t('common.processing') : t('header.settings')"
+          :title="isProcessing ? t('common.processing') : updateStore.hasUpdate ? t('updates.notification') : t('header.settings')"
+          class="relative"
           @click="openSettings"
         >
           <Settings class="w-5 h-5" />
+          <span
+            v-if="updateStore.hasUpdate"
+            class="pointer-events-none absolute right-0.5 top-0.5 h-2 w-2 rounded-full bg-primary ring-2 ring-dark-bg"
+            :aria-label="t('updates.notification')"
+            role="status"
+            data-test="app-update-dot"
+          />
         </button>
 
         <button
@@ -197,6 +205,7 @@ import { useProjectStore } from '@/stores/project';
 import { useProcessStore } from '@/stores/process';
 import { useAuthStore } from '@/stores/auth';
 import { useBillingStore } from '@/stores/billing';
+import { useUpdateStore } from '@/stores/updates';
 import { api } from '@/api';
 import { toggleLocale } from '@/locales';
 import { openSubscriptionPage } from '@/composables/useSubscriptionPage';
@@ -216,6 +225,7 @@ const projectStore = useProjectStore();
 const processStore = useProcessStore();
 const authStore = useAuthStore();
 const billingStore = useBillingStore();
+const updateStore = useUpdateStore();
 const { locale, t } = useI18n();
 
 const { currentProject } = storeToRefs(projectStore);

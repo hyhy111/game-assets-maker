@@ -54,8 +54,11 @@ export function correctPlatformImageParameters(
   model: SeedreamModelRef,
   resolution: SeedreamResolution,
   models: readonly PlatformModelCapability[],
+  preferredModel = '',
 ): Pick<CreateForm, 'model' | 'resolution'> {
-  const entry = models.find(candidate => candidate.model === model) ?? models[0];
+  const entry = models.find(candidate => candidate.model === model)
+    ?? models.find(candidate => candidate.model === preferredModel)
+    ?? models[0];
   if (!entry) return { model, resolution };
   const sizes = (entry.sizes ?? []) as SeedreamResolution[];
   return {

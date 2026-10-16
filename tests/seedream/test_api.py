@@ -451,6 +451,8 @@ def test_seedream_get_settings_returns_image_defaults(runtime_config_path):
     assert result["settings"] == {
         "default_count": 1,
         "default_model": "pro",
+        "platform_default_model": "",
+        "default_model_id": "doubao-seedream-5-0-pro-260628",
         "default_resolution": "2K",
         "default_ratio": "16:9",
     }

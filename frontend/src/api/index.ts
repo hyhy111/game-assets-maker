@@ -19,6 +19,7 @@ import type {
   Step2Params,
   Step3Params,
   AppConfig,
+  AppUpdateInfo,
   BackgroundColor,
   ModelStatus,
   ProjectTrimStatus,
@@ -73,14 +74,15 @@ type PyWebViewApi = NonNullable<PyWebViewWindow['pywebview']>['api'];
  */
 function waitForPyWebView(): Promise<PyWebViewApi> {
   return new Promise((resolve) => {
-    if (window.pywebview?.api) {
+    // PyWebView injects an empty api object before registering its methods.
+    if (typeof window.pywebview?.api.get_app_version === 'function') {
       resolve(window.pywebview.api);
     } else {
       window.addEventListener('pywebviewready', () => {
         if (window.pywebview?.api) {
           resolve(window.pywebview.api);
         }
-      });
+      }, { once: true });
     }
   });
 }
@@ -116,7 +118,7 @@ async function callApi<T>(
  * Check if PyWebView API is available (synchronous check)
  */
 export function isApiAvailable(): boolean {
-  return !!window.pywebview?.api;
+  return typeof window.pywebview?.api.get_app_version === 'function';
 }
 
 /**
@@ -329,6 +331,18 @@ export const systemApi = {
 
   async openProjectFolder(projectPath: string): Promise<boolean> {
     return callApi<boolean>('open_project_folder', 'openProjectFolder', projectPath);
+  },
+
+  async checkAppUpdate(): Promise<AppUpdateInfo> {
+    return callApi<AppUpdateInfo>('check_app_update', 'checkAppUpdate');
+  },
+
+  async ignoreAppUpdate(version: string): Promise<boolean> {
+    return callApi<boolean>('ignore_app_update', 'ignoreAppUpdate', version);
+  },
+
+  async openAppUpdate(): Promise<boolean> {
+    return callApi<boolean>('open_app_update', 'openAppUpdate');
   },
 
   async getAppVersion(): Promise<string> {

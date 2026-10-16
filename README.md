@@ -39,6 +39,8 @@ cd frontend && npm run build && cd ..
 uv run python -m backend.main
 ```
 
+Agent 控制服务优先使用本机 `8765` 端口；被占用时自动分配空闲端口。CLI 从当前数据目录的 `cache/agent-control.json` 发现实际端口，退出时清理记录。源码开发时请在同一工作区调用 CLI；使用 `GAM_DATA_ROOT` 时，桌面程序与 CLI 应指向同一数据目录。
+
 ### 模型准备
 
 背景移除当前仅支持 U2Net（约 176 MB），模型权重不随仓库或发布包分发。安装版在步骤 2 提示下载，由用户选择来源并点击下载；有效模型就绪后可离线处理。源码开发可在仓库根目录提前下载：
@@ -48,6 +50,16 @@ uv run python scripts/download_models.py u2net
 ```
 
 详见 [MODELS.md](MODELS.md)。
+
+### 按生成来源设置默认模型
+
+设置页的图片与视频默认参数分别提供“自定义 API Key 默认模型”和“ForFuner AI 默认模型”。平台模型选项来自登录后获取的可用模型清单，保存完整模型 ID，与 API Key 的模型简称独立保存。未单独指定平台默认模型时，优先匹配自定义 API Key 默认模型对应的平台模型，只有不可用时才选择清单中的其他模型。新草稿、清空草稿和切换生成来源时应用对应默认值；重新进入已有草稿时保留手动选择的有效模型。平台默认模型下架后，创建页会选择其他可用模型，但不改写已保存的偏好；清单加载失败时可重试，不回退到 API Key 模型列表。平台不支持的分辨率和时长仍按可用参数调整。
+
+### 版本与更新
+
+应用每次启动后在后台检查 GitHub 最新正式 Release。设置页显示当前版本；检测到更高版本后显示“更新”和“忽略当前版本”，顶部设置图标右上角同时出现黄点。更新会打开对应版本的 Release 下载页，下载后退出应用并手动覆盖安装。忽略操作立即保存到当前数据目录的配置中，只隐藏该版本的顶部黄点；设置页保留更新按钮和更新说明，下一个新版本仍会提示。检查失败不影响本地处理，也不会显示“已是最新版”。
+
+私有仓库测试可在启动进程中设置 `GAM_UPDATE_GITHUB_TOKEN`，使用仅授权本仓库且具有 `Contents: read` 权限的 Token。该值只用于后端请求，不保存到配置、不返回前端，也不放入安装包。未设置时匿名查询，适用于公开发行仓库。`latest` 必须存在非草稿、非预发布的正式 Release；404 可能表示尚无正式版本或无访问权限。
 
 ### 自定义 Key 调用日志
 
@@ -155,6 +167,18 @@ uv run python dev_start.py
 cd frontend && npm run build && cd ..
 uv run python -m backend.main
 ```
+
+The local agent control service prefers port `8765` and automatically selects a free port if occupied. The CLI discovers it through `cache/agent-control.json` in the active data root; shutdown removes the record. For source development, run the CLI from the same workspace. If using `GAM_DATA_ROOT`, point the desktop app and CLI to the same directory.
+
+### Model defaults by generation source
+
+Image and video settings each offer separate Custom API Key and ForFuner AI default models. Platform options come from the available-model catalog after login and store full model IDs independently of API-key aliases. Without a platform override, the app first matches the configured API-key default to an available platform model, falling back only if unavailable. New drafts, clearing drafts and source changes use the corresponding defaults; reopening a draft retains a valid manually selected model. If a preferred platform model is removed, the composer selects another available model without overwriting the saved preference. Failed catalog loads can be retried and never fall back to the API-key model list. Unsupported platform resolutions and durations are still adjusted to available combinations.
+
+### Version and updates
+
+At each launch, the app checks the latest stable GitHub Release in the background. Settings shows the current version. A newer release reveals Update and Ignore this version, with a yellow dot on the header settings icon. Update opens that release page for download; quit the app and install manually. Ignoring persists immediately in the active data-root configuration and hides only that version’s header dot. Settings retains the Update button and release notes. Future releases remain eligible. Failed checks do not block local processing or claim the app is up to date.
+
+For private-repository tests, set `GAM_UPDATE_GITHUB_TOKEN` in the launching process using a token restricted to this repository with `Contents: read`. It stays in the backend request, outside frontend responses, saved config and packaged artifacts. Without it, checks are anonymous for public releases. The latest endpoint requires a published stable release; 404 can mean no stable release or insufficient access.
 
 ### Custom-key Ark audit log
 

@@ -519,6 +519,7 @@ const modelOptions = computed<ModelOption[]>(() => (
     : localVideoModelOptions()
 ));
 const form: CreateForm = workspace.videoDraft;
+const modelDefaultsReady = ref(false);
 // 平台源只需要登录；api-key 源还需要已配置 Ark Key。
 const showGenerationSourceSelector = computed(() => authStore.isLoggedIn);
 const generationSourceOptions = computed(() => [
@@ -636,9 +637,14 @@ onMounted(async () => {
       duration: correctDuration(settings.default_duration),
       generate_audio: settings.default_generate_audio,
       return_last_frame: settings.default_return_last_frame,
-    });
+    }, settings.platform_default_model || settings.default_model_id);
   } else {
     workspace.initializeVideoDraft(defaultVideoDraft());
+  }
+  modelDefaultsReady.value = true;
+  if (platformGenerationSelected.value) {
+    form.return_last_frame = false;
+    clampToPlatformModel();
   }
 
   const regenerateId = typeof route.query.regenerate === 'string' ? route.query.regenerate : '';
@@ -674,6 +680,7 @@ onMounted(async () => {
   form.return_last_frame = request.return_last_frame ?? form.return_last_frame;
   previewUrls.first_frame = source.preview_urls.first_frame ?? '';
   previewUrls.last_frame = source.preview_urls.last_frame ?? '';
+  if (platformGenerationSelected.value) clampToPlatformModel();
 });
 
 function clearDraft() {
@@ -707,6 +714,7 @@ async function dropLocalFrame(field: 'first_frame' | 'last_frame', file: File) {
 
 function resetDraft() {
   workspace.resetVideoDraft();
+  if (platformGenerationSelected.value) clampToPlatformModel();
   previewUrls.first_frame = '';
   previewUrls.last_frame = '';
   errors.value = {};
@@ -724,11 +732,12 @@ function fixResolution() {
  * 用户点提交才被后端拒掉。
  */
 function clampToPlatformModel() {
+  if (!modelDefaultsReady.value) return;
   const models = platformVideoModels.value;
   if (!models.length) return;
   let entry = models.find((candidate) => candidate.model === form.model);
   if (!entry) {
-    entry = models[0];
+    entry = models.find(candidate => candidate.model === (store.settings?.platform_default_model || store.settings?.default_model_id)) ?? models[0];
     form.model = entry.model;
   }
   const resolutions = (entry.resolutions ?? []) as SeedanceResolution[];
@@ -962,8 +971,8 @@ function selectGenerationSource(source: string) {
     form.return_last_frame = false;
     clampToPlatformModel();
   } else {
-    // 切回直连：模型可能还是上游 ID，本地表不认，重置为预设默认。
-    if (!localModelResolutions(form.model).length) form.model = 'standard';
+    // Restore the saved API-key default when the current ID belongs to the platform.
+    if (!localModelResolutions(form.model).length) form.model = store.settings?.default_model ?? 'mini';
     fixResolution();
     form.duration = correctDuration(form.duration);
   }
