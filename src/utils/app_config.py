@@ -39,7 +39,6 @@ DEFAULT_APP_CONFIG: dict[str, Any] = {
         "api_key": "",
         "cache_dir": "cache",
         "default_model": "mini",
-        "platform_default_model": "",
         "default_resolution": "720p",
         "default_ratio": "16:9",
         "default_duration": 4,
@@ -53,7 +52,6 @@ DEFAULT_APP_CONFIG: dict[str, Any] = {
     "seedream": {
         "default_count": 1,
         "default_model": "pro",
-        "platform_default_model": "",
         "default_resolution": "2K",
         "default_ratio": "16:9",
     },
@@ -75,25 +73,6 @@ def get_app_config_path() -> Path:
     return data_root() / DEV_CONFIG_FILENAME
 
 
-def platform_default_model(value: Any) -> str:
-    """Validate a stored platform model identifier without a network dependency."""
-    if not isinstance(value, str) or len(value) > 256:
-        raise ValueError("Platform default model must be a string of at most 256 characters")
-    value = value.strip()
-    if any(character.isspace() or ord(character) < 32 for character in value):
-        raise ValueError("Platform default model must not contain whitespace or control characters")
-    return value
-
-
-def _validated_config_update(update: dict[str, Any]) -> dict[str, Any]:
-    update = deepcopy(update)
-    for section in ("seedance", "seedream"):
-        values = update.get(section)
-        if isinstance(values, dict) and "platform_default_model" in values:
-            values["platform_default_model"] = platform_default_model(values["platform_default_model"])
-    return update
-
-
 def merge_app_config(config: dict[str, Any] | None = None) -> dict[str, Any]:
     """Merge a partial config with application defaults."""
     merged = deepcopy(DEFAULT_APP_CONFIG)
@@ -101,13 +80,6 @@ def merge_app_config(config: dict[str, Any] | None = None) -> dict[str, Any]:
         return merged
 
     _merge_known_keys(merged, config)
-    for section in ("seedance", "seedream"):
-        try:
-            merged[section]["platform_default_model"] = platform_default_model(
-                merged[section]["platform_default_model"]
-            )
-        except ValueError:
-            merged[section]["platform_default_model"] = ""
     if merged["seedance"]["default_resolution"] == "4k":
         merged["seedance"]["default_resolution"] = "1080p"
     cache_dir = merged["seedance"].get("cache_dir")
@@ -186,7 +158,7 @@ def save_app_config(update: dict[str, Any]) -> dict[str, Any]:
     with _CONFIG_WRITE_LOCK:
         config_path = get_app_config_path()
         current = load_app_config()
-        update = _validated_config_update(update)
+        update = deepcopy(update)
         _merge_known_keys(current, update)
 
         if update.get("seedance", {}).get("api_key", object()) is None:
@@ -254,7 +226,7 @@ def default_projects_root() -> Path:
 def merge_config_update(current: dict[str, Any], update: dict[str, Any]) -> dict[str, Any]:
     """Return a copy of ``current`` with known keys from ``update`` applied."""
     merged = deepcopy(current)
-    _merge_known_keys(merged, _validated_config_update(update))
+    _merge_known_keys(merged, deepcopy(update))
     return merged
 
 

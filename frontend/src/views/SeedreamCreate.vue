@@ -543,7 +543,7 @@ const supportedResolutions = computed<SeedreamResolution[]>(() => {
 function clampToPlatformModel() {
   if (!modelDefaultsReady.value) return;
   Object.assign(form, correctPlatformImageParameters(
-    form.model, form.resolution, platformImageModels.value, store.settings?.platform_default_model || store.settings?.default_model_id,
+    form.model, form.resolution, platformImageModels.value, store.settings?.default_model_id,
   ));
 }
 const paidConfirmationEnabled = computed(() => configStore.config?.paid_generation_confirmation_enabled !== false);
@@ -561,7 +561,7 @@ onMounted(async () => {
     model: settings?.default_model ?? 'pro',
     resolution: correctResolution(settings?.default_model ?? 'pro', settings?.default_resolution ?? '2K'),
     ratio: settings?.default_ratio ?? '16:9',
-  }, settings?.platform_default_model || settings?.default_model_id);
+  }, settings?.default_model_id);
   modelDefaultsReady.value = true;
   if (platformGenerationSelected.value) clampToPlatformModel();
   else fixResolution();

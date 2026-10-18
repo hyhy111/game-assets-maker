@@ -46,7 +46,7 @@ export const useAICreationStore = defineStore('ai-creation', () => {
   const videoDefaults = reactive<SeedanceCreateForm>(defaultVideoDraft());
   const imageInitialized = ref(false);
   const videoInitialized = ref(false);
-  const platformModelDefaults = reactive({ image: '', video: '' });
+  const defaultModelIds = reactive({ image: '', video: '' });
   const currentGeneration = ref<CurrentGeneration | null>(null);
   const recentFilter = ref<RecentGenerationFilter>('image');
   const recentLoaded = reactive<Record<RecentGenerationFilter, number>>({
@@ -102,26 +102,26 @@ export const useAICreationStore = defineStore('ai-creation', () => {
     capabilitiesLoading.value = false;
   }
 
-  function initializeImageDraft(defaults: SeedreamCreateForm, platformModel = '') {
+  function initializeImageDraft(defaults: SeedreamCreateForm, defaultModelId = '') {
     Object.assign(imageDefaults, defaults);
-    platformModelDefaults.image = platformModel;
+    defaultModelIds.image = defaultModelId || defaults.model;
     if (!imageInitialized.value) {
       const factory = defaultForm();
       const pending = Object.fromEntries(Object.entries(imageDraft).filter(([key, value]) => value !== factory[key as keyof SeedreamCreateForm]));
       Object.assign(imageDraft, defaults, pending);
-      if (generationSource.value === 'forfuner-ai' && !pending.model) imageDraft.model = platformModel;
+      if (generationSource.value === 'forfuner-ai' && !pending.model) imageDraft.model = defaultModelId || defaults.model;
       imageInitialized.value = true;
     }
   }
 
-  function initializeVideoDraft(defaults: SeedanceCreateForm, platformModel = '') {
+  function initializeVideoDraft(defaults: SeedanceCreateForm, defaultModelId = '') {
     Object.assign(videoDefaults, defaults);
-    platformModelDefaults.video = platformModel;
+    defaultModelIds.video = defaultModelId || defaults.model;
     if (!videoInitialized.value) {
       const factory = defaultVideoDraft();
       const pending = Object.fromEntries(Object.entries(videoDraft).filter(([key, value]) => value !== factory[key as keyof SeedanceCreateForm]));
       Object.assign(videoDraft, defaults, pending);
-      if (generationSource.value === 'forfuner-ai' && !pending.model) videoDraft.model = platformModel;
+      if (generationSource.value === 'forfuner-ai' && !pending.model) videoDraft.model = defaultModelId || defaults.model;
       videoInitialized.value = true;
     }
   }
@@ -195,13 +195,13 @@ export const useAICreationStore = defineStore('ai-creation', () => {
 
   function resetImageDraft() {
     Object.assign(imageDraft, imageDefaults);
-    if (generationSource.value === 'forfuner-ai') imageDraft.model = platformModelDefaults.image;
+    if (generationSource.value === 'forfuner-ai') imageDraft.model = defaultModelIds.image;
     imagePreviewUrls.reference = '';
   }
 
   function resetVideoDraft() {
     Object.assign(videoDraft, videoDefaults);
-    if (generationSource.value === 'forfuner-ai') videoDraft.model = platformModelDefaults.video;
+    if (generationSource.value === 'forfuner-ai') videoDraft.model = defaultModelIds.video;
     videoPreviewUrls.first_frame = '';
     videoPreviewUrls.last_frame = '';
   }
@@ -232,8 +232,8 @@ export const useAICreationStore = defineStore('ai-creation', () => {
   function setGenerationSource(source: GenerationSource) {
     if (generationSource.value === source) return;
     generationSource.value = source;
-    imageDraft.model = source === 'forfuner-ai' ? platformModelDefaults.image : imageDefaults.model;
-    videoDraft.model = source === 'forfuner-ai' ? platformModelDefaults.video : videoDefaults.model;
+    imageDraft.model = source === 'forfuner-ai' ? defaultModelIds.image : imageDefaults.model;
+    videoDraft.model = source === 'forfuner-ai' ? defaultModelIds.video : videoDefaults.model;
   }
 
   function loadMoreRecent(filter: RecentGenerationFilter) {

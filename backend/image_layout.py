@@ -8,7 +8,6 @@ import shutil
 from pathlib import Path
 from typing import Any
 
-
 _INTEGER_FIELDS = (
     "source_width",
     "source_height",

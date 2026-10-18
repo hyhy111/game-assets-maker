@@ -8,7 +8,6 @@ from pathlib import Path
 
 from PIL import Image
 
-from backend.seedream.client import ArkAPIError
 from src.utils.app_config import save_app_config
 
 
@@ -59,13 +58,17 @@ class FakeManager:
 
     def get_batch(self, local_id):
         self.calls.append(("get", local_id))
-        return self.create_batch.__self__.create_batch.__func__(self, None) if False else {
-            "local_id": local_id,
-            "request": {},
-            "attempts": [],
-            "created_at": "2026-01-01T00:00:00Z",
-            "updated_at": "2026-01-01T00:00:00Z",
-        }
+        return (
+            self.create_batch.__self__.create_batch.__func__(self, None)
+            if False
+            else {
+                "local_id": local_id,
+                "request": {},
+                "attempts": [],
+                "created_at": "2026-01-01T00:00:00Z",
+                "updated_at": "2026-01-01T00:00:00Z",
+            }
+        )
 
     def list_batches(self):
         self.calls.append(("list", None))
@@ -332,16 +335,17 @@ def test_seedream_apply_eraser_saves_same_size_edit_and_preserves_original(tmp_p
         "bottom_margin_ratio": 0.125,
         "scale": 0.5,
     }
-    result = api.apply_eraser(
-        "batch-1", 0, _png_data_url(edited), _png_data_url(edit_source), generation_layout
-    )
+    result = api.apply_eraser("batch-1", 0, _png_data_url(edited), _png_data_url(edit_source), generation_layout)
 
-    assert result == {"success": True, "data": {
-        "saved": True,
-        "width": 32,
-        "height": 32,
-        "generation_layout": generation_layout,
-    }}
+    assert result == {
+        "success": True,
+        "data": {
+            "saved": True,
+            "width": 32,
+            "height": 32,
+            "generation_layout": generation_layout,
+        },
+    }
     assert source.with_name("candidate.original.png").read_bytes() == original_bytes
     assert json.loads(source.with_name("candidate.png.layout.json").read_text(encoding="utf-8")) == generation_layout
     with Image.open(source) as saved:
@@ -451,7 +455,6 @@ def test_seedream_get_settings_returns_image_defaults(runtime_config_path):
     assert result["settings"] == {
         "default_count": 1,
         "default_model": "pro",
-        "platform_default_model": "",
         "default_model_id": "doubao-seedream-5-0-pro-260628",
         "default_resolution": "2K",
         "default_ratio": "16:9",
@@ -468,6 +471,7 @@ def test_seedream_save_settings_persists_count(runtime_config_path):
 
     # Verify it was persisted.
     from src.utils.app_config import load_app_config
+
     config = load_app_config()
     assert config["seedream"]["default_count"] == 3
 
@@ -588,9 +592,7 @@ class _HandoffManager(FakeManager):
         return self._batch
 
 
-def test_seedream_get_handoff_image_returns_local_path_for_succeeded_attempt(
-    tmp_path, runtime_config_path
-):
+def test_seedream_get_handoff_image_returns_local_path_for_succeeded_attempt(tmp_path, runtime_config_path):
     from backend.api.seedream_api import SeedreamAPI
 
     source = _image(tmp_path / "candidate.jpg")
@@ -1026,7 +1028,9 @@ def test_seedream_create_accepts_reference_image(runtime_config_path, tmp_path):
     source = tmp_path / "reference.png"
     Image.new("RGB", (64, 64), "#3156d9").save(source, format="PNG")
 
-    result = api.create_batch({"prompt": "hero", "model": "pro", "resolution": "1K", "ratio": "16:9", "reference_image": str(source)})
+    result = api.create_batch(
+        {"prompt": "hero", "model": "pro", "resolution": "1K", "ratio": "16:9", "reference_image": str(source)}
+    )
 
     assert result["success"] is True
     assert manager.calls[0][0] == "create"
@@ -1041,7 +1045,13 @@ def test_seedream_create_rejects_missing_reference_image_file(runtime_config_pat
     api = SeedreamAPI(manager, media_resolver=MissingResolver())
 
     result = api.create_batch(
-        {"prompt": "hero", "model": "pro", "resolution": "1K", "ratio": "16:9", "reference_image": str(tmp_path / "missing.png")}
+        {
+            "prompt": "hero",
+            "model": "pro",
+            "resolution": "1K",
+            "ratio": "16:9",
+            "reference_image": str(tmp_path / "missing.png"),
+        }
     )
 
     assert result["success"] is False

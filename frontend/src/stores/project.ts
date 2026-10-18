@@ -2,12 +2,13 @@
  * Project Store - Manages project state
  */
 import { defineStore } from 'pinia';
-import { ref, computed } from 'vue';
+import { ref, computed, reactive } from 'vue';
 import { api } from '@/api';
 import type {
   Project,
   CreateProjectData,
   RoleSummary,
+  ProjectRenameResult,
   LegacyMigrationRequest,
   LegacyMigrationResult,
   LegacyProjectImportResult,
@@ -18,6 +19,13 @@ export const useProjectStore = defineStore('project', () => {
   const projects = ref<Project[]>([]);
   const roles = ref<RoleSummary[]>([]);
   const currentProject = ref<Project | null>(null);
+  const activeLibraryRole = ref('');
+  const libraryViewState = reactive({
+    searchQuery: '',
+    animationPage: 1,
+    scrollY: 0,
+    roleScrollTop: 0,
+  });
   const loading = ref(false);
   const error = ref<string | null>(null);
 
@@ -174,6 +182,21 @@ export const useProjectStore = defineStore('project', () => {
     }
   }
 
+  function applyRename(result: ProjectRenameResult) {
+    const replacements = new Map(result.projects.map(project => [project.id, project]));
+    const selected = projects.value.find(project => (
+      project.role === activeLibraryRole.value && result.idMap[project.id]
+    ));
+    if (selected) {
+      activeLibraryRole.value = replacements.get(result.idMap[selected.id])?.role ?? activeLibraryRole.value;
+    }
+    if (currentProject.value && result.idMap[currentProject.value.id]) {
+      currentProject.value = replacements.get(result.idMap[currentProject.value.id]) ?? null;
+    }
+    projects.value = projects.value.map(project => replacements.get(result.idMap[project.id]) ?? project);
+    roles.value = result.roles;
+  }
+
   function setCurrentProject(project: Project | null) {
     currentProject.value = project;
   }
@@ -187,6 +210,8 @@ export const useProjectStore = defineStore('project', () => {
     projects,
     roles,
     currentProject,
+    activeLibraryRole,
+    libraryViewState,
     loading,
     error,
     // Getters
@@ -204,6 +229,7 @@ export const useProjectStore = defineStore('project', () => {
     deleteProject,
     deleteRole,
     updateProject,
+    applyRename,
     setCurrentProject,
     clearError
   };

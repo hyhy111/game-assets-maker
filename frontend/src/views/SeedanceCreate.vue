@@ -637,7 +637,7 @@ onMounted(async () => {
       duration: correctDuration(settings.default_duration),
       generate_audio: settings.default_generate_audio,
       return_last_frame: settings.default_return_last_frame,
-    }, settings.platform_default_model || settings.default_model_id);
+    }, settings.default_model_id);
   } else {
     workspace.initializeVideoDraft(defaultVideoDraft());
   }
@@ -737,7 +737,7 @@ function clampToPlatformModel() {
   if (!models.length) return;
   let entry = models.find((candidate) => candidate.model === form.model);
   if (!entry) {
-    entry = models.find(candidate => candidate.model === (store.settings?.platform_default_model || store.settings?.default_model_id)) ?? models[0];
+    entry = models.find(candidate => candidate.model === store.settings?.default_model_id) ?? models[0];
     form.model = entry.model;
   }
   const resolutions = (entry.resolutions ?? []) as SeedanceResolution[];

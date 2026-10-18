@@ -102,14 +102,18 @@
           class="mb-4"
           :data-test="`seedream-attempt-${selectedSucceededAttempt.index}`"
         >
-          <div class="relative mx-auto w-fit">
+          <div
+            class="relative mx-auto w-fit"
+            :draggable="!!selectedSucceededAttempt.absolute_path && selectedSucceededAttempt.can_open_directory !== false"
+            :title="t('aiCreation.recent.dragImageToVideoFrame')"
+            @dragstart="dragCurrentImage($event)"
+          >
             <img
               :src="attemptImageUrl(selectedSucceededAttempt)"
               :alt="t('seedream.detail.candidateImage')"
               class="block max-h-[60vh] max-w-full rounded-lg"
               :data-test="`seedream-image-${selectedSucceededAttempt.index}`"
-              :draggable="!!selectedSucceededAttempt.local_path && selectedSucceededAttempt.can_open_directory !== false"
-              @dragstart="dragCurrentImage($event)"
+              draggable="false"
             />
             <RecentMediaFavoriteButton
               class="absolute right-3 top-3 z-[2]"
@@ -372,11 +376,12 @@ async function useAsReference() {
 
 function dragCurrentImage(event: DragEvent) {
   const attempt = selectedSucceededAttempt.value;
-  if (!attempt?.local_path) { event.preventDefault(); return; }
+  if (!attempt?.absolute_path || attempt.can_open_directory === false) { event.preventDefault(); return; }
   writeSeedreamImageDrag(
     event.dataTransfer,
     { localId: batchId.value, attemptIndex: attempt.index },
     event.currentTarget as HTMLElement | null,
+    attempt.absolute_path,
   );
 }
 

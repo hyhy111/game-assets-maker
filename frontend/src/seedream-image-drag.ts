@@ -1,6 +1,7 @@
 export const SEEDREAM_IMAGE_DRAG_TYPE = 'application/x-gam-seedream-image';
 const IMAGE_DRAG_TEXT_PREFIX = 'gam-seedream-image:';
 let removeImageDragEffect: (() => void) | undefined;
+let currentImageDrag: { absolutePath: string; payload: SeedreamImageDragPayload } | undefined;
 
 export interface SeedreamImageDragPayload {
   localId: string;
@@ -46,19 +47,30 @@ export function writeSeedreamImageDrag(
   dataTransfer: DataTransfer | null,
   payload: SeedreamImageDragPayload,
   source?: HTMLElement | null,
+  absolutePath?: string | null,
+  preview?: HTMLElement | null,
 ) {
   if (!dataTransfer) return;
   dataTransfer.effectAllowed = 'copy';
   const serialized = JSON.stringify(payload);
   dataTransfer.setData(SEEDREAM_IMAGE_DRAG_TYPE, serialized);
-  // Native WebView pasteboards also need a standard representation of the drag.
-  dataTransfer.setData('text/plain', IMAGE_DRAG_TEXT_PREFIX + serialized);
+  currentImageDrag = absolutePath ? { absolutePath, payload: { ...payload } } : undefined;
+  // External agent inputs receive a usable local path instead of internal metadata.
+  dataTransfer.setData('text/plain', absolutePath || IMAGE_DRAG_TEXT_PREFIX + serialized);
+  if (preview) {
+    try {
+      // Reuse the rendered thumbnail so the drag bitmap contains only this image.
+      dataTransfer.setDragImage(preview, preview.clientWidth / 2, preview.clientHeight / 2);
+    } catch {
+      // Preview failures must leave the native drag and its payload usable.
+    }
+  }
   if (source) startImageDragEffect(source);
 }
 
 function startImageDragEffect(source: HTMLElement) {
   removeImageDragEffect?.();
-  // Keep WebView's native drag bitmap: overriding it can cancel the native drop.
+  // Avoid Canvas drag bitmaps, which can cancel native WebView drops.
   // The cosmetic overlay never captures input or changes drag/drop acceptance.
   try {
     const document = source.ownerDocument;
@@ -109,6 +121,8 @@ export function readSeedreamImageDrag(dataTransfer: DataTransfer | null): Seedre
     let serialized = dataTransfer.getData(SEEDREAM_IMAGE_DRAG_TYPE);
     if (!serialized) {
       const text = dataTransfer.getData('text/plain');
+      // Native WebViews may retain only text when dragging back into the app.
+      if (currentImageDrag && text === currentImageDrag.absolutePath) return { ...currentImageDrag.payload };
       if (!text.startsWith(IMAGE_DRAG_TEXT_PREFIX)) return null;
       serialized = text.slice(IMAGE_DRAG_TEXT_PREFIX.length);
     }

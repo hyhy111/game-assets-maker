@@ -195,8 +195,8 @@ def test_installed_config_uses_home_dot_gam(monkeypatch: pytest.MonkeyPatch, tmp
     _clear_overrides(monkeypatch)
     monkeypatch.setenv("GAM_DATA_MODE", "installed")
 
-    from src.utils.app_config import get_app_config_path
     from src.utils import data_paths
+    from src.utils.app_config import get_app_config_path
 
     home = tmp_path / "developer-home"
     monkeypatch.setattr(data_paths.Path, "home", classmethod(lambda cls: home))

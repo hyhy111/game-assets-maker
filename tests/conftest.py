@@ -46,7 +46,7 @@ def _write_video(path: Path, color: tuple[int, int, int]):
         frame = np.full((64, 64, 3), (30, 180, 40), dtype=np.uint8)
         x = 10 + i
         y = 16
-        frame[y:y + 28, x:x + 24] = color
+        frame[y : y + 28, x : x + 24] = color
         writer.write(frame)
 
     writer.release()
@@ -76,11 +76,15 @@ def test_assets(tmp_path, repo_root):
     _copy_if_exists(source_root / "legacy_projects", assets_root / "legacy_projects")
 
     required = {}
-    existing_roles = {
-        role_dir.name: sorted(video_path.stem for video_path in role_dir.glob("*.mp4"))
-        for role_dir in (assets_root / "videos").iterdir()
-        if role_dir.is_dir()
-    } if (assets_root / "videos").exists() else {}
+    existing_roles = (
+        {
+            role_dir.name: sorted(video_path.stem for video_path in role_dir.glob("*.mp4"))
+            for role_dir in (assets_root / "videos").iterdir()
+            if role_dir.is_dir()
+        }
+        if (assets_root / "videos").exists()
+        else {}
+    )
 
     if len(existing_roles) < 2 or any(len(actions) < 2 for actions in existing_roles.values()):
         required = {
@@ -114,7 +118,10 @@ def test_assets(tmp_path, repo_root):
         (legacy_root / "cache").mkdir(parents=True, exist_ok=True)
         (legacy_root / "output" / "02_no_bg").mkdir(parents=True, exist_ok=True)
         (legacy_root / "cache" / "global_params.json").write_text(
-            json.dumps({"project_name": "legacy_walk", "video_path": "", "timestamp": "2026-01-01T00:00:00"}, ensure_ascii=False),
+            json.dumps(
+                {"project_name": "legacy_walk", "video_path": "", "timestamp": "2026-01-01T00:00:00"},
+                ensure_ascii=False,
+            ),
             encoding="utf-8",
         )
         _write_trim_frames(legacy_root / "output" / "02_no_bg", (255, 0, 0, 255))

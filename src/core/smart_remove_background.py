@@ -175,6 +175,7 @@ def smart_remove_background_rembg(
 
     try:
         from rembg import remove
+
         from backend.core.smart_remove_background import get_rembg_session
     except ImportError:
         log_info("rembg not installed, falling back to legacy algorithm")

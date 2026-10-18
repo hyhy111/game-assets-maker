@@ -1,5 +1,6 @@
 """Use saved step parameters with validated explicit overrides."""
 
+from contextlib import nullcontext
 from pathlib import Path
 from typing import Any
 
@@ -53,8 +54,13 @@ class StepControl:
     def __init__(self, project_api, process_api):
         self.projects = project_api
         self.process = process_api
+        self._mutation_lock = getattr(project_api, "_project_mutation_lock", nullcontext())
 
     def apply(self, operation: str, payload: dict[str, Any]) -> dict[str, Any]:
+        with self._mutation_lock:
+            return self._apply(operation, payload)
+
+    def _apply(self, operation: str, payload: dict[str, Any]) -> dict[str, Any]:
         if operation == "step.status":
             status = self.process.get_task_status(payload.get("task_id", ""))
             if not status.get("success"):

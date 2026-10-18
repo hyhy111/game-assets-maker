@@ -1,11 +1,15 @@
 """Project API - Project management endpoints"""
 
 import json
+import os
+import re
 import shutil
 import tempfile
+import threading
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 from backend.api.project_paths import (
     LEGACY_ROLE,
@@ -26,6 +30,7 @@ class ProjectAPI:
     def __init__(self, projects_root: Path | None = None):
         self._projects_root = projects_root if projects_root is not None else default_projects_root()
         self._projects_root.mkdir(parents=True, exist_ok=True)
+        self._rename_lock = threading.RLock()
 
     def _get_project_path(self, project_id: str) -> Path:
         """Get full path to project directory"""
@@ -543,6 +548,162 @@ class ProjectAPI:
             print(f"Error deleting role {role}: {e}")
             return False
 
+    @staticmethod
+    def _validate_rename_name(value: str) -> str:
+        if not isinstance(value, str):
+            raise ValueError("RENAME_INVALID: 名称必须是文字")
+        name = value.strip()
+        reserved = re.fullmatch(r"(?:CON|PRN|AUX|NUL|COM[1-9¹²³]|LPT[1-9¹²³])(?:\..*)?", name, re.IGNORECASE)
+        if (
+            not name
+            or any(ord(char) < 32 or ord(char) == 127 for char in value)
+            or name in {".", "..", LEGACY_ROLE}
+            or any(char in '<>:"/\\|?*' or ord(char) < 32 or ord(char) == 127 for char in name)
+            or name.endswith((".", " "))
+            or reserved
+            or len(name.encode("utf-8")) > 240
+        ):
+            raise ValueError("RENAME_INVALID: 名称为空、包含不支持的字符或使用了保留名称")
+        return name
+
+    def _checked_rename_source(self, identifier: str, *, role: bool = False) -> Path:
+        if not isinstance(identifier, str):
+            raise ValueError("RENAME_INVALID: 无效的项目标识")
+        parts = identifier.split("/")
+        if len(parts) not in ((1,) if role else (1, 2)) or any(
+            not part or part in {".", ".."} or "\\" in part for part in parts
+        ):
+            raise ValueError("RENAME_INVALID: 无效的项目标识")
+        source = self._projects_root.joinpath(*parts)
+        root = self._projects_root.resolve()
+        if not source.resolve().is_relative_to(root) or any(
+            self._projects_root.joinpath(*parts[:index]).is_symlink() for index in range(1, len(parts) + 1)
+        ):
+            raise ValueError("RENAME_INVALID: 不能重命名链接或项目目录之外的数据")
+        if not source.is_dir() or (not role and not is_project_dir(source)) or (role and is_project_dir(source)):
+            raise ValueError("RENAME_NOT_FOUND: 角色或动画不存在，请刷新列表")
+        if any(path.is_symlink() for path in source.rglob("*")):
+            raise ValueError("RENAME_INVALID: 项目中存在链接，不能安全重命名")
+        return source
+
+    @staticmethod
+    def _write_rename_metadata(path: Path, content: bytes) -> None:
+        temporary = path.with_name(f".{path.name}.{uuid4().hex}.tmp")
+        try:
+            temporary.write_bytes(content)
+            os.replace(temporary, path)
+        finally:
+            temporary.unlink(missing_ok=True)
+
+    def rename_role(self, role: str, new_name: str) -> dict[str, Any]:
+        """Rename one role directory and every child project's identity."""
+        with self._rename_lock:
+            if role == LEGACY_ROLE:
+                raise ValueError("RENAME_INVALID: 未迁移是虚拟分组，不能重命名")
+            source = self._checked_rename_source(role, role=True)
+            name = self._validate_rename_name(new_name)
+            projects = [project for project in self.get_projects() if project["role"] == role and not project["legacy"]]
+            if not projects:
+                raise ValueError("RENAME_NOT_FOUND: 角色不存在，请刷新列表")
+            return self._rename_directory(source, name, projects, role_name=name)
+
+    def rename_project(self, project_id: str, new_name: str) -> dict[str, Any]:
+        """Rename one nested or legacy project without changing its layout."""
+        with self._rename_lock:
+            source = self._checked_rename_source(project_id)
+            name = self._validate_rename_name(new_name)
+            return self._rename_directory(source, name, [self.get_project(project_id)], action_name=name)
+
+    def _rename_directory(
+        self, source: Path, name: str, projects: list[dict[str, Any]], *, role_name: str = "", action_name: str = ""
+    ) -> dict[str, Any]:
+        target = source.with_name(name)
+        if any(
+            item.name != source.name and item.name.casefold() == name.casefold() for item in source.parent.iterdir()
+        ):
+            raise ValueError("RENAME_CONFLICT: 名称已存在，请使用其他名称")
+        mapping = {
+            project["id"]: (
+                action_name
+                if project["legacy"]
+                else make_project_id(role_name or project["role"], action_name or project["action"])
+            )
+            for project in projects
+        }
+        if source.name == name:
+            return {
+                "projects": [self.get_project(value) for value in mapping.values()],
+                "roles": self.get_roles(),
+                "idMap": mapping,
+            }
+
+        snapshots = []
+        for project in projects:
+            metadata_path = Path(project["path"]) / "cache" / "global_params.json"
+            original = metadata_path.read_bytes() if metadata_path.exists() else None
+            metadata = json.loads(original) if original is not None else {}
+            if not isinstance(metadata, dict):
+                raise ValueError("RENAME_INVALID: 项目元数据无效，未执行重命名")
+            metadata["role"] = role_name or project["role"]
+            metadata["action"] = action_name or project["action"]
+            if action_name:
+                metadata["project_name"] = action_name
+            # Only known project-local paths move; external inputs remain untouched.
+            for key in ("video_path", "project_path", "output_path", "cache_path"):
+                value = metadata.get(key)
+                if isinstance(value, str) and Path(value).is_absolute():
+                    try:
+                        relative = Path(value).resolve().relative_to(source.resolve())
+                    except ValueError:
+                        continue
+                    metadata[key] = str(target.absolute() / relative)
+            snapshots.append(
+                (
+                    metadata_path.relative_to(source),
+                    original,
+                    json.dumps(metadata, ensure_ascii=False, indent=2).encode("utf-8"),
+                )
+            )
+
+        current = source
+        written = []
+        try:
+            if source.name.casefold() == name.casefold():
+                temporary = source.with_name(f".rename-{uuid4().hex}")
+                source.rename(temporary)
+                current = temporary
+            current.rename(target)
+            current = target
+            for relative, original, content in snapshots:
+                written.append((relative, original))
+                self._write_rename_metadata(target / relative, content)
+            return {
+                "projects": [self.get_project(value) for value in mapping.values()],
+                "roles": self.get_roles(),
+                "idMap": mapping,
+            }
+        except Exception as error:
+            recovery_errors = []
+            for relative, original in reversed(written):
+                try:
+                    if original is None:
+                        (current / relative).unlink(missing_ok=True)
+                    else:
+                        self._write_rename_metadata(current / relative, original)
+                except OSError as recovery_error:
+                    recovery_errors.append(str(recovery_error))
+            if current != source:
+                try:
+                    current.rename(source)
+                    current = source
+                except OSError as recovery_error:
+                    recovery_errors.append(str(recovery_error))
+            if recovery_errors:
+                raise RuntimeError(
+                    f"RENAME_RECOVERY: 重命名未完成，部分数据未能恢复。保留位置：{current}；请勿删除该目录"
+                ) from error
+            raise RuntimeError("RENAME_FAILED: 重命名失败，已保留原目录和数据，请检查文件权限后重试") from error
+
     def update_project(self, project_id: str, data: dict[str, Any]) -> dict[str, Any]:
         """Update project metadata"""
         project_path = self._get_project_path(project_id)
@@ -710,11 +871,7 @@ class ProjectAPI:
         if source_root.resolve() == self._projects_root.resolve():
             raise ValueError("所选目录已经是当前项目目录")
 
-        existing_names = {
-            path.name.casefold()
-            for path in self._projects_root.iterdir()
-            if path.is_dir()
-        }
+        existing_names = {path.name.casefold() for path in self._projects_root.iterdir() if path.is_dir()}
         imported: list[dict[str, str]] = []
         skipped: list[dict[str, str]] = []
         failed: list[dict[str, str]] = []

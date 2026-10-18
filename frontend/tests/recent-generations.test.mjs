@@ -24,6 +24,7 @@ const attempt = (index, status = 'succeeded') => ({
   image_width: 1024,
   image_height: 576,
   local_path: status === 'succeeded' ? `images/${index}.jpg` : null,
+  absolute_path: status === 'succeeded' ? `/cache/batch/images/${index}.jpg` : null,
   url_expired: false,
   created_at: '2026-08-13T10:00:00Z',
   updated_at: '2026-08-13T10:00:42Z',
@@ -305,6 +306,7 @@ test('image task cards use one main preview with a selectable thumbnail strip', 
   });
 
   assert.match(html, /data-test="recent-image-main-preview"/);
+  assert.match(html, /<button[^>]*data-test="recent-image-main-preview"[^>]*draggable="true"/);
   assert.match(html, /data-test="recent-image-thumbnails"/);
   assert.match(html, /data-test="recent-image-thumbnail-0"/);
   assert.match(html, /data-test="recent-image-thumbnail-1"/);
@@ -314,6 +316,14 @@ test('image task cards use one main preview with a selectable thumbnail strip', 
   assert.match(html, /aria-pressed="true"[^>]*data-test="recent-image-thumbnail-0"/);
   assert.doesNotMatch(html, /3\/3/);
   assert.doesNotMatch(html, /gridTemplateRows|thumbnailGridStyle|thumbnailItemClass/);
+});
+
+test('missing cached images cannot be dragged as local paths', async () => {
+  const html = await renderRecent({
+    batches: [batch(1, { attempts: [{ ...attempt(0), absolute_path: null, can_open_directory: false }] })],
+  });
+  assert.match(html, /<button[^>]*data-test="recent-image-main-preview"[^>]*draggable="false"/);
+  assert.doesNotMatch(html, /draggable="true"/);
 });
 
 test('image previews fill the card top edge like video previews', async () => {

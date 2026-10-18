@@ -44,7 +44,13 @@ class AudioAPI:
         meta = self._load_project_meta(project_path)
         video_path = meta.get("video_path", "") if meta else ""
         if not video_path:
-            return {"success": False, "error": "项目缺少源视频路径", "source_wav": "", "source_fps": 0, "total_frames": 0}
+            return {
+                "success": False,
+                "error": "项目缺少源视频路径",
+                "source_wav": "",
+                "source_fps": 0,
+                "total_frames": 0,
+            }
 
         audio_dir = project_path / "cache" / "01_audio"
         wav_path = audio_dir / "source.wav"
@@ -53,7 +59,13 @@ class AudioAPI:
         if not wav_path.exists():
             video_file = Path(video_path)
             if not video_file.exists():
-                return {"success": False, "error": "源视频文件不存在", "source_wav": "", "source_fps": 0, "total_frames": 0}
+                return {
+                    "success": False,
+                    "error": "源视频文件不存在",
+                    "source_wav": "",
+                    "source_fps": 0,
+                    "total_frames": 0,
+                }
             audio_dir.mkdir(parents=True, exist_ok=True)
             ok = self._extract_wav(video_file, wav_path)
             if not ok:
@@ -132,9 +144,7 @@ class AudioAPI:
         data["clips"] = list(data.get("clips", []) or [])
         self._fill_timeline_metadata(data, project_path)
         wav_path = project_path / "cache" / "01_audio" / "source.wav"
-        data["source_wav"] = (
-            wav_path.relative_to(project_path).as_posix() if wav_path.exists() else ""
-        )
+        data["source_wav"] = wav_path.relative_to(project_path).as_posix() if wav_path.exists() else ""
 
         timeline_path.write_text(
             json.dumps(data, ensure_ascii=False),
@@ -159,6 +169,7 @@ class AudioAPI:
             data["source_fps"] = source_fps
         if not data.get("total_frames"):
             data["total_frames"] = total_frames
+
     def _load_project_meta(self, project_path: Path) -> dict[str, Any] | None:
         meta_path = project_path / "cache" / "global_params.json"
         if meta_path.exists():
@@ -172,12 +183,17 @@ class AudioAPI:
         try:
             result = subprocess.run(
                 [
-                    ffmpeg_exe, "-y",
-                    "-i", str(video_path),
+                    ffmpeg_exe,
+                    "-y",
+                    "-i",
+                    str(video_path),
                     "-vn",
-                    "-acodec", "pcm_s16le",
-                    "-ar", str(_WAV_SAMPLE_RATE),
-                    "-ac", str(_WAV_CHANNELS),
+                    "-acodec",
+                    "pcm_s16le",
+                    "-ar",
+                    str(_WAV_SAMPLE_RATE),
+                    "-ac",
+                    str(_WAV_CHANNELS),
                     str(wav_path),
                 ],
                 capture_output=True,

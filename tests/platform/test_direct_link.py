@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pytest
 from PIL import Image
+from platform_test_helpers import FakeTransport, ajax_ok, make_video_bytes
 
 from backend.platform.client import PlatformClient
 from backend.platform.downloads import direct_link_candidates, fresh_upstream_link
@@ -24,8 +25,6 @@ from backend.seedance.repository import TaskRepository
 from backend.seedream.manager import PLATFORM_SOURCE, SeedreamBatchManager
 from backend.seedream.models import SeedreamRequest
 from backend.seedream.repository import BatchRepository
-
-from platform_test_helpers import FakeTransport, ajax_ok, make_video_bytes, png_bytes
 
 FUTURE_MS = int(time.time() * 1000) + 3_600_000
 PAST_MS = int(time.time() * 1000) - 60_000

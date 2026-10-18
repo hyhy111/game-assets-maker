@@ -7,8 +7,8 @@ import { createPinia, setActivePinia } from 'pinia';
 import { closeFrontendHarness, createScriptedPyWebViewBridge, loadFrontendModule } from './scripted-pywebview-bridge.mjs';
 
 after(closeFrontendHarness);
-const IMAGE_DEFAULT = 'doubao-seedream-preferred';
-const VIDEO_DEFAULT = 'doubao-seedance-preferred';
+const IMAGE_DEFAULT = 'doubao-seedream-5-0-flash-260915';
+const VIDEO_DEFAULT = 'doubao-seedance-2-0-fast-260128';
 
 async function setup() {
   const bridge = createScriptedPyWebViewBridge();
@@ -19,7 +19,7 @@ async function setup() {
   return { workspace, bridge, image: { ...defaultForm(), model: 'flash' }, video: { ...defaultVideoDraft(), model: 'fast' }, correctPlatformImageParameters };
 }
 
-test('switching generation sources selects separate image/video defaults without changing input content', async () => {
+test('switching sources maps the shared default models to platform IDs without changing input content', async () => {
   const { workspace, bridge, image, video } = await setup();
   workspace.initializeImageDraft(image, IMAGE_DEFAULT);
   workspace.initializeVideoDraft(video, VIDEO_DEFAULT);
@@ -44,7 +44,7 @@ test('switching generation sources selects separate image/video defaults without
   assert.deepEqual(bridge.calls, []);
 });
 
-test('asynchronously loaded settings initialize the platform preference instead of the first model', async () => {
+test('asynchronously loaded settings apply the shared default and retain an edited draft', async () => {
   const { workspace, image, video } = await setup();
   workspace.setGenerationSource('forfuner-ai');
   workspace.initializeImageDraft(image, IMAGE_DEFAULT);
@@ -59,7 +59,7 @@ test('asynchronously loaded settings initialize the platform preference instead 
   assert.equal(workspace.videoDraft.model, 'manual-video');
 });
 
-test('clearing a draft uses defaults from the active source', async () => {
+test('clearing a draft uses the same configured model in either source', async () => {
   const { workspace, image, video } = await setup();
   workspace.initializeImageDraft(image, IMAGE_DEFAULT);
   workspace.initializeVideoDraft(video, VIDEO_DEFAULT);
@@ -98,7 +98,7 @@ function clampVideo(model, ready = true) {
       { model: 'first', resolutions: ['480p'], durationsByResolution: { '480p': [4] } },
       { model: VIDEO_DEFAULT, resolutions: ['720p'], durationsByResolution: { '720p': [5] } },
     ] },
-    store: { settings: { platform_default_model: VIDEO_DEFAULT } },
+    store: { settings: { default_model_id: VIDEO_DEFAULT, platform_default_model: 'obsolete-override' } },
   };
   vm.runInNewContext(ts.transpileModule(`${clampSource}\nclampToPlatformModel();`, {
     compilerOptions: { target: ts.ScriptTarget.ES2022 },
@@ -134,7 +134,7 @@ test('switching image source corrects resolution even after the store selects a 
 });
 
 
-test('switching API-key Mini to ForFuner AI follows the configured model when no platform override is saved', async () => {
+test('switching API-key Mini to ForFuner AI follows the common default model', async () => {
   const { workspace, video } = await setup();
   workspace.initializeVideoDraft({ ...video, model: 'mini' }, '');
   assert.equal(workspace.videoDraft.model, 'mini');
@@ -147,7 +147,7 @@ test('switching API-key Mini to ForFuner AI follows the configured model when no
       { model: 'doubao-seedance-2-0-260128', resolutions: ['720p'], durationsByResolution: { '720p': [4] } },
       { model: mini, resolutions: ['720p'], durationsByResolution: { '720p': [4] } },
     ] },
-    store: { settings: { default_model: 'mini', default_model_id: mini, platform_default_model: '' } },
+    store: { settings: { default_model: 'mini', default_model_id: mini } },
   };
   vm.runInNewContext(ts.transpileModule(`${clampSource}\nclampToPlatformModel();`, {
     compilerOptions: { target: ts.ScriptTarget.ES2022 },

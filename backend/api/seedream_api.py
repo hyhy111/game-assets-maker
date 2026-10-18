@@ -39,7 +39,7 @@ from backend.seedream.models import MODEL_CAPABILITIES, SeedreamRequest, platfor
 from backend.seedream.repository import BatchRepository
 from backend.seedream.validation import _ALLOWED_RATIOS, ValidationError, validate_request
 from src.utils.ai_cache_paths import ai_pic_cache_root
-from src.utils.app_config import load_app_config, platform_default_model, save_app_config
+from src.utils.app_config import load_app_config, save_app_config
 from src.utils.storage_locations import StorageLocations
 from src.utils.system_paths import open_directory
 
@@ -538,7 +538,6 @@ class SeedreamAPI:
                     "default_count": default_count,
                     "default_model": default_model,
                     "default_model_id": platform_model_id(default_model),
-                    "platform_default_model": seedream_config.get("platform_default_model", ""),
                     "default_resolution": default_resolution,
                     "default_ratio": default_ratio,
                 },
@@ -551,7 +550,6 @@ class SeedreamAPI:
             if not isinstance(settings, dict):
                 raise ValueError("Seedream settings must be an object")
             settings = {**self.get_settings()["settings"], **settings}
-            platform_model = platform_default_model(settings["platform_default_model"])
             default_count = settings.get("default_count", _DEFAULT_COUNT)
             if not isinstance(default_count, int) or default_count < 1 or default_count > 4:
                 raise ValidationError("default_count", "INVALID_COUNT", "Image count must be between 1 and 4")
@@ -571,7 +569,6 @@ class SeedreamAPI:
                     "seedream": {
                         "default_count": default_count,
                         "default_model": default_model,
-                        "platform_default_model": platform_model,
                         "default_resolution": default_resolution,
                         "default_ratio": default_ratio,
                     }
@@ -583,7 +580,6 @@ class SeedreamAPI:
                     "default_count": default_count,
                     "default_model": default_model,
                     "default_model_id": platform_model_id(default_model),
-                    "platform_default_model": platform_model,
                     "default_resolution": default_resolution,
                     "default_ratio": default_ratio,
                 },
@@ -681,6 +677,7 @@ class SeedreamAPI:
         for attempt in decorated.get("attempts", []):
             if isinstance(attempt, dict):
                 attempt["can_open_directory"] = False
+                attempt["absolute_path"] = None
             if isinstance(attempt, dict) and attempt.get("image_url"):
                 index = attempt.get("index", 0)
                 attempt["image_url"] = self._media_url(local_id, index if isinstance(index, int) else 0)
@@ -688,6 +685,8 @@ class SeedreamAPI:
                     source = self.media_resolver.resolve(local_id, "image", index if isinstance(index, int) else 0)
                     backup = source.with_name(f"{source.stem}.original{source.suffix}")
                     attempt["can_open_directory"] = source.is_file()
+                    if attempt["can_open_directory"]:
+                        attempt["absolute_path"] = str(source.resolve())
                     attempt["has_original_backup"] = backup.is_file()
                 except (OSError, TypeError, ValueError):
                     attempt["has_original_backup"] = False

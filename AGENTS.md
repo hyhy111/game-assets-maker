@@ -24,6 +24,11 @@ These instructions apply to the entire repository.
 - `tests/` contains Python tests; `frontend/tests/` contains frontend tests.
 - Keep UI, settings, types, validation, persistence fallback, localization, and tests consistent when changing a user-visible model or capability.
 
+## GAM Skills Submodule
+
+- `.agents/skills` is the separate `hyhy111/gam-skills` Git repository. Read its `AGENTS.md` before editing Skills. Keep local non-GAM skills ignored within that directory.
+- Initialize the recorded Skills version with `git submodule update --init -- .agents/skills`. Commit and push intended Skills changes in the submodule before updating the client pointer; preserve pending edits in both repositories.
+
 ## Persistent Data Safety
 
 - Installed applications store writable user state under `~/.gam` by default. Resolve paths through the existing data-path helpers and honor `GAM_DATA_ROOT`, `GAM_DATA_MODE`, and `GAM_CONFIG`.

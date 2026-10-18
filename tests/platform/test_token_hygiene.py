@@ -6,14 +6,12 @@ import logging
 from typing import Any
 
 import pytest
-
 from PIL import Image
+from platform_test_helpers import FakeTransport, ajax_error, ajax_ok
 
 from backend.api.seedance_api import SeedanceAPI
 from backend.platform.client import PlatformError
 from backend.platform.config import PlatformConfig
-
-from platform_test_helpers import FakeTransport, ajax_error, ajax_ok
 
 
 class StubManager:

@@ -264,22 +264,32 @@
             </label>
 
             <nav
+              ref="roleNav"
               class="role-nav"
               :aria-label="t('projectManager.roleListLabel')"
             >
-              <button
+              <div
                 v-for="group in filteredGroupedProjects"
                 :key="group.role"
-                type="button"
                 class="role-nav-item"
                 :class="{ active: group.role === selectedGroup?.role }"
-                :aria-current="group.role === selectedGroup?.role ? 'true' : undefined"
-                @click="selectRole(group.role)"
               >
-                <span class="role-nav-dot" />
-                <span class="min-w-0 flex-1 truncate">{{ group.role }}</span>
-                <span class="font-mono text-[11px]">{{ group.projects.length }}</span>
-              </button>
+                <button
+                  type="button"
+                  class="flex min-w-0 flex-1 items-center gap-2.5 rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  :aria-current="group.role === selectedGroup?.role ? 'true' : undefined"
+                  @click="selectRole(group.role)"
+                >
+                  <span class="role-nav-dot" />
+                  <span class="min-w-0 flex-1 truncate">{{ group.role }}</span>
+                </button>
+                <LibraryItemMenu
+                  v-if="group.role !== '未迁移'"
+                  :menu-key="`role:${group.role}`"
+                  :label="t('projectManager.roleMenu', { name: group.role })"
+                  @rename="beginRoleRename(group.role, $event)"
+                />
+              </div>
             </nav>
           </aside>
 
@@ -449,18 +459,14 @@
                     </h3>
 
                     <div
-                      class="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+                      class="flex flex-none items-center gap-0.5"
                       @click.stop
                     >
-                      <button
-                        type="button"
-                        class="rounded-md p-1.5 text-gray-500 hover:bg-dark-border hover:text-white"
-                        :title="t('projectManager.openProject')"
-                        @click="openProject(project)"
-                        @keydown.stop
-                      >
-                        <ArrowRight class="h-4 w-4" />
-                      </button>
+                      <LibraryItemMenu
+                        :menu-key="`project:${project.id}`"
+                        :label="t('projectManager.animationMenu', { name: project.action || project.name })"
+                        @rename="beginProjectRename(project, $event)"
+                      />
                       <button
                         type="button"
                         class="rounded-md p-1.5 text-gray-500 hover:bg-danger/15 hover:text-danger"
@@ -697,6 +703,72 @@
       </Dialog>
     </TransitionRoot>
 
+    <Dialog
+      v-if="renameTarget"
+      :open="true"
+      :initial-focus="renameInput"
+      class="relative z-50"
+      @close="closeRename"
+    >
+      <div
+        class="fixed inset-0 bg-black/60"
+        aria-hidden="true"
+      />
+      <div class="fixed inset-0 overflow-y-auto">
+        <div class="flex min-h-full items-center justify-center p-4">
+          <DialogPanel class="w-full max-w-sm rounded-xl border border-dark-border bg-dark-surface p-6 shadow-2xl">
+            <DialogTitle class="mb-4 text-lg font-semibold text-white">
+              {{ t(renameTarget.kind === 'role' ? 'projectManager.renameRole' : 'projectManager.renameAnimation') }}
+            </DialogTitle>
+            <form @submit.prevent="submitRename">
+              <label
+                for="library-rename-name"
+                class="mb-2 block text-sm text-gray-300"
+              >
+                {{ t(renameTarget.kind === 'role' ? 'projectManager.roleName' : 'projectManager.actionName') }}
+              </label>
+              <input
+                id="library-rename-name"
+                ref="renameInput"
+                v-model="renameName"
+                type="text"
+                autocomplete="off"
+                class="w-full rounded-lg border border-dark-border bg-dark-bg px-3 py-2.5 text-sm text-white outline-none focus:border-primary"
+                :disabled="renaming"
+                :aria-invalid="Boolean(renameError)"
+                :aria-describedby="renameError ? 'library-rename-error' : undefined"
+                @focus="renameInput?.select()"
+              >
+              <p
+                v-if="renameError"
+                id="library-rename-error"
+                role="alert"
+                class="mt-2 break-words text-sm text-danger"
+              >
+                {{ renameError }}
+              </p>
+              <div class="mt-5 flex justify-end gap-3">
+                <Button
+                  variant="secondary"
+                  :disabled="renaming"
+                  @click="closeRename"
+                >
+                  {{ t('common.cancel') }}
+                </Button>
+                <Button
+                  type="submit"
+                  :loading="renaming"
+                  :disabled="!renameName.trim() || renaming"
+                >
+                  {{ t('common.save') }}
+                </Button>
+              </div>
+            </form>
+          </DialogPanel>
+        </div>
+      </div>
+    </Dialog>
+
     <!-- Delete role confirmation modal -->
     <TransitionRoot
       as="template"
@@ -765,13 +837,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { useRouter } from 'vue-router';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { onBeforeRouteLeave, useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import { useI18n } from 'vue-i18n';
 import {
   AlertTriangle,
-  ArrowRight,
   Check,
   CheckCircle,
   ChevronLeft,
@@ -794,19 +865,31 @@ import { Dialog, DialogPanel, DialogTitle, Menu, MenuButton, MenuItem, MenuItems
 import { useProjectStore } from '@/stores/project';
 import { usePlayerStore } from '@/stores/player';
 import { api } from '@/api';
-import type { BatchTrimResult, Frame, Project } from '@/types';
+import type { BatchTrimResult, Frame, Project, ProjectRenameResult } from '@/types';
 import Button from '@/components/common/Button.vue';
 import Select from '@/components/common/Select.vue';
 import Header from '@/components/layout/Header.vue';
 import ProjectManagerHero from '@/components/project-manager/ProjectManagerHero.vue';
+import LibraryItemMenu from '@/components/project-manager/LibraryItemMenu.vue';
 
 const router = useRouter();
 const projectStore = useProjectStore();
 const playerStore = usePlayerStore();
 const { locale, t } = useI18n();
-const { projects, loading, legacyProjects } = storeToRefs(projectStore);
+const { projects, loading, legacyProjects, activeLibraryRole: activeRole } = storeToRefs(projectStore);
 
-const searchQuery = ref('');
+const savedLibraryView = { ...projectStore.libraryViewState, role: activeRole.value };
+const searchQuery = ref(savedLibraryView.searchQuery);
+const roleNav = ref<HTMLElement | null>(null);
+let leavingLibrary = false;
+const renameTarget = ref<{ kind: 'role' | 'project'; id: string; name: string } | null>(null);
+const renameName = ref('');
+const renameError = ref('');
+const renaming = ref(false);
+const renameInput = ref<HTMLInputElement | null>(null);
+let renameTrigger: HTMLElement | undefined;
+let preservingRenamePage = false;
+const previewVersions = new Map<string, number>();
 const showDeleteModal = ref(false);
 const projectToDelete = ref<Project | null>(null);
 const deleting = ref(false);
@@ -823,8 +906,7 @@ const customMigrationRoles = ref<string[]>([]);
 const migrationRoleMessage = ref('');
 const importingLegacyDirectory = ref(false);
 const importMessage = ref('');
-const activeRole = ref('');
-const animationPage = ref(1);
+const animationPage = ref(savedLibraryView.animationPage);
 const cardsPerPage = ref(16);
 const selectedProjectIds = ref<Set<string>>(new Set());
 const trimMode = ref<'global' | 'individual'>('global');
@@ -899,7 +981,7 @@ watch(
 watch(
   [() => selectedGroup.value?.role, searchQuery, cardsPerPage],
   () => {
-    animationPage.value = 1;
+    if (!preservingRenamePage) animationPage.value = 1;
   }
 );
 
@@ -949,16 +1031,42 @@ watch(
   { immediate: true }
 );
 
-onMounted(() => {
-  updateCardsPerPage();
-  window.addEventListener('resize', updateCardsPerPage);
-  loadProjects();
-});
+onMounted(initializeLibrary);
+onBeforeRouteLeave(rememberLibraryView);
 
 onBeforeUnmount(() => {
+  leavingLibrary = true;
   window.removeEventListener('resize', updateCardsPerPage);
   stopProjectPreview();
 });
+
+function rememberLibraryView() {
+  leavingLibrary = true;
+  Object.assign(projectStore.libraryViewState, {
+    searchQuery: searchQuery.value,
+    animationPage: animationPage.value,
+    scrollY: window.scrollY,
+    roleScrollTop: roleNav.value?.scrollTop ?? 0,
+  });
+}
+
+async function initializeLibrary() {
+  updateCardsPerPage();
+  window.addEventListener('resize', updateCardsPerPage);
+  await loadProjects();
+  await nextTick();
+  if (leavingLibrary) return;
+
+  // Loading and responsive page sizes may reset the page before the list is ready.
+  animationPage.value = activeRole.value === savedLibraryView.role
+    ? Math.min(savedLibraryView.animationPage, animationPageCount.value)
+    : 1;
+  await nextTick();
+  if (leavingLibrary) return;
+
+  if (roleNav.value) roleNav.value.scrollTop = savedLibraryView.roleScrollTop;
+  window.scrollTo({ top: savedLibraryView.scrollY, behavior: 'auto' });
+}
 
 function updateCardsPerPage() {
   const width = window.innerWidth;
@@ -973,7 +1081,7 @@ function loadProjects() {
   stopProjectPreview();
   previewFrames.value = {};
   previewIndexes.value = {};
-  projectStore.loadProjects();
+  return projectStore.loadProjects();
 }
 
 async function importLegacyProjectDirectory() {
@@ -1146,8 +1254,10 @@ async function loadPreviewFrames(project: Project) {
   if (previewLoading.value.has(project.id)) return [];
 
   previewLoading.value = new Set(previewLoading.value).add(project.id);
+  const version = previewVersions.get(project.id) ?? 0;
   try {
     const response = await api.frame.getFrames(project.id, previewSourceStep(project), 1, 12, true);
+    if ((previewVersions.get(project.id) ?? 0) !== version || leavingLibrary) return [];
     const frames = response.success ? response.frames : [];
     previewFrames.value = { ...previewFrames.value, [project.id]: frames };
     previewIndexes.value = { ...previewIndexes.value, [project.id]: 0 };
@@ -1156,9 +1266,11 @@ async function loadPreviewFrames(project: Project) {
     console.error('Failed to load project preview:', error);
     return [];
   } finally {
-    const nextLoading = new Set(previewLoading.value);
-    nextLoading.delete(project.id);
-    previewLoading.value = nextLoading;
+    if ((previewVersions.get(project.id) ?? 0) === version) {
+      const nextLoading = new Set(previewLoading.value);
+      nextLoading.delete(project.id);
+      previewLoading.value = nextLoading;
+    }
   }
 }
 
@@ -1242,6 +1354,100 @@ async function openProject(project: Project) {
     router.push('/editor');
   } finally {
     openingProjectId.value = null;
+  }
+}
+
+function beginRoleRename(role: string, trigger?: HTMLButtonElement) {
+  if (role === '未迁移') return;
+  beginRename({ kind: 'role', id: role, name: role }, trigger);
+}
+
+function beginProjectRename(project: Project, trigger?: HTMLButtonElement) {
+  beginRename({ kind: 'project', id: project.id, name: project.action || project.name }, trigger);
+}
+
+function beginRename(target: NonNullable<typeof renameTarget.value>, trigger?: HTMLButtonElement) {
+  if (renaming.value || openingProjectId.value) return;
+  renameTrigger = trigger;
+  renameTarget.value = target;
+  renameName.value = target.name;
+  renameError.value = '';
+  void nextTick(() => renameInput.value?.select());
+}
+
+async function restoreRenameFocus(key?: string) {
+  await nextTick();
+  if (typeof document === 'undefined') return;
+  const menu = key ? Array.from(document.querySelectorAll<HTMLElement>('[data-item-menu]'))
+    .find(item => item.dataset.itemMenu === key) : undefined;
+  const target = menu?.querySelector('button')
+    ?? (renameTrigger?.isConnected ? renameTrigger : undefined)
+    ?? document.querySelector<HTMLInputElement>('input[type="search"]');
+  target?.focus();
+}
+
+function closeRename() {
+  if (renaming.value) return;
+  renameTarget.value = null;
+  void restoreRenameFocus();
+}
+
+function applyRenameResult(result: ProjectRenameResult) {
+  const affected = new Set(Object.keys(result.idMap));
+  if (activePreviewId.value && affected.has(activePreviewId.value)) stopProjectPreview();
+  for (const id of affected) {
+    previewVersions.set(id, (previewVersions.get(id) ?? 0) + 1);
+    const timer = previewTimers.get(id);
+    if (timer) clearInterval(timer);
+    previewTimers.delete(id);
+    delete previewFrames.value[id];
+    delete previewIndexes.value[id];
+  }
+  previewLoading.value = new Set([...previewLoading.value].filter(id => !affected.has(id)));
+  selectedProjectIds.value = new Set([...selectedProjectIds.value].map(id => result.idMap[id] ?? id));
+  const drafts = { ...migrationDrafts.value };
+  for (const [oldId, newId] of Object.entries(result.idMap)) {
+    if (oldId !== newId && drafts[oldId]) {
+      drafts[newId] = drafts[oldId];
+      delete drafts[oldId];
+    }
+  }
+  migrationDrafts.value = drafts;
+  if (projectStore.currentProject && affected.has(projectStore.currentProject.id)) {
+    playerStore.stop();
+    playerStore.loadFrames([]);
+  }
+  preservingRenamePage = true;
+  projectStore.applyRename(result);
+  void nextTick(() => { preservingRenamePage = false; });
+}
+
+async function submitRename() {
+  const target = renameTarget.value;
+  if (!target || renaming.value || !renameName.value.trim()) return;
+  renaming.value = true;
+  renameError.value = '';
+  try {
+    const result = target.kind === 'role'
+      ? await api.project.renameRole(target.id, renameName.value)
+      : await api.project.renameProject(target.id, renameName.value);
+    applyRenameResult(result);
+    const newId = target.kind === 'role'
+      ? result.projects[0]?.role ?? target.id
+      : result.idMap[target.id] ?? target.id;
+    renameTarget.value = null;
+    await restoreRenameFocus(`${target.kind}:${newId}`);
+  } catch (error) {
+    const message = error instanceof Error ? error.message
+      : String((error as { message?: string })?.message ?? error);
+    const code = message.match(/RENAME_(?:INVALID|NOT_FOUND|CONFLICT|BUSY|RESTART|FAILED|RECOVERY)\b/)?.[0];
+    renaming.value = false;
+    renameError.value = t(`projectManager.renameErrors.${code ?? 'RENAME_UNKNOWN'}`);
+    if (code === 'RENAME_RECOVERY') renameError.value += ` ${message}`;
+    await nextTick();
+    renameInput.value?.focus();
+  } finally {
+    renaming.value = false;
   }
 }
 

@@ -47,3 +47,21 @@ test('an empty library keeps its original create and import entrypoints', async 
   assert.match(html, /data-test="import-legacy-projects-empty"/);
   assert.doesNotMatch(html, /没有找到匹配的角色或动画/);
 });
+
+
+test('a rename that no longer matches the search keeps the search recovery controls', async () => {
+  const html = await renderSfc('views/ProjectManager.vue', {
+    piniaState: { project: { projects: [project], roles: [], loading: false } },
+    configureSetup(bindings) {
+      bindings.searchQuery.value = 'knight';
+      bindings.applyRenameResult({
+        projects: [{ ...project, id: 'mage/attack', role: 'mage' }],
+        roles: [{ name: 'mage', projectCount: 1 }],
+        idMap: { 'knight/attack': 'mage/attack' },
+      });
+    },
+  });
+  assert.match(html, /没有找到匹配的角色或动画/);
+  assert.match(html, /type="search"/);
+  assert.match(html, /value="knight"/);
+});

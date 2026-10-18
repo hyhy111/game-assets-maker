@@ -123,13 +123,11 @@ class PlatformClient:
             f"--{boundary}\r\n"
             f'Content-Disposition: form-data; name="file"; filename="{file_path.name}"\r\n'
             f"Content-Type: {content_type}\r\n\r\n"
-        ).encode("utf-8")
-        body = head + file_path.read_bytes() + f"\r\n--{boundary}--\r\n".encode("utf-8")
+        ).encode()
+        body = head + file_path.read_bytes() + f"\r\n--{boundary}--\r\n".encode()
         headers = self._headers()
         headers["Content-Type"] = f"multipart/form-data; boundary={boundary}"
-        data = self._request(
-            "POST", "/app/gen/assets", body=body, headers=headers, timeout=max(self._timeout, 120.0)
-        )
+        data = self._request("POST", "/app/gen/assets", body=body, headers=headers, timeout=max(self._timeout, 120.0))
         asset_id = data.get("assetId")
         if not isinstance(asset_id, str) or not asset_id:
             raise PlatformResponseError("Platform asset response has no assetId")
@@ -182,9 +180,7 @@ class PlatformClient:
         """Download a finished artifact; error bodies map to PlatformError."""
         path = f"/app/artifact/{urllib.parse.quote(str(job_id), safe='')}/download"
         try:
-            response = self._transport.request(
-                "GET", self._url(path), self._headers(), None, max(self._timeout, 300.0)
-            )
+            response = self._transport.request("GET", self._url(path), self._headers(), None, max(self._timeout, 300.0))
         except Exception as error:
             trace_failure("GET", path, type(error).__name__, str(error), secret=self._token)
             raise
@@ -251,7 +247,9 @@ class PlatformClient:
         code = data.get("code")
         message = data.get("msg")
         error_code = str(code) if code is not None else f"HTTP_{response.status}"
-        error_message = message if isinstance(message, str) and message else f"Platform API returned HTTP {response.status}"
+        error_message = (
+            message if isinstance(message, str) and message else f"Platform API returned HTTP {response.status}"
+        )
         if response.status == 401 or code == 401:
             return PlatformUnauthorizedError(response.status, error_code, error_message)
         return PlatformError(response.status, error_code, error_message)

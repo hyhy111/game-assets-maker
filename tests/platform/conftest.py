@@ -8,10 +8,8 @@ conftest won the module-name race.
 
 from __future__ import annotations
 
-import pytest
-from PIL import Image
-
 import platform_test_helpers as helpers
+import pytest
 from platform_test_helpers import reset_trace_logger
 
 

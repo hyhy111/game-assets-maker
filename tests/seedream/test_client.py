@@ -9,8 +9,8 @@ from backend.seedream.client import (
     HttpResponse,
     SubmissionUnknownError,
 )
-from backend.seedream.validation import build_api_payload
 from backend.seedream.models import SeedreamRequest
+from backend.seedream.validation import build_api_payload
 
 
 class FakeTransport:
@@ -28,7 +28,10 @@ class FakeTransport:
 def _ok_response(data=None, usage=None) -> HttpResponse:
     body = {
         "created": 1700000000,
-        "data": data or [{"url": "https://ark.example.com/image.jpg", "image_type": "JPEG", "image_width": 1024, "image_height": 576}],
+        "data": data
+        or [
+            {"url": "https://ark.example.com/image.jpg", "image_type": "JPEG", "image_width": 1024, "image_height": 576}
+        ],
         "usage": usage or {"total_tokens": 42, "generated_images": 1},
     }
     return HttpResponse(200, {}, json.dumps(body).encode("utf-8"))
@@ -39,7 +42,9 @@ def _error_response(status: int, code: str = "ERROR", message: str = "failed") -
     return HttpResponse(status, {}, json.dumps(body).encode("utf-8"))
 
 
-def _error_response_with_headers(status: int, headers: dict[str, str], code: str = "ERROR", message: str = "failed") -> HttpResponse:
+def _error_response_with_headers(
+    status: int, headers: dict[str, str], code: str = "ERROR", message: str = "failed"
+) -> HttpResponse:
     body = {"error": {"code": code, "message": message}}
     return HttpResponse(status, headers, json.dumps(body).encode("utf-8"))
 
@@ -70,7 +75,7 @@ def test_client_sends_correct_request_body_and_headers():
 
 
 def test_client_timeout_is_25_minutes_by_default():
-    from backend.seedream.client import ArkClient, _DEFAULT_TIMEOUT_SECONDS
+    from backend.seedream.client import _DEFAULT_TIMEOUT_SECONDS, ArkClient
 
     assert _DEFAULT_TIMEOUT_SECONDS == 1500.0
     client = ArkClient("key")
@@ -185,9 +190,7 @@ def test_client_429_without_request_id_sets_none():
 
 def test_client_header_request_id_takes_precedence_over_body():
     body = {"error": {"code": "RATE_LIMIT", "message": "rate limited", "request_id": "from-body"}}
-    transport = FakeTransport(
-        HttpResponse(429, {"X-Request-ID": "from-header"}, json.dumps(body).encode("utf-8"))
-    )
+    transport = FakeTransport(HttpResponse(429, {"X-Request-ID": "from-header"}, json.dumps(body).encode("utf-8")))
     from backend.seedream.client import ArkClient
 
     client = ArkClient("key", transport=transport)

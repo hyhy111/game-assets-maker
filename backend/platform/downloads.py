@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import time
 import urllib.request
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from backend.platform.client import PlatformClient
@@ -34,7 +34,7 @@ def _expiry_ms(value: Any) -> int | None:
             return None
         # naive → assume UTC so the result is clock-independent
         if parsed.tzinfo is None:
-            parsed = parsed.replace(tzinfo=timezone.utc)
+            parsed = parsed.replace(tzinfo=UTC)
         return int(parsed.timestamp() * 1000)
     return None
 

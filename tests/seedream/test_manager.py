@@ -8,12 +8,11 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from backend.seedream.client import ArkAPIError, HttpResponse, SubmissionUnknownError
+from backend.seedream.client import HttpResponse
 from backend.seedream.downloader import ImageDownloader
 from backend.seedream.manager import SeedreamBatchManager
 from backend.seedream.models import SeedreamRequest
 from backend.seedream.repository import BatchRepository
-from backend.seedream.validation import build_api_payload
 
 
 class FakeTransport:
@@ -41,7 +40,9 @@ class FakeDownloadTransport:
 def _ok_response(usage=None) -> HttpResponse:
     body = {
         "created": int(time.time()),
-        "data": [{"url": "https://ark.example.com/image.jpg", "image_type": "JPEG", "image_width": 1024, "image_height": 576}],
+        "data": [
+            {"url": "https://ark.example.com/image.jpg", "image_type": "JPEG", "image_width": 1024, "image_height": 576}
+        ],
         "usage": usage or {"total_tokens": 42, "generated_images": 1},
     }
     return HttpResponse(200, {}, json.dumps(body).encode("utf-8"))
@@ -61,11 +62,13 @@ def _wait_for_terminal(manager: SeedreamBatchManager, batch_id: str, timeout: fl
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         batch = manager.get_batch(batch_id)
-        if batch["attempts"][0]["status"] in ("succeeded", "failed", "unknown", "download_failed"):
-            # Also wait for the worker thread's finally block to release the
-            # active-attempt lock, so delete_batch doesn't race with cleanup.
-            if not manager.has_active_batches():
-                return batch
+        # Also wait for the worker thread's finally block to release the
+        # active-attempt lock, so delete_batch doesn't race with cleanup.
+        if (
+            batch["attempts"][0]["status"] in ("succeeded", "failed", "unknown", "download_failed")
+            and not manager.has_active_batches()
+        ):
+            return batch
         time.sleep(0.01)
     return manager.get_batch(batch_id)
 
@@ -75,10 +78,7 @@ def _make_manager(tmp_path, transport, download_content=b""):
 
     repository = BatchRepository(tmp_path / "cache")
     jpeg_path = tmp_path / "test.jpg"
-    if download_content:
-        jpeg_bytes = download_content
-    else:
-        jpeg_bytes = _jpeg_bytes(jpeg_path)
+    jpeg_bytes = download_content or _jpeg_bytes(jpeg_path)
     downloader = ImageDownloader(repository, transport=FakeDownloadTransport(jpeg_bytes))
     client = ArkClient("test-key", transport=transport, timeout=1500.0)
     return SeedreamBatchManager(client, repository, downloader)
@@ -190,9 +190,7 @@ def test_manager_success_persists_response_then_downloads_then_succeeds(tmp_path
         "bottom_margin_ratio": 0.125,
         "scale": 0.5,
     }
-    image_path.with_name(f"{image_path.name}.layout.json").write_text(
-        json.dumps(generation_layout), encoding="utf-8"
-    )
+    image_path.with_name(f"{image_path.name}.layout.json").write_text(json.dumps(generation_layout), encoding="utf-8")
     assert manager.get_batch(batch["local_id"])["attempts"][0]["generation_layout"] == generation_layout
 
     # Request body sent to Ark was correct.
@@ -299,7 +297,7 @@ def test_manager_event_sink_dispatched_on_state_changes(tmp_path):
             event_ready.set()
 
     manager.set_event_sink(sink)
-    batch = manager.create_batch(SeedreamRequest(prompt="hero", model="pro", resolution="1K", ratio="16:9", count=1))
+    manager.create_batch(SeedreamRequest(prompt="hero", model="pro", resolution="1K", ratio="16:9", count=1))
     event_ready.wait(timeout=5.0)
 
     statuses = [e[1]["attempts"][0]["status"] for e in events]
@@ -348,10 +346,12 @@ def _wait_for_batch_terminal(manager: SeedreamBatchManager, batch_id: str, timeo
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         batch = manager.get_batch(batch_id)
-        if batch["status"] in ("completed", "partially_complete", "failed", "unknown"):
-            # Wait for all worker threads to release the active-attempt lock.
-            if not manager.has_active_batches():
-                return batch
+        # Wait for all worker threads to release the active-attempt lock.
+        if (
+            batch["status"] in ("completed", "partially_complete", "failed", "unknown")
+            and not manager.has_active_batches()
+        ):
+            return batch
         time.sleep(0.01)
     return manager.get_batch(batch_id)
 
@@ -383,7 +383,9 @@ def test_concurrent_batch_all_requests_enter_before_any_releases(tmp_path):
     transport = _BarrierTransport(_ok_response(), count)
     manager = _make_manager(tmp_path, transport)
 
-    batch = manager.create_batch(SeedreamRequest(prompt="hero", model="pro", resolution="1K", ratio="16:9", count=count))
+    batch = manager.create_batch(
+        SeedreamRequest(prompt="hero", model="pro", resolution="1K", ratio="16:9", count=count)
+    )
     result = _wait_for_batch_terminal(manager, batch["local_id"])
 
     assert result["status"] == "completed"
@@ -418,7 +420,9 @@ def test_concurrency_never_exceeds_four(tmp_path):
 
     transport = TrackingTransport()
     manager = _make_manager(tmp_path, transport)
-    batch = manager.create_batch(SeedreamRequest(prompt="hero", model="pro", resolution="1K", ratio="16:9", count=count))
+    batch = manager.create_batch(
+        SeedreamRequest(prompt="hero", model="pro", resolution="1K", ratio="16:9", count=count)
+    )
     _wait_for_batch_terminal(manager, batch["local_id"])
 
     assert max_concurrent <= 4
@@ -442,7 +446,9 @@ def test_batch_persists_all_attempt_placeholders_before_remote_call(tmp_path):
     transport = BlockingTransport()
     manager = _make_manager(tmp_path, transport)
 
-    batch = manager.create_batch(SeedreamRequest(prompt="hero", model="pro", resolution="1K", ratio="16:9", count=count))
+    batch = manager.create_batch(
+        SeedreamRequest(prompt="hero", model="pro", resolution="1K", ratio="16:9", count=count)
+    )
 
     # Batch returned immediately with all N placeholders queued.
     assert len(batch["attempts"]) == count
@@ -472,7 +478,9 @@ def test_batch_aggregation_all_succeeded(tmp_path):
     count = 2
     transport = FakeTransport(_ok_response())
     manager = _make_manager(tmp_path, transport)
-    batch = manager.create_batch(SeedreamRequest(prompt="hero", model="pro", resolution="1K", ratio="16:9", count=count))
+    batch = manager.create_batch(
+        SeedreamRequest(prompt="hero", model="pro", resolution="1K", ratio="16:9", count=count)
+    )
     result = _wait_for_batch_terminal(manager, batch["local_id"])
     assert result["status"] == "completed"
 
@@ -762,7 +770,7 @@ def test_manager_retry_download_rejects_expired_url(tmp_path):
     downloader = FailingDownloader(repository, transport=FakeDownloadTransport(b""))
     from backend.seedream.client import ArkClient
 
-    client = ArkClient("test-key", transport=transport, timeout=1500.0)
+    ArkClient("test-key", transport=transport, timeout=1500.0)
 
     # Use a response created 25 hours ago so the URL is expired at current time.
     from datetime import UTC, datetime, timedelta
@@ -778,7 +786,14 @@ def test_manager_retry_download_rejects_expired_url(tmp_path):
             self.calls.append((method, url, headers, body, timeout))
             body_data = {
                 "created": old_timestamp,
-                "data": [{"url": "https://ark.example.com/image.jpg", "image_type": "JPEG", "image_width": 1024, "image_height": 576}],
+                "data": [
+                    {
+                        "url": "https://ark.example.com/image.jpg",
+                        "image_type": "JPEG",
+                        "image_width": 1024,
+                        "image_height": 576,
+                    }
+                ],
                 "usage": {"total_tokens": 42, "generated_images": 1},
             }
             return HttpResponse(200, {}, json.dumps(body_data).encode("utf-8"))
@@ -807,9 +822,9 @@ def test_manager_url_expired_flag_in_public_attempt(tmp_path):
             raise OSError("download failed")
 
     downloader = FailingDownloader(repository, transport=FakeDownloadTransport(b""))
-    from backend.seedream.client import ArkClient
-
     from datetime import UTC, datetime, timedelta
+
+    from backend.seedream.client import ArkClient
 
     old_time = datetime.now(UTC) - timedelta(hours=25)
     old_timestamp = int(old_time.timestamp())
@@ -822,7 +837,14 @@ def test_manager_url_expired_flag_in_public_attempt(tmp_path):
             self.calls.append((method, url, headers, body, timeout))
             body_data = {
                 "created": old_timestamp,
-                "data": [{"url": "https://ark.example.com/image.jpg", "image_type": "JPEG", "image_width": 1024, "image_height": 576}],
+                "data": [
+                    {
+                        "url": "https://ark.example.com/image.jpg",
+                        "image_type": "JPEG",
+                        "image_width": 1024,
+                        "image_height": 576,
+                    }
+                ],
                 "usage": {"total_tokens": 42, "generated_images": 1},
             }
             return HttpResponse(200, {}, json.dumps(body_data).encode("utf-8"))
@@ -940,9 +962,7 @@ def _persist_batch_with_statuses(
     repository: BatchRepository, statuses: list[str], *, response: dict | None = None
 ) -> str:
     """Create a persisted batch whose attempts start in the given statuses."""
-    request = SeedreamRequest(
-        prompt="hero", model="pro", resolution="1K", ratio="16:9", count=len(statuses)
-    )
+    request = SeedreamRequest(prompt="hero", model="pro", resolution="1K", ratio="16:9", count=len(statuses))
     batch = repository.create_batch(request)
 
     def apply_statuses(current) -> None:
@@ -982,9 +1002,7 @@ def test_manager_reclassify_marks_downloading_as_download_failed(tmp_path):
         "data": [{"url": "https://ark.example.com/image.jpg"}],
         "usage": {"total_tokens": 9},
     }
-    batch_id = _persist_batch_with_statuses(
-        repository, ["downloading"], response=persisted_response
-    )
+    batch_id = _persist_batch_with_statuses(repository, ["downloading"], response=persisted_response)
 
     result = manager.reclassify_interrupted_attempts()
 
@@ -1002,9 +1020,7 @@ def test_manager_reclassify_does_not_touch_terminal_statuses(tmp_path):
     repository = BatchRepository(tmp_path / "cache")
     manager = _make_manager(tmp_path, transport)
 
-    batch_id = _persist_batch_with_statuses(
-        repository, ["succeeded", "failed", "unknown", "download_failed"]
-    )
+    batch_id = _persist_batch_with_statuses(repository, ["succeeded", "failed", "unknown", "download_failed"])
 
     result = manager.reclassify_interrupted_attempts()
 
@@ -1055,15 +1071,13 @@ def test_manager_reclassified_downloading_can_retry_download_without_generation(
     jpeg_bytes = _jpeg_bytes(tmp_path / "test.jpg")
 
     # First manager: persist a downloading attempt (response on disk), then "crash".
-    manager1 = _make_manager(tmp_path, transport)
+    _make_manager(tmp_path, transport)
     persisted_response = {
         "created": int(time.time()),
         "data": [{"url": "https://ark.example.com/image.jpg"}],
         "usage": {"total_tokens": 9},
     }
-    batch_id = _persist_batch_with_statuses(
-        repository, ["downloading"], response=persisted_response
-    )
+    batch_id = _persist_batch_with_statuses(repository, ["downloading"], response=persisted_response)
 
     # Restart: new manager with a working downloader reclassifies then retries.
     from backend.seedream.client import ArkClient
@@ -1111,7 +1125,6 @@ def test_manager_active_attempt_count_zero_when_empty(tmp_path):
     manager = _make_manager(tmp_path, transport)
 
     assert manager.active_attempt_count() == 0
-
 
 
 # ---------------------------------------------------------------------------

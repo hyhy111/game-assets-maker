@@ -10,6 +10,7 @@ import shutil
 import sys
 import threading
 from collections.abc import Callable
+from functools import wraps
 from http.server import SimpleHTTPRequestHandler
 from pathlib import Path
 from queue import Empty, Queue
@@ -353,6 +354,26 @@ class SubscriptionWindowBridge:
             return False
 
 
+def _project_write(*, existing: bool = False, multiple: bool = False):
+    """Serialize project writes with renames and reject stale project IDs."""
+
+    def decorate(function):
+        @wraps(function)
+        def guarded(self, *args, **kwargs):
+            with self._project_mutation_lock:
+                if existing or multiple:
+                    value = args[0] if args else kwargs.get("project_id" if existing else "params")
+                    identifiers = [value] if existing else value.get("projectIds", [])
+                    for project_id in identifiers:
+                        if self._project_api.get_project(project_id) is None:
+                            raise ValueError("RENAME_NOT_FOUND: 动画不存在或已改名，请刷新列表")
+                return function(self, *args, **kwargs)
+
+        return guarded
+
+    return decorate
+
+
 class API:
     """
     Main API class exposed to JavaScript via PyWebView
@@ -366,6 +387,7 @@ class API:
         restart_handler: Callable[[], dict[str, Any]] | None = None,
         close_handler: Callable[[], dict[str, Any]] | None = None,
     ):
+        self._project_mutation_lock = threading.RLock()
         self._window = window
         self._assets_base_url = assets_base_url.rstrip("/")
         self._restart_handler = restart_handler
@@ -613,26 +635,60 @@ class API:
         """Get project by ID (name)"""
         return self._project_api.get_project(project_id)
 
+    @_project_write()
     def create_project(self, role: str, action: str, video_path: str, frame_interval: int = 1) -> dict[str, Any]:
         """Create a new project"""
         return self._project_api.create_project(role, action, video_path, frame_interval)
 
+    @_project_write()
     def delete_project(self, project_id: str) -> bool:
         """Delete a project"""
         return self._project_api.delete_project(project_id)
 
+    @_project_write()
     def delete_role(self, role: str) -> bool:
         """Delete a role and all action projects under it"""
         return self._project_api.delete_role(role)
 
+    def _rename_project_item(self, operation: str, identifier: str, new_name: str) -> dict[str, Any]:
+        if not self._project_mutation_lock.acquire(blocking=False):
+            raise ValueError("RENAME_BUSY: 项目正在使用，请稍后重试")
+        try:
+            if self._storage_migration_coordinator.restart_required:
+                raise ValueError("RENAME_RESTART: 存储位置已更改，请重启应用后再重命名")
+            for attribute in ("_process_api_instance", "_batch_trim_api_instance"):
+                instance = getattr(self, attribute)
+                if instance is not None and instance.has_active_writes():
+                    raise ValueError("RENAME_BUSY: 项目正在处理或裁剪，请任务结束后重试")
+            # Cancellation updates status before the worker has finished unwinding.
+            process = self._process_api_instance
+            if process is not None and any(
+                not task.future.done() for task in getattr(process, "tasks", {}).values() if hasattr(task, "future")
+            ):
+                raise ValueError("RENAME_BUSY: 项目任务尚未结束，请稍后重试")
+            return getattr(self._project_api, operation)(identifier, new_name)
+        finally:
+            self._project_mutation_lock.release()
+
+    def rename_role(self, role: str, new_name: str) -> dict[str, Any]:
+        """Rename a role while no project writer can use the old paths."""
+        return self._rename_project_item("rename_role", role, new_name)
+
+    def rename_project(self, project_id: str, new_name: str) -> dict[str, Any]:
+        """Rename a single animation and return its new identity."""
+        return self._rename_project_item("rename_project", project_id, new_name)
+
+    @_project_write(existing=True)
     def update_project(self, project_id: str, data: dict[str, Any]) -> dict[str, Any]:
         """Update project metadata"""
         return self._project_api.update_project(project_id, data)
 
+    @_project_write()
     def migrate_legacy_projects(self, migrations: Any = "未知") -> dict[str, Any]:
         """Migrate legacy flat projects into role/action directories"""
         return self._project_api.migrate_legacy_projects(migrations)
 
+    @_project_write()
     def import_legacy_project_directory(self, source_directory: str) -> dict[str, Any]:
         """Copy projects from a user-selected legacy project directory."""
         return self._project_api.import_legacy_project_directory(source_directory)
@@ -671,16 +727,19 @@ class API:
         """Get project frames hidden from Step 2/3 preview and export."""
         return self._frame_api.get_hidden_frames(project_id)
 
+    @_project_write(existing=True)
     def set_frame_hidden(self, project_id: str, filename: str, hidden: bool = True) -> dict[str, Any]:
         """Hide or restore one frame without deleting its image file."""
         return self._frame_api.set_frame_hidden(project_id, filename, hidden)
 
+    @_project_write(existing=True)
     def restore_hidden_frames(self, project_id: str) -> dict[str, Any]:
         """Restore all project frames to Step 2/3 preview and export."""
         return self._frame_api.restore_hidden_frames(project_id)
 
     # ==================== Process API ====================
 
+    @_project_write(existing=True)
     def start_processing(self, project_id: str, step: int, params: dict[str, Any]) -> str:
         """Start processing task, returns task ID"""
         return self._process_api.start_processing(project_id, step, params)
@@ -693,10 +752,12 @@ class API:
         """Cancel a running task"""
         return self._process_api.cancel_task(task_id)
 
+    @_project_write(existing=True)
     def get_step_params(self, project_id: str, step: int) -> dict[str, Any]:
         """Get saved parameters for a step"""
         return self._process_api.get_step_params(project_id, step)
 
+    @_project_write(existing=True)
     def save_step_params(self, project_id: str, step: int, params: dict[str, Any]) -> bool:
         """Save parameters for a step"""
         return self._process_api.save_step_params(project_id, step, params)
@@ -773,6 +834,7 @@ class API:
         """Save the settings draft, or precheck a storage migration."""
         return self._storage_settings_api.save_settings(draft)
 
+    @_project_write()
     def storage_execute_migration(self, token: str) -> dict[str, Any]:
         """Run the confirmed migration and commit the settings draft."""
         return self._storage_settings_api.execute_migration(token)
@@ -890,8 +952,8 @@ class API:
                 "",
                 url,
                 js_api=bridge,
-                width=520,
-                height=720,
+                width=1280,
+                height=820,
                 resizable=True,
             )
             if window is None:
@@ -919,12 +981,14 @@ class API:
         """Check whether multiple projects are available for trimming."""
         return self._batch_trim_api.check_projects(project_ids)
 
+    @_project_write(multiple=True)
     def execute_batch_trim(self, params: dict[str, Any]) -> list[dict[str, Any]]:
         """Execute batch trimming."""
         return self._batch_trim_api.execute_trim(params)
 
     # ==================== Audio API ====================
 
+    @_project_write(existing=True)
     def extract_source_audio(self, project_id: str) -> dict[str, Any]:
         """抽取源视频音轨为 wav 并缓存，返回 wav URL + source_fps + total_frames。"""
         return self._audio_api.extract_source_audio(project_id)
@@ -933,6 +997,7 @@ class API:
         """读取 audio_timeline.json，返回 AudioTimeline 对象（未保存返空默认）。"""
         return self._audio_api.load_timeline(project_id)
 
+    @_project_write(existing=True)
     def save_timeline(self, project_id: str, timeline: dict[str, Any]) -> dict[str, Any]:
         """写入 audio_timeline.json，缺失的元数据从 source_meta.json 回填。"""
         return self._audio_api.save_timeline(project_id, timeline)
@@ -1005,6 +1070,7 @@ class API:
     def seedance_delete_task(self, local_id: str, allow_protected: bool = False) -> dict[str, Any]:
         return self._seedance_api.delete_task(local_id, allow_protected)
 
+    @_project_write()
     def seedance_handoff(self, local_id: str, role: str, action: str) -> dict[str, Any]:
         return self._seedance_api.handoff(local_id, role, action)
 

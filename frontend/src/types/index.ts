@@ -34,6 +34,12 @@ export interface CreateProjectData {
   frame_interval: number;
 }
 
+export interface ProjectRenameResult {
+  projects: Project[];
+  roles: RoleSummary[];
+  idMap: Record<string, string>;
+}
+
 export interface RoleSummary {
   name: string;
   projectCount: number;
@@ -400,7 +406,6 @@ export interface SeedanceSettings {
   api_key_configured: boolean;
   cache_dir: string;
   default_model: SeedanceModel;
-  platform_default_model: string;
   readonly default_model_id?: string;
   default_resolution: SeedanceResolution;
   default_ratio: SeedanceRatio;
@@ -631,6 +636,7 @@ export interface SeedreamAttempt {
   image_height: number | null;
   local_path: string | null;
   generation_layout?: GenerationLayout | null;
+  absolute_path?: string | null;
   has_original_backup?: boolean;
   can_open_directory?: boolean;
   url_expired: boolean;
@@ -655,7 +661,6 @@ export interface SeedreamBatch {
 export interface SeedreamSettings {
   default_count: number;
   default_model: SeedreamModel;
-  platform_default_model: string;
   readonly default_model_id?: string;
   default_resolution: SeedreamResolution;
   default_ratio: SeedreamRatio;

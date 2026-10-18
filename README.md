@@ -16,6 +16,10 @@ Game Assets Maker 是一款桌面应用，把视频一键转换为**透明背景
 - **项目管理**：角色 / 动作两级项目结构，每步参数独立保存
 - **像素后处理滤镜**：描边、孤立像素清理、边缘优化、颜色替换
 
+### 角色与动画重命名
+
+在动画库中，点击角色行右侧的三点菜单，或动画卡片删除图标左侧的三点菜单，选择「重命名」。输入新名称后保存；角色名不能与已有角色重复，动画名不能与同角色下的其他动画重复。项目正在处理或裁剪时，请等待任务结束后再改名。动画卡片的删除图标始终显示，悬浮时变红，点击后仍需确认。
+
 ### 技术栈
 
 - 后端：Python 3.12、PyWebView、OpenCV、Pillow、rembg
@@ -51,9 +55,9 @@ uv run python scripts/download_models.py u2net
 
 详见 [MODELS.md](MODELS.md)。
 
-### 按生成来源设置默认模型
+### 默认模型
 
-设置页的图片与视频默认参数分别提供“自定义 API Key 默认模型”和“ForFuner AI 默认模型”。平台模型选项来自登录后获取的可用模型清单，保存完整模型 ID，与 API Key 的模型简称独立保存。未单独指定平台默认模型时，优先匹配自定义 API Key 默认模型对应的平台模型，只有不可用时才选择清单中的其他模型。新草稿、清空草稿和切换生成来源时应用对应默认值；重新进入已有草稿时保留手动选择的有效模型。平台默认模型下架后，创建页会选择其他可用模型，但不改写已保存的偏好；清单加载失败时可重试，不回退到 API Key 模型列表。平台不支持的分辨率和时长仍按可用参数调整。
+设置页的图片与视频参数各提供一套默认模型配置，自定义 API Key 和 ForFuner AI 共用。平台来源会将所选模型匹配到可用模型清单中的完整 ID；不可用时选择其他可用模型，并按平台能力调整分辨率和时长。新草稿、清空草稿和切换生成来源时应用默认值；重新进入已有草稿时保留手动选择的有效模型。旧版单独保存的 ForFuner AI 默认模型不再使用。平台清单加载失败时可重试，不回退到 API Key 模型列表。
 
 ### 版本与更新
 
@@ -170,9 +174,9 @@ uv run python -m backend.main
 
 The local agent control service prefers port `8765` and automatically selects a free port if occupied. The CLI discovers it through `cache/agent-control.json` in the active data root; shutdown removes the record. For source development, run the CLI from the same workspace. If using `GAM_DATA_ROOT`, point the desktop app and CLI to the same directory.
 
-### Model defaults by generation source
+### Default models
 
-Image and video settings each offer separate Custom API Key and ForFuner AI default models. Platform options come from the available-model catalog after login and store full model IDs independently of API-key aliases. Without a platform override, the app first matches the configured API-key default to an available platform model, falling back only if unavailable. New drafts, clearing drafts and source changes use the corresponding defaults; reopening a draft retains a valid manually selected model. If a preferred platform model is removed, the composer selects another available model without overwriting the saved preference. Failed catalog loads can be retried and never fall back to the API-key model list. Unsupported platform resolutions and durations are still adjusted to available combinations.
+Image and video settings each have one default model shared by Custom API Key and ForFuner AI. Platform generation maps that choice to a full ID in the available-model catalog, choosing another available model and adjusting resolution or duration when needed. New drafts, clearing drafts and source changes apply the shared defaults; reopening an existing draft retains a valid manually selected model. Legacy separate ForFuner AI defaults are ignored. Failed catalog loads can be retried and never fall back to the API-key model list.
 
 ### Version and updates
 
@@ -249,3 +253,23 @@ The in-app login / credit features are optional extensions backed by a self-host
 ### License
 
 [MIT](LICENSE) © ForFuner
+
+
+## GAM Skills 子模块 / Skills submodule
+
+六个 GAM Skills 在独立仓库 [hyhy111/gam-skills](https://github.com/hyhy111/gam-skills) 维护，以 Git 子模块放在 `.agents/skills/`。这里的修改直接属于 Skills 仓库；客户端记录使用的 Skills 提交版本。
+
+```bash
+# 新克隆时一起获取 Skills / Clone with Skills
+git clone --recurse-submodules https://github.com/hyhy111/game-assets-maker.git
+
+# 已有客户端检出：初始化记录的 Skills 版本 / Initialize the recorded revision
+git submodule update --init -- .agents/skills
+
+# 开始修改 Skills 前切换到维护分支 / Enter the maintenance branch
+git -C .agents/skills switch main
+```
+
+维护流程：先在 `.agents/skills/` 检查并验证改动，只提交本次所需的 Skills 文件并推送；再回到客户端更新 `.agents/skills` 指针。两个仓库分别提交，已有未提交改动应保留。其他本地 Skills 可继续放在该目录，但不会进入 GAM Skills 发布内容。
+
+The six GAM Skills live in the independent `hyhy111/gam-skills` repository, checked out at `.agents/skills` as a submodule. Commit and push the intended Skills changes there first, then update the client’s recorded submodule commit. Other local skills remain ignored. See the submodule README for user installation and Python/Godot export requirements.

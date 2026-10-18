@@ -31,7 +31,15 @@ def test_create_batch_persists_batch_and_attempt_before_remote_call(tmp_path):
     assert attempt.local_path is None
     assert attempt.error is None
     assert attempt.finished_at is None
-    assert attempt.request == {"prompt": "hero", "model": "pro", "resolution": "1K", "ratio": "16:9", "count": 1, "reference_image": None, "source": "api-key"}
+    assert attempt.request == {
+        "prompt": "hero",
+        "model": "pro",
+        "resolution": "1K",
+        "ratio": "16:9",
+        "count": 1,
+        "reference_image": None,
+        "source": "api-key",
+    }
 
 
 def test_list_returns_batches_sorted_by_creation_time(tmp_path):

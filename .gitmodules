@@ -1,0 +1,4 @@
+[submodule "gam-skills"]
+	path = .agents/skills
+	url = https://github.com/hyhy111/gam-skills.git
+	branch = main

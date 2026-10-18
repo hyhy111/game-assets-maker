@@ -6,8 +6,6 @@ repository/manager/downloader stack runs against a tmp cache root.
 
 from __future__ import annotations
 
-import threading
-import time
 from pathlib import Path
 from typing import Any
 

@@ -41,8 +41,8 @@ class RembgModelLoader:
         return check_model_available(model)
 
     def download(self, model: str, _progress: Callable[[int, int | None], None], source: str) -> None:
-        from src.core.rembg_model import download_u2net, validate_model
         from backend.core.smart_remove_background import _MODELS_DIR, check_model_available, get_model_file_size
+        from src.core.rembg_model import download_u2net, validate_model
 
         validate_model(model)
         download_u2net(_MODELS_DIR, source)
@@ -118,7 +118,9 @@ class ModelPreloader:
     def _prepare(self, model: str, needs_download: bool, source: str | None) -> None:
         try:
             if needs_download:
-                self._loader.download(model, lambda current, total: self._download_progress(model, current, total), source)
+                self._loader.download(
+                    model, lambda current, total: self._download_progress(model, current, total), source
+                )
                 current = self.get_status(model)
                 downloaded = current["total_bytes"] if current["total_bytes"] is not None else None
                 self._publish(model, phase="initializing", downloaded_bytes=downloaded)

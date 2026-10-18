@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import pytest
+from platform_test_helpers import FakeTransport, ajax_ok
 
 from backend.platform.client import PlatformClient
 from backend.platform.images import PlatformImageClient
 from backend.platform.video import PlatformVideoClient, artifact_url, local_status, parse_error_json
-
-from platform_test_helpers import FakeTransport, ajax_ok
 
 
 def make_video_client(transport: FakeTransport) -> PlatformVideoClient:
@@ -20,8 +19,15 @@ def make_image_client(transport: FakeTransport) -> PlatformImageClient:
 
 
 def describe(status: str, **extra):
-    payload = {"jobId": "9001", "jobType": "video", "status": status, "remoteStatus": "queued", "quote": 100,
-               "error": None, "createdAt": "2026-09-27T00:00:00Z"}
+    payload = {
+        "jobId": "9001",
+        "jobType": "video",
+        "status": status,
+        "remoteStatus": "queued",
+        "quote": 100,
+        "error": None,
+        "createdAt": "2026-09-27T00:00:00Z",
+    }
     payload.update(extra)
     return ajax_ok(payload)
 
@@ -45,7 +51,9 @@ def test_status_mapping_table(platform_status, expected):
 
 def test_create_task_maps_job_id_and_quote():
     transport = FakeTransport(
-        lambda m, u, h, b: ajax_ok({"jobId": "9001", "status": "QUEUED", "quote": 500, "quoteDetail": "{}", "idemReplay": False})
+        lambda m, u, h, b: ajax_ok(
+            {"jobId": "9001", "status": "QUEUED", "quote": 500, "quoteDetail": "{}", "idemReplay": False}
+        )
     )
     mapped = make_video_client(transport).create_task({"idemKey": "gam-x"})
     assert mapped["id"] == "9001"
@@ -71,7 +79,9 @@ def test_get_task_running_has_no_content():
 
 
 def test_get_task_failed_parses_error_json():
-    transport = FakeTransport(lambda m, u, h, b: describe("FAILED", error='{"class":"ACCOUNT_EXHAUSTED","message":"余额不足"}'))
+    transport = FakeTransport(
+        lambda m, u, h, b: describe("FAILED", error='{"class":"ACCOUNT_EXHAUSTED","message":"余额不足"}')
+    )
     mapped = make_video_client(transport).get_task("9001")
     assert mapped["status"] == "failed"
     assert mapped["error"]["message"] == "余额不足"
@@ -102,10 +112,21 @@ def test_parse_error_json_variants():
 def test_image_client_success_maps_upstream_url():
     """v1：url 即上游地址本身（唯一交付载体），不再是平台伪地址。"""
     transport = FakeTransport(
-        lambda m, u, h, b: ajax_ok({"jobId": "42", "status": "SUCCEEDED", "quote": 30,
-                                    "images": [{"url": "https://upstream.example/i.png",
-                                                "upstreamUrl": "https://upstream.example/i.png",
-                                                "upstreamExpiresAt": 9999999999999}], "error": None})
+        lambda m, u, h, b: ajax_ok(
+            {
+                "jobId": "42",
+                "status": "SUCCEEDED",
+                "quote": 30,
+                "images": [
+                    {
+                        "url": "https://upstream.example/i.png",
+                        "upstreamUrl": "https://upstream.example/i.png",
+                        "upstreamExpiresAt": 9999999999999,
+                    }
+                ],
+                "error": None,
+            }
+        )
     )
     mapped = make_image_client(transport).generate_image({"idemKey": "gam-i"})
     assert mapped["platform_status"] == "SUCCEEDED"
@@ -114,8 +135,15 @@ def test_image_client_success_maps_upstream_url():
 
 def test_image_client_failed_carries_error():
     transport = FakeTransport(
-        lambda m, u, h, b: ajax_ok({"jobId": "42", "status": "FAILED", "quote": 0,
-                                    "images": [], "error": '{"class":"RATE_LIMITED","message":"触发限流"}'})
+        lambda m, u, h, b: ajax_ok(
+            {
+                "jobId": "42",
+                "status": "FAILED",
+                "quote": 0,
+                "images": [],
+                "error": '{"class":"RATE_LIMITED","message":"触发限流"}',
+            }
+        )
     )
     mapped = make_image_client(transport).generate_image({"idemKey": "gam-i"})
     assert mapped["platform_status"] == "FAILED"

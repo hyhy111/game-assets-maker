@@ -10,4 +10,14 @@ from .seedance_api import SeedanceAPI
 from .seedream_api import SeedreamAPI
 from .video_api import VideoAPI
 
-__all__ = ["ProjectAPI", "VideoAPI", "FrameAPI", "ProcessAPI", "ConfigAPI", "BatchTrimAPI", "AudioAPI", "SeedanceAPI", "SeedreamAPI"]
+__all__ = [
+    "ProjectAPI",
+    "VideoAPI",
+    "FrameAPI",
+    "ProcessAPI",
+    "ConfigAPI",
+    "BatchTrimAPI",
+    "AudioAPI",
+    "SeedanceAPI",
+    "SeedreamAPI",
+]

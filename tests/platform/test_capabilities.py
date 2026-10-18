@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-import json
-
 import pytest
+from platform_test_helpers import FakeTransport, ajax_error, ajax_ok, reset_trace_logger
 
 from backend.api.platform_api import PlatformFacade
 from backend.platform.client import PlatformClient
 from backend.platform.config import PlatformConfig
-from platform_test_helpers import FakeTransport, ajax_error, ajax_ok, reset_trace_logger
 
 CAPABILITIES = {
     "video": {

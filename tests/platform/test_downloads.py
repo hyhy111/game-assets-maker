@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 import pytest
+from platform_test_helpers import FakeTransport, make_video_bytes
 
 from backend.platform.client import HttpResponse, PlatformClient
 from backend.platform.downloads import PlatformArtifactTransport
 from backend.platform.last_frame import extract_last_frame
 from backend.platform.video import ARTIFACT_URL_PREFIX
-
-from platform_test_helpers import FakeTransport, make_video_bytes
 
 
 class StubFallback:

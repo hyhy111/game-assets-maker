@@ -85,6 +85,7 @@ def _get_model_path(model: str) -> Path:
 def check_model_available(model: str) -> bool:
     """Check if a model file exists locally"""
     from pooch import file_hash
+
     from src.core.rembg_model import U2NET_HASH
 
     path = _get_model_path(model)

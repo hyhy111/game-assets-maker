@@ -48,7 +48,6 @@ export const useConfigStore = defineStore('config', () => {
           api_key_configured: false,
           cache_dir: '',
           default_model: 'standard',
-          platform_default_model: '',
           default_resolution: '720p',
           default_ratio: 'adaptive',
           default_duration: 5,

@@ -14,9 +14,12 @@ import pytest
 from PIL import Image
 
 from backend.platform.sources import PLATFORM_SOURCE
-from backend.seedance.models import SeedanceRequest, platform_model_id as video_model_id
-from backend.seedance.validation import ValidationError, build_api_payload, validate_request as validate_video
-from backend.seedream.models import SeedreamRequest, platform_model_id as image_model_id
+from backend.seedance.models import SeedanceRequest
+from backend.seedance.models import platform_model_id as video_model_id
+from backend.seedance.validation import ValidationError, build_api_payload
+from backend.seedance.validation import validate_request as validate_video
+from backend.seedream.models import SeedreamRequest
+from backend.seedream.models import platform_model_id as image_model_id
 from backend.seedream.validation import ValidationError as SeedreamValidationError
 from backend.seedream.validation import validate_request as validate_image
 

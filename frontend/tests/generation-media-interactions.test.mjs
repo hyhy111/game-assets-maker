@@ -139,7 +139,7 @@ test('image toolbar has a single accessible icon save followed by directory and 
   const batch = {
     local_id: 'batch-1', status: 'completed', created_at: '', updated_at: '',
     request: { prompt: 'fixture', model: 'pro', resolution: '1K', ratio: '16:9', count: 1 },
-    attempts: [{ local_id: 'a', index: 0, status: 'succeeded', image_url: '/seedream-media/batch-1/image/0', local_path: '/cache/image.png', elapsed_seconds: 0 }],
+    attempts: [{ local_id: 'a', index: 0, status: 'succeeded', image_url: '/seedream-media/batch-1/image/0', local_path: 'images/0.png', absolute_path: '/cache/image.png', elapsed_seconds: 0 }],
   };
   const html = await renderSfc('views/SeedreamBatchDetail.vue', { route: '/image-generation/batches/batch-1', piniaState: { seedream: { currentBatch: batch, batches: [] } } });
   const ids = ['seedream-create-video', 'seedream-regenerate', 'seedream-use-reference', 'seedream-download', 'seedream-open-directory', 'seedream-delete'];

@@ -217,7 +217,7 @@ def test_macos_window_controls_are_dispatched_to_main_thread(monkeypatch):
 
     class FakeAppHelper:
         @staticmethod
-        def callAfter(callback, *args):
+        def callAfter(callback, *args):  # noqa: N802 - Match the PyObjC API.
             scheduled.append((callback, args))
 
     fake_pyobjc_tools = types.ModuleType("PyObjCTools")
@@ -229,7 +229,7 @@ def test_macos_window_controls_are_dispatched_to_main_thread(monkeypatch):
         def __init__(self):
             self.title_visibility_calls = 0
 
-        def setTitleVisibility_(self, value):
+        def setTitleVisibility_(self, value):  # noqa: N802 - Match the AppKit selector.
             self.title_visibility_calls += 1
 
     app = MainApp()

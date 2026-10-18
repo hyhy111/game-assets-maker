@@ -49,7 +49,6 @@ test('project manager uses a role dock with one expanded role detail', async () 
   assert.match(manager, /data-test="project-manager-library-workbench"/);
   assert.match(manager, /data-test="project-manager-role-dock"/);
   assert.match(manager, /data-test="project-manager-role-detail"/);
-  assert.match(manager, /const activeRole = ref\(''\)/);
   assert.match(manager, /const selectedGroup = computed/);
   assert.match(manager, /@click="selectRole\(group\.role\)"/);
   assert.match(manager, /v-for="project in paginatedProjects"/);

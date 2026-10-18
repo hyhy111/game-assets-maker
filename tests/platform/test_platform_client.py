@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 
 import pytest
+from platform_test_helpers import FakeTransport, ajax_error, ajax_ok, json_response
 
 from backend.platform.client import (
     PlatformClient,
@@ -13,8 +14,6 @@ from backend.platform.client import (
     PlatformUnauthorizedError,
     new_idem_key,
 )
-
-from platform_test_helpers import FakeTransport, ajax_error, ajax_ok, json_response
 
 
 def make_client(transport: FakeTransport) -> PlatformClient:
@@ -60,8 +59,14 @@ def test_upload_asset_rejects_oversized_file(tmp_path, monkeypatch):
 def test_quote_video_hits_preview_endpoint():
     transport = FakeTransport(lambda m, u, h, b: ajax_ok({"quote": 100, "baseCredits": 80, "multiplier": 1.25}))
     client = make_client(transport)
-    body = {"model": "doubao-seedance-2-0-260128", "content": [{"type": "text", "text": "quote"}],
-            "resolution": "720p", "ratio": "16:9", "duration": 5, "generate_audio": False}
+    body = {
+        "model": "doubao-seedance-2-0-260128",
+        "content": [{"type": "text", "text": "quote"}],
+        "resolution": "720p",
+        "ratio": "16:9",
+        "duration": 5,
+        "generate_audio": False,
+    }
     data = client.quote_video(body)
     assert data["quote"] == 100
     method, url, headers, payload = transport.last
@@ -71,7 +76,9 @@ def test_quote_video_hits_preview_endpoint():
 
 def test_create_video_job_returns_job_fields():
     transport = FakeTransport(
-        lambda m, u, h, b: ajax_ok({"jobId": "9001", "status": "QUEUED", "quote": 500, "quoteDetail": "{}", "idemReplay": False})
+        lambda m, u, h, b: ajax_ok(
+            {"jobId": "9001", "status": "QUEUED", "quote": 500, "quoteDetail": "{}", "idemReplay": False}
+        )
     )
     client = make_client(transport)
     data = client.create_video_job({"idemKey": "gam-x", "model": "m", "content": []})
@@ -96,7 +103,9 @@ def test_cancel_job_posts_to_cancel_path():
 
 
 def test_generate_image_uses_sync_endpoint():
-    transport = FakeTransport(lambda m, u, h, b: ajax_ok({"jobId": "42", "status": "SUCCEEDED", "quote": 30, "images": [], "error": None}))
+    transport = FakeTransport(
+        lambda m, u, h, b: ajax_ok({"jobId": "42", "status": "SUCCEEDED", "quote": 30, "images": [], "error": None})
+    )
     client = make_client(transport)
     client.generate_image({"idemKey": "gam-y", "model": "m", "prompt": "p", "size": "1k"})
     assert transport.last[0] == "POST"

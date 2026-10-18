@@ -66,12 +66,9 @@ Thumbs.db
 # Agent / tool work directories
 .claude/
 .codex/
-# .agents/ holds locally deployed agent skills; only this repo's own gam-*
-# skills are committed, the rest stay local.
+# GAM-owned skills are maintained in the .agents/skills Git submodule.
 .agents/*
 !.agents/skills/
-.agents/skills/*
-!.agents/skills/gam-*/
 .codegraph/
 .worktrees/
 .scratch/

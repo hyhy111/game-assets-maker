@@ -249,9 +249,8 @@ def auto_clean_edges(image_path, output_path, tolerance=30):
 # Manual entry point.
 if __name__ == "__main__":
     # Configuration.
-    INPUT_PATH = (
-        r"E:\\python\\game_assets_maker\\project\\witch\\output\\03_pixelate\\px_0000.png"  # Replace with your image path.
-    )
+    # Replace with your image path.
+    INPUT_PATH = r"E:\\python\\game_assets_maker\\project\\witch\\output\\03_pixelate\\px_0000.png"
     OUTPUT_PATH = r"witch_fixed.png"
     TOLERANCE = 30  # Color grouping tolerance; smaller values create finer groups.
 

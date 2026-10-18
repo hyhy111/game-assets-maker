@@ -9,15 +9,17 @@
         type="button"
         class="group/preview relative block aspect-video w-full overflow-hidden bg-black/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70"
         data-test="recent-image-main-preview"
+        :draggable="!!selectedAttempt?.absolute_path && selectedAttempt.can_open_directory !== false"
+        :title="t('aiCreation.recent.dragImageToVideoFrame')"
         @click="emit('open', batch.local_id)"
+        @dragstart="selectedAttempt && startImageDrag($event, selectedAttempt)"
       >
         <img
           v-if="selectedAttempt"
           :src="imageUrl(selectedAttempt.image_url)"
           :alt="`${t('seedream.detail.candidateImage')} ${selectedAttempt.index + 1}`"
           class="h-full w-full object-cover transition duration-300 group-hover/preview:brightness-105"
-          :draggable="selectedAttempt.can_open_directory !== false"
-          @dragstart="startImageDrag($event, selectedAttempt)"
+          draggable="false"
         >
         <span v-else class="grid h-full place-items-center text-sm text-gray-500">{{ statusText }}</span>
         <div class="absolute left-3 top-3 flex items-center gap-1.5">
@@ -40,7 +42,7 @@
           v-for="(attempt, index) in succeededAttempts"
           :key="attempt.local_id"
           type="button"
-          :draggable="attempt.can_open_directory !== false"
+          :draggable="!!attempt.absolute_path && attempt.can_open_directory !== false"
           class="h-14 w-14 shrink-0 overflow-hidden rounded-md border-2 bg-black/20 p-0.5 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70"
           :class="selectedAttempt?.index === attempt.index ? 'border-primary' : 'border-transparent hover:border-white/30'"
           :aria-label="`${t('seedream.detail.candidateImage')} ${index + 1}`"
@@ -135,11 +137,15 @@ function imageUrl(url: string): string {
 }
 
 function startImageDrag(event: DragEvent, attempt: SeedreamAttempt) {
-  if (attempt.can_open_directory === false) { event.preventDefault(); return; }
+  if (!attempt.absolute_path || attempt.can_open_directory === false) { event.preventDefault(); return; }
+  const source = event.currentTarget as HTMLElement | null;
+  const thumbnail = source?.closest('article')?.querySelector<HTMLElement>(
+    `[data-test="recent-image-thumbnail-${attempt.index}"]`,
+  );
   writeSeedreamImageDrag(event.dataTransfer, {
     localId: props.batch.local_id,
     attemptIndex: attempt.index,
-  }, event.currentTarget as HTMLElement | null);
+  }, source, attempt.absolute_path, thumbnail);
 }
 
 function formatDate(iso: string): string {

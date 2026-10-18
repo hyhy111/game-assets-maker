@@ -200,9 +200,7 @@ class BatchTrimAPI:
             frame_interval = max(1, int(step1.get("frame_interval", 1)))
 
             all_source_files = sorted(
-                filename
-                for filename in os.listdir(source_dir)
-                if filename.lower().endswith((".png", ".jpg", ".jpeg"))
+                filename for filename in os.listdir(source_dir) if filename.lower().endswith((".png", ".jpg", ".jpeg"))
             )
             source_slots = {filename: index for index, filename in enumerate(all_source_files)}
             exported_slots = [source_slots[name] for name in exported_source_files if name in source_slots]
@@ -234,7 +232,9 @@ class BatchTrimAPI:
                     start_source_frame = int(clip.get("srcStartFrame", 0))
                     end_source_frame = int(clip.get("srcEndFrame", start_source_frame))
                     start_sample = max(0, min(total_samples, round(start_source_frame / source_fps * sample_rate)))
-                    end_sample = max(start_sample, min(total_samples, round(end_source_frame / source_fps * sample_rate)))
+                    end_sample = max(
+                        start_sample, min(total_samples, round(end_source_frame / source_fps * sample_rate))
+                    )
                     if end_sample <= start_sample:
                         errors.append(f"{clip.get('name', clip_index)}: 音频区间为空")
                         continue

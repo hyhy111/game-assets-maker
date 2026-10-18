@@ -16,7 +16,9 @@ def _video(test_assets: Path, role: str, action: str) -> str:
     return str(test_assets / "videos" / role / f"{action}.mp4")
 
 
-def _copy_trim_source(test_assets: Path, source_role: str, source_action: str, target_project_id: str, step_dir: str = "02_no_bg"):
+def _copy_trim_source(
+    test_assets: Path, source_role: str, source_action: str, target_project_id: str, step_dir: str = "02_no_bg"
+):
     target_role, target_action = target_project_id.split("/", 1)
     source = test_assets / "trim_sources" / source_role / source_action
     target = Path("project") / target_role / target_action / "output" / step_dir
@@ -67,10 +69,30 @@ def test_project_role_action_lifecycle(api, test_assets, asset_catalog):
     first_role = asset_catalog[0]
     second_role = asset_catalog[1]
     created = [
-        _create_project(api, first_role["role"], first_role["actions"][0], _video(test_assets, first_role["role"], first_role["actions"][0])),
-        _create_project(api, first_role["role"], first_role["actions"][1], _video(test_assets, first_role["role"], first_role["actions"][1])),
-        _create_project(api, second_role["role"], second_role["actions"][0], _video(test_assets, second_role["role"], second_role["actions"][0])),
-        _create_project(api, second_role["role"], second_role["actions"][1], _video(test_assets, second_role["role"], second_role["actions"][1])),
+        _create_project(
+            api,
+            first_role["role"],
+            first_role["actions"][0],
+            _video(test_assets, first_role["role"], first_role["actions"][0]),
+        ),
+        _create_project(
+            api,
+            first_role["role"],
+            first_role["actions"][1],
+            _video(test_assets, first_role["role"], first_role["actions"][1]),
+        ),
+        _create_project(
+            api,
+            second_role["role"],
+            second_role["actions"][0],
+            _video(test_assets, second_role["role"], second_role["actions"][0]),
+        ),
+        _create_project(
+            api,
+            second_role["role"],
+            second_role["actions"][1],
+            _video(test_assets, second_role["role"], second_role["actions"][1]),
+        ),
     ]
 
     roles = {role["name"]: role["projectCount"] for role in api.get_roles()}
@@ -87,7 +109,9 @@ def test_project_role_action_lifecycle(api, test_assets, asset_catalog):
     assert project["output_path"].endswith(f"project/{first_role['role']}/{first_role['actions'][0]}/output")
     assert project["steps"]["1"]["data_ready"] is True
 
-    updated = api.update_project(f"{first_role['role']}/{first_role['actions'][0]}", {"name": "walk-renamed", "fps": 12})
+    updated = api.update_project(
+        f"{first_role['role']}/{first_role['actions'][0]}", {"name": "walk-renamed", "fps": 12}
+    )
     assert updated["name"] == "walk-renamed"
 
     assert api.delete_project(f"{second_role['role']}/{second_role['actions'][1]}") is True
@@ -126,10 +150,12 @@ def test_legacy_project_migration_accepts_per_project_targets(api, test_assets):
     shutil.copytree(legacy_source, Path("project") / "legacy_walk")
     shutil.copytree(legacy_source, Path("project") / "legacy_attack")
 
-    result = api.migrate_legacy_projects([
-        {"projectId": "legacy_walk", "targetRole": "hero", "targetAction": "walk"},
-        {"projectId": "legacy_attack", "targetRole": "enemy", "targetAction": "attack"},
-    ])
+    result = api.migrate_legacy_projects(
+        [
+            {"projectId": "legacy_walk", "targetRole": "hero", "targetAction": "walk"},
+            {"projectId": "legacy_attack", "targetRole": "enemy", "targetAction": "attack"},
+        ]
+    )
 
     assert result["success"] is True
     assert {item["to"] for item in result["migrated"]} == {"hero/walk", "enemy/attack"}
@@ -328,13 +354,17 @@ def test_video_validation_step1_and_frame_api(api, test_assets, asset_catalog):
     assert info["frame_count"] > 0
     assert api.validate_video(project["video_path"])["valid"] is True
 
-    task_id = api.start_processing(project["id"], 1, {
-        "video_path": project["video_path"],
-        "frame_interval": 1,
-        "start_frame": 0,
-        "end_frame": 3,
-        "fps": 6,
-    })
+    task_id = api.start_processing(
+        project["id"],
+        1,
+        {
+            "video_path": project["video_path"],
+            "frame_interval": 1,
+            "start_frame": 0,
+            "end_frame": 3,
+            "fps": 6,
+        },
+    )
     status = wait_for_task(api, task_id)
     assert status["status"] == "completed"
 
@@ -369,15 +399,19 @@ def test_api_propagates_dynamic_assets_base_url(isolated_workspace):
 def test_video_validation_allows_vertical_1080p_with_no_resolution_warning(monkeypatch):
     video_api = VideoAPI()
 
-    monkeypatch.setattr(video_api, "get_video_info", lambda _path: {
-        "success": True,
-        "fps": 30,
-        "frame_count": 900,
-        "width": 1080,
-        "height": 1920,
-        "duration": 30,
-        "duration_formatted": "00:30",
-    })
+    monkeypatch.setattr(
+        video_api,
+        "get_video_info",
+        lambda _path: {
+            "success": True,
+            "fps": 30,
+            "frame_count": 900,
+            "width": 1080,
+            "height": 1920,
+            "duration": 30,
+            "duration_formatted": "00:30",
+        },
+    )
 
     result = video_api.validate_video("vertical.mp4")
 
@@ -389,15 +423,19 @@ def test_video_validation_allows_vertical_1080p_with_no_resolution_warning(monke
 def test_video_validation_warns_when_width_or_height_exceeds_2160(monkeypatch):
     video_api = VideoAPI()
 
-    monkeypatch.setattr(video_api, "get_video_info", lambda _path: {
-        "success": True,
-        "fps": 30,
-        "frame_count": 900,
-        "width": 1200,
-        "height": 2200,
-        "duration": 30,
-        "duration_formatted": "00:30",
-    })
+    monkeypatch.setattr(
+        video_api,
+        "get_video_info",
+        lambda _path: {
+            "success": True,
+            "fps": 30,
+            "frame_count": 900,
+            "width": 1200,
+            "height": 2200,
+            "duration": 30,
+            "duration_formatted": "00:30",
+        },
+    )
 
     result = video_api.validate_video("large-vertical.mp4")
 
@@ -409,30 +447,38 @@ def test_video_validation_warns_when_width_or_height_exceeds_2160(monkeypatch):
 def test_video_validation_allows_up_to_60_seconds_and_rejects_longer(monkeypatch):
     video_api = VideoAPI()
 
-    monkeypatch.setattr(video_api, "get_video_info", lambda _path: {
-        "success": True,
-        "fps": 30,
-        "frame_count": 1800,
-        "width": 1920,
-        "height": 1080,
-        "duration": 60,
-        "duration_formatted": "01:00",
-    })
+    monkeypatch.setattr(
+        video_api,
+        "get_video_info",
+        lambda _path: {
+            "success": True,
+            "fps": 30,
+            "frame_count": 1800,
+            "width": 1920,
+            "height": 1080,
+            "duration": 60,
+            "duration_formatted": "01:00",
+        },
+    )
 
     result = video_api.validate_video("one-minute.mp4")
 
     assert result["valid"] is True
     assert result["errors"] == []
 
-    monkeypatch.setattr(video_api, "get_video_info", lambda _path: {
-        "success": True,
-        "fps": 30,
-        "frame_count": 1830,
-        "width": 1920,
-        "height": 1080,
-        "duration": 61,
-        "duration_formatted": "01:01",
-    })
+    monkeypatch.setattr(
+        video_api,
+        "get_video_info",
+        lambda _path: {
+            "success": True,
+            "fps": 30,
+            "frame_count": 1830,
+            "width": 1920,
+            "height": 1080,
+            "duration": 61,
+            "duration_formatted": "01:01",
+        },
+    )
 
     result = video_api.validate_video("too-long.mp4")
 
@@ -471,7 +517,9 @@ def test_batch_trim_global_and_individual(api, test_assets, asset_catalog):
     assert all(result["status"] == "success" for result in individual_results)
     for result in individual_results:
         assert (Path(result["outputPath"]) / "_frame_data.json").exists()
-    individual_audio_output = Path(next(result for result in individual_results if result["projectId"] == ids[0])["outputPath"])
+    individual_audio_output = Path(
+        next(result for result in individual_results if result["projectId"] == ids[0])["outputPath"]
+    )
     assert len(list(individual_audio_output.glob("*.wav"))) == 1
     assert (individual_audio_output / "_audio_timeline.json").exists()
 
@@ -534,33 +582,47 @@ def test_full_rembg_pipeline(api, test_assets, asset_catalog):
         pytest.skip("u2net rembg model is not available locally")
 
     sample = asset_catalog[0]
-    project = _create_project(api, "full", sample["actions"][0], _video(test_assets, sample["role"], sample["actions"][0]))
+    project = _create_project(
+        api, "full", sample["actions"][0], _video(test_assets, sample["role"], sample["actions"][0])
+    )
 
-    step1 = api.start_processing(project["id"], 1, {
-        "video_path": project["video_path"],
-        "frame_interval": 1,
-        "start_frame": 0,
-        "end_frame": 2,
-        "fps": 6,
-    })
+    step1 = api.start_processing(
+        project["id"],
+        1,
+        {
+            "video_path": project["video_path"],
+            "frame_interval": 1,
+            "start_frame": 0,
+            "end_frame": 2,
+            "fps": 6,
+        },
+    )
     assert wait_for_task(api, step1, timeout=20)["status"] == "completed"
 
-    step2 = api.start_processing(project["id"], 2, {
-        "model": "u2net",
-        "alpha_matting": False,
-        "edge_erode": 0,
-        "fps": 6,
-    })
+    step2 = api.start_processing(
+        project["id"],
+        2,
+        {
+            "model": "u2net",
+            "alpha_matting": False,
+            "edge_erode": 0,
+            "fps": 6,
+        },
+    )
     assert wait_for_task(api, step2, timeout=120)["status"] == "completed"
 
-    step3 = api.start_processing(project["id"], 3, {
-        "enabled": True,
-        "green_intensity": 3,
-        "feather_radius": 1,
-        "min_hole_size": 0,
-        "align_enabled": False,
-        "fps": 6,
-    })
+    step3 = api.start_processing(
+        project["id"],
+        3,
+        {
+            "enabled": True,
+            "green_intensity": 3,
+            "feather_radius": 1,
+            "min_hole_size": 0,
+            "align_enabled": False,
+            "fps": 6,
+        },
+    )
     assert wait_for_task(api, step3, timeout=30)["status"] == "completed"
 
     frames = api.get_frames(project["id"], 3, page=1, page_size=10)

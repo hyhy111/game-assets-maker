@@ -6,6 +6,7 @@ import type {
   SeedanceTask,
   SeedreamBatch,
   RoleSummary,
+  ProjectRenameResult,
   LegacyMigrationRequest,
   LegacyMigrationResult,
   LegacyProjectImportResult,
@@ -60,6 +61,8 @@ export interface PyWebViewWindow extends Window {
       create_project: (role: string, action: string, video_path: string, fps: number) => Promise<Project>;
       delete_project: (project_id: string) => Promise<boolean>;
       delete_role: (role: string) => Promise<boolean>;
+      rename_role: (role: string, new_name: string) => Promise<ProjectRenameResult>;
+      rename_project: (project_id: string, new_name: string) => Promise<ProjectRenameResult>;
       update_project: (project_id: string, data: Partial<Project>) => Promise<Project>;
       migrate_legacy_projects: (migrations: LegacyMigrationRequest[] | string) => Promise<LegacyMigrationResult>;
       import_legacy_project_directory: (source_directory: string) => Promise<LegacyProjectImportResult>;

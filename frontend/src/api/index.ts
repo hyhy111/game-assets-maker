@@ -7,6 +7,7 @@ import type {
   Project,
   CreateProjectData,
   RoleSummary,
+  ProjectRenameResult,
   LegacyMigrationRequest,
   LegacyMigrationResult,
   LegacyProjectImportResult,
@@ -154,6 +155,14 @@ export const projectApi = {
 
   async deleteRole(role: string): Promise<boolean> {
     return callApi<boolean>('delete_role', 'deleteRole', role);
+  },
+
+  async renameRole(role: string, newName: string): Promise<ProjectRenameResult> {
+    return callApi<ProjectRenameResult>('rename_role', 'renameRole', role, newName);
+  },
+
+  async renameProject(projectId: string, newName: string): Promise<ProjectRenameResult> {
+    return callApi<ProjectRenameResult>('rename_project', 'renameProject', projectId, newName);
   },
 
   async updateProject(projectId: string, data: Partial<Project>): Promise<Project> {

@@ -58,9 +58,12 @@ def test_reference_urls_use_media_server_in_details_and_regeneration(local_confi
     assert detail["success"]
     assert detail["batch"]["reference_image_url"] == url
     assert detail["batch"]["attempts"][0]["can_open_directory"] is True
+    assert detail["batch"]["attempts"][0]["absolute_path"] == str(source.resolve())
+    assert detail["batch"]["attempts"][0]["local_path"] == "images/0.png"
     assert api.get_regeneration_draft(local_id)["data"]["reference_image_url"] == url
     source.unlink()
     assert api.get_batch(local_id)["batch"]["attempts"][0]["can_open_directory"] is False
+    assert api.get_batch(local_id)["batch"]["attempts"][0]["absolute_path"] is None
 
 
 def test_image_directory_and_handoff_use_current_edited_file(local_config, monkeypatch):
