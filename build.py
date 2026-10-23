@@ -155,8 +155,24 @@ def verify_packaged_cli(dist_dir: Path = Path("dist")) -> None:
     print(f"Packaged Agent CLI verified: {cli_path}")
 
 
-def create_macos_dmg(dist_dir: Path) -> Path:
+def validate_package_name(value: str) -> str:
+    """Accept a filename prefix usable by both macOS and Windows installers."""
+    if (
+        not value
+        or value != value.strip()
+        or value.endswith(".")
+        or any(ord(char) < 32 or char in '<>:"/\\|?*{}' for char in value)
+    ):
+        raise argparse.ArgumentTypeError(
+            "Package name must be a non-empty filename prefix without path separators, "
+            'control characters, <>:"|?*{}, or leading/trailing whitespace or trailing dots'
+        )
+    return value
+
+
+def create_macos_dmg(dist_dir: Path, package_name: str = "GameAssetsMaker") -> Path:
     """Create a compressed drag-to-Applications image and its checksum."""
+    package_name = validate_package_name(package_name)
     bundle = dist_dir / "Game Assets Maker.app"
     with (bundle / "Contents" / "Info.plist").open("rb") as stream:
         info = plistlib.load(stream)
@@ -164,7 +180,7 @@ def create_macos_dmg(dist_dir: Path) -> Path:
         if info.get(key) != app_version():
             raise RuntimeError(f"Bundle {key} does not match project metadata")
     architecture = {"aarch64": "arm64", "x86_64": "x64"}.get(platform.machine(), platform.machine())
-    output = dist_dir / f"GameAssetsMaker-{app_version()}-macos-{architecture}.dmg"
+    output = dist_dir / f"{package_name}-{app_version()}-macos-{architecture}.dmg"
     with tempfile.TemporaryDirectory(prefix="gam-dmg-", dir=dist_dir) as directory:
         workspace = Path(directory)
         staging = workspace / "contents"
@@ -206,8 +222,11 @@ def create_macos_dmg(dist_dir: Path) -> Path:
     return output
 
 
-def create_windows_installer(dist_dir: Path, iscc: Path, webview2_bootstrapper: Path) -> Path:
+def create_windows_installer(
+    dist_dir: Path, iscc: Path, webview2_bootstrapper: Path, package_name: str = "GameAssetsMaker"
+) -> Path:
     """Wrap the verified Windows bundle in a per-user Inno Setup installer."""
+    package_name = validate_package_name(package_name)
     bundle = (dist_dir / "game-assets-maker").resolve()
     iscc = iscc.resolve()
     webview2_bootstrapper = webview2_bootstrapper.resolve()
@@ -220,7 +239,7 @@ def create_windows_installer(dist_dir: Path, iscc: Path, webview2_bootstrapper: 
     ):
         if not required.is_file():
             raise FileNotFoundError(f"Windows installer input is missing: {required}")
-    output = dist_dir / f"GameAssetsMaker-{app_version()}-windows-x64-Setup.exe"
+    output = dist_dir / f"{package_name}-{app_version()}-windows-x64-Setup.exe"
     # Fail rather than mistaking an old installer for successful compiler output.
     if output.exists():
         raise FileExistsError(f"Installer already exists; choose a fresh --dist-dir: {output}")
@@ -228,6 +247,7 @@ def create_windows_installer(dist_dir: Path, iscc: Path, webview2_bootstrapper: 
         [
             str(iscc),
             f"/DAppVersion={app_version()}",
+            f"/DPackageName={package_name}",
             f"/DRepoRoot={REPO_ROOT}",
             f"/DBundleDir={bundle}",
             f"/DOutputDir={dist_dir.resolve()}",
@@ -256,6 +276,12 @@ def main():
         action="store_true",
         help="Skip frontend rebuild and package directly",
     )
+    parser.add_argument(
+        "--package-name",
+        type=validate_package_name,
+        default="GameAssetsMaker",
+        help="Installer filename prefix; keeps version/platform/architecture suffixes (default: GameAssetsMaker)",
+    )
     parser.add_argument("--dist-dir", type=Path, default=REPO_ROOT / "dist", help="Package output directory")
     parser.add_argument("--work-dir", type=Path, default=REPO_ROOT / "build", help="PyInstaller work directory")
     parser.add_argument("--skip-dmg", action="store_true", help="Build only the app bundle on macOS")
@@ -281,9 +307,9 @@ def main():
         pyinstaller("GameAssetsMaker.spec", dist_dir, work_dir)
         verify_packaged_cli(dist_dir)
         if sys.platform == "darwin" and not args.skip_dmg:
-            create_macos_dmg(dist_dir)
+            create_macos_dmg(dist_dir, args.package_name)
         if args.windows_installer:
-            create_windows_installer(dist_dir, args.iscc, args.webview2_bootstrapper)
+            create_windows_installer(dist_dir, args.iscc, args.webview2_bootstrapper, args.package_name)
 
     print("=" * 60)
     print("All done!")

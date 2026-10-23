@@ -2,6 +2,12 @@ name: Build installers
 
 on:
   workflow_dispatch:
+    inputs:
+      package_name:
+        description: Installer filename prefix / 安装包文件名前缀
+        type: string
+        default: GameAssetsMaker
+        required: true
 
 permissions:
   contents: read
@@ -11,6 +17,8 @@ jobs:
     name: ${{ matrix.platform }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
+    env:
+      GAM_PACKAGE_NAME: ${{ inputs.package_name }}
     strategy:
       fail-fast: false
       matrix:
@@ -86,13 +94,16 @@ jobs:
         if: runner.os == 'Windows'
         run: >-
           uv run --locked python build.py --windows-installer
+          --package-name "$env:GAM_PACKAGE_NAME"
           --iscc "$env:ISCC_PATH"
           --webview2-bootstrapper "$env:WEBVIEW2_BOOTSTRAPPER"
           --dist-dir dist/installers --work-dir build/installers
 
       - name: Build macOS Apple Silicon installer
         if: runner.os == 'macOS'
-        run: uv run --locked python build.py --dist-dir dist/installers --work-dir build/installers
+        run: >-
+          uv run --locked python build.py --package-name "$GAM_PACKAGE_NAME"
+          --dist-dir dist/installers --work-dir build/installers
 
       - name: Upload installer and checksum
         uses: actions/upload-artifact@v7
