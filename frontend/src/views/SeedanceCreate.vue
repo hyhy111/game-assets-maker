@@ -536,6 +536,10 @@ const capabilitiesBlocked = computed(() => (
 const showCreditEstimate = computed(() => (
   authStore.isLoggedIn && platformGenerationSelected.value
 ));
+const quoteReady = computed(() => (
+  platformGenerationSelected.value && authStore.isLoggedIn && modelDefaultsReady.value
+  && !capabilitiesBlocked.value && !workspace.capabilitiesLoading
+));
 // 平台源报价（quote-preview）：编辑页参数一变就刷新，弹窗确认前必须有值。
 const quoteLoading = ref(false);
 const quoteValue = ref<number | null>(null);
@@ -555,7 +559,8 @@ function quoteSignature() {
 }
 
 async function refreshPlatformQuote() {
-  if (!platformGenerationSelected.value || !authStore.isLoggedIn) {
+  const requestId = ++quoteRequestId;
+  if (!quoteReady.value) {
     quoteValue.value = null;
     quoteError.value = '';
     quoteLoading.value = false;
@@ -563,7 +568,6 @@ async function refreshPlatformQuote() {
     return;
   }
   const signature = quoteSignature();
-  const requestId = ++quoteRequestId;
   quoteLoading.value = true;
   quoteError.value = '';
   const data = await store.quoteVideo(createRequest(form));
@@ -581,6 +585,13 @@ async function refreshPlatformQuote() {
 
 function scheduleQuoteRefresh() {
   if (quoteTimer) clearTimeout(quoteTimer);
+  quoteTimer = null;
+  quoteRequestId += 1;
+  quoteValue.value = null;
+  quoteError.value = '';
+  quoteLoading.value = quoteReady.value;
+  quoteSignatureOf.value = '';
+  if (!quoteReady.value) return;
   quoteTimer = setTimeout(() => {
     quoteTimer = null;
     void refreshPlatformQuote();
@@ -759,8 +770,9 @@ function selectModel(model: string) {
 
 // 切模型/分辨率/时长/比例/音频都刷新平台报价（仅平台源）。
 watch(
-  () => [platformGenerationSelected.value, quoteSignature()].join('#'),
+  () => [quoteReady.value, quoteSignature()].join('#'),
   () => scheduleQuoteRefresh(),
+  { immediate: true },
 );
 
 // 清单是异步到达的：到了之后把表单收敛一次（也覆盖"清单被刷新导致档位变少"）。

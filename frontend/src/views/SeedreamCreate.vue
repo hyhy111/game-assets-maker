@@ -441,6 +441,10 @@ const capabilitiesBlocked = computed(() => (
 const showCreditEstimate = computed(() => (
   authStore.isLoggedIn && platformGenerationSelected.value
 ));
+const quoteReady = computed(() => (
+  platformGenerationSelected.value && authStore.isLoggedIn && modelDefaultsReady.value
+  && !capabilitiesBlocked.value && !workspace.capabilitiesLoading
+));
 // 平台源报价：单价来自服务端（model + size），总数 = 单价 × 生成数量（N 张 = N 个平台任务）。
 const quoteLoading = ref(false);
 const quoteUnit = ref<number | null>(null);
@@ -457,13 +461,13 @@ function quoteSignature() {
 }
 
 async function refreshPlatformQuote() {
-  if (!platformGenerationSelected.value || !authStore.isLoggedIn) {
+  const requestId = ++quoteRequestId;
+  if (!quoteReady.value) {
     quoteUnit.value = null;
     quoteError.value = '';
     quoteLoading.value = false;
     return;
   }
-  const requestId = ++quoteRequestId;
   quoteLoading.value = true;
   quoteError.value = '';
   const data = await store.quoteImage(createRequest(form));
@@ -480,6 +484,12 @@ async function refreshPlatformQuote() {
 
 function scheduleQuoteRefresh() {
   if (quoteTimer) clearTimeout(quoteTimer);
+  quoteTimer = null;
+  quoteRequestId += 1;
+  quoteUnit.value = null;
+  quoteError.value = '';
+  quoteLoading.value = quoteReady.value;
+  if (!quoteReady.value) return;
   quoteTimer = setTimeout(() => {
     quoteTimer = null;
     void refreshPlatformQuote();
@@ -625,8 +635,9 @@ function selectModel(model: string) {
 
 // 切模型/分辨率刷新平台报价；数量是本地倍率，改数量无需重查。
 watch(
-  () => [platformGenerationSelected.value, quoteSignature()].join('#'),
+  () => [quoteReady.value, quoteSignature()].join('#'),
   () => scheduleQuoteRefresh(),
+  { immediate: true },
 );
 
 // 清单是异步到达的：到了之后收敛一次（也覆盖"清单刷新导致档位变少"）。

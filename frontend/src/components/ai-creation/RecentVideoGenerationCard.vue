@@ -37,7 +37,10 @@
         <span class="rounded-full px-3 py-1 text-xs font-medium shadow-sm" :class="statusClass">
           {{ statusText }}
         </span>
-        <PlatformSourceBadge :source="task.source" />
+        <PlatformSourceBadge
+          :source="task.source"
+          class="!border-0 !bg-white/20 !px-3 !py-1 !text-xs !font-normal !text-black"
+        />
       </div>
       <div v-if="$slots['top-right']" class="absolute right-3 top-3 z-[2]">
         <slot name="top-right" />
