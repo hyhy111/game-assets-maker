@@ -8,6 +8,8 @@
 
 Game Assets Maker 是一款桌面应用，把视频一键转换为**透明背景的游戏动画帧序列**，并内置 AI 图像 / 视频生成能力（Seedream / Seedance）。基于 PyWebView + Vue 3 + TailwindCSS。
 
+官网：[forfunerai.com](https://forfunerai.com)
+
 ### 核心功能
 
 - **三步流水线**：视频抽帧 → rembg 背景移除（alpha matting）→ 绿幕打孔与精灵对齐
@@ -25,6 +27,34 @@ Game Assets Maker 是一款桌面应用，把视频一键转换为**透明背景
 - 后端：Python 3.12、PyWebView、OpenCV、Pillow、rembg
 - 前端：Vue 3 + TypeScript + Vite + Pinia + TailwindCSS
 - 打包：PyInstaller（`GameAssetsMaker.spec`）
+
+### 安装 GAM Skills
+
+六个 [GAM Skills](https://github.com/hyhy111/gam-skills) 可帮助 Agent 编写提示词、操作客户端、处理素材，并将动画导入 Godot 4。安装工具需要 Node.js/npm；选择对应命令安装全部六个 Skills：
+
+```bash
+# Codex
+npx skills add hyhy111/gam-skills -g -a codex --skill "*"
+
+# Claude Code
+npx skills add hyhy111/gam-skills -g -a claude-code --skill "*"
+
+# 自动检测并选择其他 Agent
+npx skills add hyhy111/gam-skills -g --skill "*"
+```
+
+| Skill | 用途 |
+| --- | --- |
+| `gam-pic-prompt` | 编写角色图片提示词，明确视角与画风。 |
+| `gam-video-prompt` | 根据角色图编写待机、行走、攻击等动作提示词。 |
+| `gam-workflow` | 安排素材制作步骤，检查结果并继续处理。 |
+| `gam-guide` | 查询功能、参数及账号与 API Key 配置。 |
+| `gam-cli` | 通过 `gam-agent` 填写草稿、查询任务和操作客户端。 |
+| `gam-export` | 将 PNG 动画帧、裁剪偏移和音效导入 Godot 4。 |
+
+安装后可直接描述需求，例如“用 gam-pic-prompt，帮我写一个侧视剑士的图片提示词”，或“用 gam-export，把这个素材目录导入我的 Godot 4 项目”。
+
+操作客户端前请先安装并打开 GAM，并允许 Agent 访问本地文件和执行命令。安装包自带 `gam-agent`，固定入口见下方「打包发行」。`gam-export` 另需 Python 3.10+，仅依赖标准库；导出时提供素材目录和 Godot 4 项目目录。本地素材处理无需登录，在线 AI 生成使用客户端中的账号或自定义 Key 配置。更多 Agent 的安装选项见 [Skills CLI 支持列表](https://github.com/vercel-labs/skills#supported-agents)。
 
 ### 快速开始
 
@@ -107,10 +137,18 @@ uv run python build.py --windows-installer --iscc "C:/Tools/Inno Setup/ISCC.exe"
 
 输出 `GameAssetsMaker-<版本>-windows-x64-Setup.exe` 和 `.exe.sha256`。安装器按当前用户安装，支持开始菜单、可选桌面快捷方式及卸载；升级沿用原安装目录。卸载保留 `.gam` 用户数据。缺少 WebView2 时联网安装微软运行库。重复构建请选新的输出目录，避免覆盖已有安装包。
 
+可用 `--package-name` 自定义安装包文件名前缀，默认值为 `GameAssetsMaker`；版本号、系统和架构后缀自动保留。例如：
+
+```bash
+uv run python build.py --package-name "GAM" --dist-dir dist/gam --work-dir build/gam
+```
+
+在 Apple Silicon Mac 上生成 `GAM-<版本>-macos-arm64.dmg`。Windows 打包命令同样支持 `--package-name "GAM"`，生成 `GAM-<版本>-windows-x64-Setup.exe`；对应校验文件的名称和内容同步使用自定义名称。名称支持中文和空格（命令行中请加引号），不能包含路径分隔符、控制字符、`<>:"|?*{}`、首尾空白或结尾的点。该选项只修改安装包文件名，应用名称、安装目录及 CLI 入口保持不变。
+
 GitHub Actions 工作流 [Build installers](.github/workflows/build-installers.yml) 支持手动同时构建 Windows x64 与 macOS Apple Silicon（ARM64），不生成 Intel Mac 安装包：
 
 1. 将工作流、打包脚本及所需源码提交并推送到仓库默认分支；`dist/` 和 `build/` 不需要上传。
-2. 打开仓库 **Actions → Build installers → Run workflow**，选择要打包的分支并运行。
+2. 打开仓库 **Actions → Build installers → Run workflow**，选择要打包的分支，填写 `package_name` 安装包前缀（默认 `GameAssetsMaker`）并运行。
 3. 成功后打开该次运行，在 **Artifacts** 下载 `windows-x64-installer` 和 `macos-arm64-installer`，解压得到安装包及 `.sha256` 校验文件。
 4. 安装验证后，可将 EXE、DMG 及对应校验文件上传到 GitHub Release。工作流只保存构建产物（14 天），不会自动发布 Release。
 
@@ -127,9 +165,23 @@ GitHub Actions 工作流 [Build installers](.github/workflows/build-installers.y
 
 草稿填写支持按需传入独立参数，例如 `draft patch --kind video --prompt "原地行走" --first-frame "角色.png" --duration 5`；省略的参数保留界面原值。图片参考图使用 `--reference-image`，长提示词可用 `--prompt-file` 读取 UTF-8 纯文本。保留 `--patch-json` 兼容已有调用，与独立参数二选一。
 
-### 说明
+### 维护 GAM Skills 子模块
 
-应用内的登录 / 积分等云端功能为可选扩展，依赖自建后端服务；本地素材处理能力不依赖任何账号。
+六个 GAM Skills 在独立仓库 [hyhy111/gam-skills](https://github.com/hyhy111/gam-skills) 维护，以 Git 子模块放在 `.agents/skills/`。这里的修改直接属于 Skills 仓库；客户端记录使用的 Skills 提交版本。
+
+```bash
+# 新克隆时一起获取 Skills
+git clone --recurse-submodules https://github.com/hyhy111/game-assets-maker.git
+
+# 已有客户端检出：初始化记录的 Skills 版本
+git submodule update --init -- .agents/skills
+
+# 开始修改 Skills 前切换到维护分支
+git -C .agents/skills switch main
+```
+
+先在 `.agents/skills/` 检查并验证改动，只提交本次所需的 Skills 文件并推送；再回到客户端更新 `.agents/skills` 指针。两个仓库分别提交，已有未提交改动应保留。其他本地 Skills 可继续放在该目录，但应保持 Git 忽略，不进入 GAM Skills 发布内容。
+
 
 ### 许可证
 
@@ -141,6 +193,8 @@ GitHub Actions 工作流 [Build installers](.github/workflows/build-installers.y
 
 Game Assets Maker is a desktop application that converts videos into **transparent game animation frame sequences**, with built-in AI image / video generation (Seedream / Seedance). Built with PyWebView + Vue 3 + TailwindCSS.
 
+Official website: [forfunerai.com](https://forfunerai.com)
+
 ### Features
 
 - **3-step pipeline**: frame extraction → rembg background removal (alpha matting) → green-screen hole punching & sprite alignment
@@ -149,11 +203,43 @@ Game Assets Maker is a desktop application that converts videos into **transpare
 - **Project management**: role/action project hierarchy with per-step settings
 - **Pixel post-processing filters**: outline, isolated-pixel cleanup, edge optimization, color replacement
 
+### Renaming roles and animations
+
+In the animation library, open the three-dot menu on the right of a role row, or the three-dot menu to the left of an animation card’s delete icon, and choose Rename. Enter the new name and save. Role names must be unique; animation names must be unique within their role. Wait for active processing or trimming to finish before renaming. The animation card’s delete icon stays visible, turns red on hover, and still requires confirmation when clicked.
+
 ### Tech Stack
 
 - Backend: Python 3.12, PyWebView, OpenCV, Pillow, rembg
 - Frontend: Vue 3 + TypeScript + Vite + Pinia + TailwindCSS
 - Packaging: PyInstaller (`GameAssetsMaker.spec`)
+
+### Install GAM Skills
+
+The six [GAM Skills](https://github.com/hyhy111/gam-skills) help agents write prompts, control the desktop app, process assets, and export animations to Godot 4. The installer requires Node.js/npm. Choose a command to install all six skills:
+
+```bash
+# Codex
+npx skills add hyhy111/gam-skills -g -a codex --skill "*"
+
+# Claude Code
+npx skills add hyhy111/gam-skills -g -a claude-code --skill "*"
+
+# Detect and choose another agent
+npx skills add hyhy111/gam-skills -g --skill "*"
+```
+
+| Skill | Purpose |
+| --- | --- |
+| `gam-pic-prompt` | Write character image prompts with a clear viewpoint and art style. |
+| `gam-video-prompt` | Write idle, walk, attack, and other motion prompts from a character image. |
+| `gam-workflow` | Plan asset creation steps, inspect results, and continue processing. |
+| `gam-guide` | Look up features, parameters, account settings, and API key configuration. |
+| `gam-cli` | Use `gam-agent` to fill drafts, query tasks, and control the desktop app. |
+| `gam-export` | Import PNG animation frames, trim offsets, and audio into Godot 4. |
+
+After installation, describe your request, for example: “Use gam-pic-prompt to write an image prompt for a side-view swordsman,” or “Use gam-export to import this asset directory into my Godot 4 project.”
+
+Install and open GAM before controlling the client, and allow your agent to access local files and execute commands. The app bundles `gam-agent`; see Packaging below for its stable entry paths. `gam-export` also requires Python 3.10+ and uses only the standard library. Provide the asset directory and Godot 4 project directory when exporting. Local processing needs no login; online AI generation uses the account or custom key configured in the client. See the [Skills CLI supported agents](https://github.com/vercel-labs/skills#supported-agents) for other installation options.
 
 ### Quick Start
 
@@ -174,6 +260,16 @@ uv run python -m backend.main
 
 The local agent control service prefers port `8765` and automatically selects a free port if occupied. The CLI discovers it through `cache/agent-control.json` in the active data root; shutdown removes the record. For source development, run the CLI from the same workspace. If using `GAM_DATA_ROOT`, point the desktop app and CLI to the same directory.
 
+### Models
+
+Background removal currently supports only U2Net (~176 MB). Model weights are not included in the repository or release package. In installed builds, step 2 prompts the user to select a source and download the model. Once ready, it supports offline processing. For source development, download it from the repository root:
+
+```bash
+uv run python scripts/download_models.py u2net
+```
+
+See [MODELS.md](MODELS.md).
+
 ### Default models
 
 Image and video settings each have one default model shared by Custom API Key and ForFuner AI. Platform generation maps that choice to a full ID in the available-model catalog, choosing another available model and adjusting resolution or duration when needed. New drafts, clearing drafts and source changes apply the shared defaults; reopening an existing draft retains a valid manually selected model. Legacy separate ForFuner AI defaults are ignored. Failed catalog loads can be retried and never fall back to the API-key model list.
@@ -188,17 +284,11 @@ For private-repository tests, set `GAM_UPDATE_GITHUB_TOKEN` in the launching pro
 
 Development launched through `dev_start.py` offers a “Record API call details” setting, disabled by default. When enabled, calls made with a user-supplied Ark API key are recorded in `logs/ark-custom-key.jsonl` under the application data root (the development workspace, or `GAM_DATA_ROOT` when set). Ordinary source launches, installed data mode and packaged applications never record this log, even with a stale enabled setting. A data-root override does not grant logging permission. This audit is independent of the optional error logger and frontend request diagnostics.
 
-The switch saves independently and applies to subsequent events immediately, without saving other settings or restarting. Disabling preserves existing files; re-enabling never backfills disabled events. An in-flight call may have only partial events, so missing events do not prove failure, lack of generation or lack of billing. Events sharing a `call_id` describe one provider call: `intent` precedes transport, `http_response` records receipt, `parsed_response` records a usable payload, and `response_persisted` / `task_persisted` records local recovery data. The log contains safe timing, status, usage, and URL-presence metadata, never keys, prompt text, media bytes, or signed URLs. An `intent` without a response does not prove provider acceptance or billing; check the Ark console for that. Account-backed generation is separate. The file rotates by size with up to five archives.
+The switch saves independently and, once saved, applies to subsequent events immediately without saving other settings or restarting. Disabling preserves existing files and stops recording new events; re-enabling never backfills disabled events. An in-flight call may have only partial events, so missing events do not prove failure, lack of generation, or lack of billing.
 
-### Models
+Events sharing a `call_id` describe one Ark call: `intent` precedes transport, `http_response` records receipt, `parsed_response` records a usable payload, and `response_persisted` / `task_persisted` records local recovery data. `elapsed_ms` is the elapsed time in milliseconds up to that event. For video, `video.get` is a task-status query; for images, `download_*` describes the local download stage. The log records only the model, timing, HTTP status, available request IDs, usage, and whether a URL exists. It excludes keys, prompt text, image data, and download URLs.
 
-Background removal currently supports only U2Net (~176 MB). Model weights are not included in the repository or release package. In installed builds, step 2 prompts the user to select a source and download the model. Once ready, it supports offline processing. For source development, download it from the repository root:
-
-```bash
-uv run python scripts/download_models.py u2net
-```
-
-See [MODELS.md](MODELS.md).
+An `intent` without a response cannot establish whether the provider received the request, generated media, or charged for it; check the Ark console. Account-backed cloud generation does not write to this custom-key log. The file rotates by size with up to five archives, and existing tasks are never backfilled.
 
 ### Testing
 
@@ -216,9 +306,15 @@ Some tests need video fixtures; regenerate them with `python scripts/generate_te
 uv run python build.py
 ```
 
-The canonical version is in `pyproject.toml`; the build synchronizes frontend package versions. On macOS it also creates `dist/GameAssetsMaker-<version>-macos-<architecture>.dmg` and `.dmg.sha256`, containing the app, an Applications shortcut, and installation instructions. Quit the old app before replacing it. Test builds have no Developer ID signature or Apple notarization; if blocked, follow the included Privacy & Security > Open Anyway instructions.
+The canonical version is in `pyproject.toml`; the build synchronizes frontend package versions. On macOS it also creates `dist/GameAssetsMaker-<version>-macos-<architecture>.dmg` and `.dmg.sha256`, containing the app, an Applications shortcut, and installation instructions. Drag the app into Applications to install it; quit the old app before replacing it. Test builds have no Developer ID signature or Apple notarization; if blocked, follow the included Privacy & Security > Open Anyway instructions.
 
-To preserve previous output, use `uv run python build.py --dist-dir dist/local-1.0.0 --work-dir build/local-1.0.0`. Use `--skip-dmg` for the app bundle only. On Windows, use Inno Setup 6.3+ (including the Simplified Chinese language file) and Microsoft's official WebView2 bootstrapper to create a single EXE installer:
+To preserve previous output, build in separate directories:
+
+```bash
+uv run python build.py --dist-dir dist/local-1.0.0 --work-dir build/local-1.0.0
+```
+
+Use `--skip-dmg` for the app bundle only. On Windows, use Inno Setup 6.3+ (including the Simplified Chinese language file) and Microsoft's official WebView2 bootstrapper to create a single EXE installer:
 
 ```powershell
 uv run python build.py --windows-installer --iscc "C:/Tools/Inno Setup/ISCC.exe" --webview2-bootstrapper "C:/Tools/MicrosoftEdgeWebview2Setup.exe" --dist-dir dist/windows-setup --work-dir build/windows-setup
@@ -226,10 +322,18 @@ uv run python build.py --windows-installer --iscc "C:/Tools/Inno Setup/ISCC.exe"
 
 This produces `GameAssetsMaker-<version>-windows-x64-Setup.exe` and `.exe.sha256`. Setup installs for the current user, adds Start menu and optional desktop shortcuts, and reuses the previous installation directory on upgrade. Uninstall preserves `.gam` user data. A missing WebView2 runtime is installed online using Microsoft's installer. Use a fresh output directory to preserve existing installers.
 
+Use `--package-name` to customize the installer filename prefix (default: `GameAssetsMaker`). The version, platform, and architecture suffixes are retained automatically. For example:
+
+```bash
+uv run python build.py --package-name "GAM" --dist-dir dist/gam --work-dir build/gam
+```
+
+This creates `GAM-<version>-macos-arm64.dmg` on an Apple Silicon Mac. The Windows build command also accepts `--package-name "GAM"`, producing `GAM-<version>-windows-x64-Setup.exe`. Checksum filenames and their contents use the custom name as well. Names may contain Chinese characters and spaces (quote them on the command line), but cannot contain path separators, control characters, `<>:"|?*{}`, leading/trailing whitespace, or trailing dots. This option changes only installer filenames; the application name, installation directory, and CLI entry paths remain unchanged.
+
 The [Build installers](.github/workflows/build-installers.yml) GitHub Actions workflow manually builds Windows x64 and macOS Apple Silicon (ARM64) together. It does not produce Intel Mac installers:
 
 1. Commit and push the workflow, packaging scripts, and required source to the repository's default branch. Do not upload `dist/` or `build/`.
-2. Open **Actions → Build installers → Run workflow**, select the branch to package, and start the run.
+2. Open **Actions → Build installers → Run workflow**, select the branch to package, enter the `package_name` installer prefix (default: `GameAssetsMaker`), and start the run.
 3. After success, open the run and download `windows-x64-installer` and `macos-arm64-installer` from **Artifacts**. Extract the archives to obtain the installers and their `.sha256` files.
 4. After installation testing, upload the EXE, DMG, and corresponding checksums to a GitHub Release. The workflow stores build artifacts for 14 days and does not publish releases automatically.
 
@@ -246,30 +350,23 @@ Plugins and agents should try this absolute path before searching the installati
 
 Draft updates accept individual options, for example `draft patch --kind video --prompt "Walk in place" --first-frame "character.png" --duration 5`; omitted options preserve the current form values. Use `--reference-image` for image references or `--prompt-file` for long UTF-8 text. Existing `--patch-json` calls remain supported; choose JSON or individual options for each update.
 
-### Note
+### Maintain the GAM Skills submodule
 
-The in-app login / credit features are optional extensions backed by a self-hosted service; all local asset-processing capabilities work without any account.
+The six GAM Skills live in the independent [hyhy111/gam-skills](https://github.com/hyhy111/gam-skills) repository, checked out at `.agents/skills/` as a Git submodule. Changes there belong to the Skills repository; the client records the Skills commit it uses.
+
+```bash
+# Clone the client with Skills
+git clone --recurse-submodules https://github.com/hyhy111/game-assets-maker.git
+
+# Initialize the Skills revision recorded by an existing client checkout
+git submodule update --init -- .agents/skills
+
+# Switch to the maintenance branch before editing Skills
+git -C .agents/skills switch main
+```
+
+Inspect and validate changes inside `.agents/skills/`, commit only the intended Skills files, and push them first. Then update the client’s `.agents/skills` pointer. Commit the two repositories separately and preserve existing uncommitted changes. Other local skills may remain in that directory but should stay Git-ignored and out of GAM Skills releases.
 
 ### License
 
 [MIT](LICENSE) © ForFuner
-
-
-## GAM Skills 子模块 / Skills submodule
-
-六个 GAM Skills 在独立仓库 [hyhy111/gam-skills](https://github.com/hyhy111/gam-skills) 维护，以 Git 子模块放在 `.agents/skills/`。这里的修改直接属于 Skills 仓库；客户端记录使用的 Skills 提交版本。
-
-```bash
-# 新克隆时一起获取 Skills / Clone with Skills
-git clone --recurse-submodules https://github.com/hyhy111/game-assets-maker.git
-
-# 已有客户端检出：初始化记录的 Skills 版本 / Initialize the recorded revision
-git submodule update --init -- .agents/skills
-
-# 开始修改 Skills 前切换到维护分支 / Enter the maintenance branch
-git -C .agents/skills switch main
-```
-
-维护流程：先在 `.agents/skills/` 检查并验证改动，只提交本次所需的 Skills 文件并推送；再回到客户端更新 `.agents/skills` 指针。两个仓库分别提交，已有未提交改动应保留。其他本地 Skills 可继续放在该目录，但不会进入 GAM Skills 发布内容。
-
-The six GAM Skills live in the independent `hyhy111/gam-skills` repository, checked out at `.agents/skills` as a submodule. Commit and push the intended Skills changes there first, then update the client’s recorded submodule commit. Other local skills remain ignored. See the submodule README for user installation and Python/Godot export requirements.
