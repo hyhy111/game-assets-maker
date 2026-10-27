@@ -1,0 +1,73 @@
+name: Publish built release assets
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Successful Build installers run ID
+        required: true
+        type: string
+      tag:
+        description: Existing draft release tag
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      BUILD_RUN_ID: ${{ inputs.run_id }}
+      RELEASE_TAG: ${{ inputs.tag }}
+    steps:
+      - name: Verify build and draft release
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$BUILD_RUN_ID" =~ ^[0-9]+$ ]]
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          gh run view "$BUILD_RUN_ID" --json conclusion,headSha,workflowName > build.json
+          gh release view "$RELEASE_TAG" --json isDraft,targetCommitish > release.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          build = json.loads(Path('build.json').read_text())
+          release = json.loads(Path('release.json').read_text())
+          assert build['conclusion'] == 'success', build
+          assert build['workflowName'] == 'Build installers', build
+          assert release['isDraft'], 'Release must still be a draft'
+          assert release['targetCommitish'] == build['headSha'], 'Build and release commits differ'
+          PY
+
+      - name: Download and verify installers in GitHub
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh run download "$BUILD_RUN_ID" --dir assets
+          python - <<'PY'
+          import hashlib
+          import os
+          from pathlib import Path
+          version = os.environ['RELEASE_TAG'][1:]
+          names = [f'GameAssetsMaker-{version}-macos-arm64.dmg', f'GameAssetsMaker-{version}-windows-x64-Setup.exe']
+          files = [path for path in Path('assets').rglob('*') if path.is_file()]
+          assert sorted(path.name for path in files) == sorted(names + [name + '.sha256' for name in names]), files
+          for name in names:
+              package = next(path for path in files if path.name == name)
+              checksum = package.with_name(name + '.sha256').read_text().split()
+              assert len(checksum) == 2 and checksum[1] == name, checksum
+              with package.open('rb') as stream:
+                  digest = hashlib.file_digest(stream, 'sha256').hexdigest()
+              assert digest == checksum[0], f'Checksum mismatch: {name}'
+              print(f'Verified {name}: {digest}')
+          PY
+
+      - name: Upload verified assets to draft release
+        shell: bash
+        run: gh release upload "$RELEASE_TAG" assets/*/*
