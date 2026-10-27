@@ -96,6 +96,9 @@ export default {
   },
   updates: {
     title: 'Version & Updates',
+    starHint: 'Enjoy Game Assets Maker? Give us a Star to support continued development.',
+    starAction: 'Star us on GitHub',
+    starOpenFailed: 'Could not open GitHub. Please retry.',
     currentVersion: 'Current version v{version}',
     checking: 'Checking for updates…',
     available: 'New version v{version} available',

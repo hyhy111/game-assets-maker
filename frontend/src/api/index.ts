@@ -354,6 +354,10 @@ export const systemApi = {
     return callApi<boolean>('open_app_update', 'openAppUpdate');
   },
 
+  async openGithubRepository(): Promise<boolean> {
+    return callApi<boolean>('open_github_repository', 'openGithubRepository');
+  },
+
   async getAppVersion(): Promise<string> {
     return callApi<string>('get_app_version', 'getAppVersion');
   }
