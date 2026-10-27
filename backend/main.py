@@ -1240,7 +1240,8 @@ class MainApp:
             else:
                 frontend_path = Path(__file__).parent.parent / "frontend" / "dist" / "index.html"
             if frontend_path.exists():
-                return str(frontend_path)
+                # Refresh cached HTML after upgrades while preserving the storage origin.
+                return f"{frontend_path}?v={app_version()}"
             else:
                 # Fallback to dev server if dist not built
                 print(f"Warning: Frontend build not found at {frontend_path}")
