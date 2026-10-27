@@ -11,6 +11,7 @@ from backend.api import update_api
 from backend.api.config_api import ConfigAPI
 from backend.api.update_api import UpdateAPI
 from src.utils.app_config import load_app_config, save_app_config
+from src.utils.app_version import app_version
 
 
 def release(tag="v1.0.1", **changes):
@@ -175,7 +176,7 @@ def test_bridge_exposes_shared_update_state(setup_updates):
     from backend.main import API
 
     bridge = API()
-    assert bridge.get_app_version() == "1.0.0"
+    assert bridge.get_app_version() == app_version()
     assert bridge.check_app_update()["status"] == "available"
     assert bridge.ignore_app_update("1.0.1") is True
     assert bridge.check_app_update()["status"] == "ignored"
