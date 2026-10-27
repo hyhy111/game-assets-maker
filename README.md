@@ -41,12 +41,12 @@ Game Assets Maker（GAM）是一款开源桌面工具，面向独立游戏开发
 
 普通用户下载安装包即可，**不需要安装 Python、Node.js 或克隆源码**。
 
-当前安装包：**v1.0.1**。后续版本请查看 [最新 Release](https://github.com/hyhy111/game-assets-maker/releases/latest)。
+当前安装包：**v1.0.2**。后续版本请查看 [最新 Release](https://github.com/hyhy111/game-assets-maker/releases/latest)。
 
 | 系统 | 下载 | 安装方式 |
 | --- | --- | --- |
-| Windows x64 | [EXE 安装包](https://github.com/hyhy111/game-assets-maker/releases/download/v1.0.1/GameAssetsMaker-1.0.1-windows-x64-Setup.exe) | 运行安装器；缺少 WebView2 时按提示联网安装。 |
-| macOS Apple Silicon（ARM64） | [DMG 安装包](https://github.com/hyhy111/game-assets-maker/releases/download/v1.0.1/GameAssetsMaker-1.0.1-macos-arm64.dmg) | 打开 DMG，将应用拖入 Applications。 |
+| Windows x64 | [EXE 安装包](https://github.com/hyhy111/game-assets-maker/releases/download/v1.0.2/GameAssetsMaker-1.0.2-windows-x64-Setup.exe) | 运行安装器；缺少 WebView2 时按提示联网安装。 |
+| macOS Apple Silicon（ARM64） | [DMG 安装包](https://github.com/hyhy111/game-assets-maker/releases/download/v1.0.2/GameAssetsMaker-1.0.2-macos-arm64.dmg) | 打开 DMG，将应用拖入 Applications。 |
 
 目前未提供 Intel Mac 或 Linux 安装包。macOS 包尚未签名或公证；若系统阻止打开，请按包内安装说明，在“系统设置 → 隐私与安全性”中选择“仍要打开”。校验文件 `.sha256` 见 [Release 附件](https://github.com/hyhy111/game-assets-maker/releases/latest)。
 
@@ -155,12 +155,12 @@ Game Assets Maker (GAM) is an open-source desktop tool for indie game developers
 
 Install the desktop app. **No Python, Node.js, or source checkout is needed for normal use.**
 
-Current installers: **v1.0.1**. Check the [latest release](https://github.com/hyhy111/game-assets-maker/releases/latest) for updates.
+Current installers: **v1.0.2**. Check the [latest release](https://github.com/hyhy111/game-assets-maker/releases/latest) for updates.
 
 | Platform | Download | Installation |
 | --- | --- | --- |
-| Windows x64 | [EXE installer](https://github.com/hyhy111/game-assets-maker/releases/download/v1.0.1/GameAssetsMaker-1.0.1-windows-x64-Setup.exe) | Run Setup; install WebView2 online if prompted. |
-| macOS Apple Silicon (ARM64) | [DMG installer](https://github.com/hyhy111/game-assets-maker/releases/download/v1.0.1/GameAssetsMaker-1.0.1-macos-arm64.dmg) | Open the DMG and drag the app into Applications. |
+| Windows x64 | [EXE installer](https://github.com/hyhy111/game-assets-maker/releases/download/v1.0.2/GameAssetsMaker-1.0.2-windows-x64-Setup.exe) | Run Setup; install WebView2 online if prompted. |
+| macOS Apple Silicon (ARM64) | [DMG installer](https://github.com/hyhy111/game-assets-maker/releases/download/v1.0.2/GameAssetsMaker-1.0.2-macos-arm64.dmg) | Open the DMG and drag the app into Applications. |
 
 Intel Mac and Linux installers are not currently provided. The macOS package is unsigned and not notarized; if blocked, follow the included instructions in System Settings → Privacy & Security → Open Anyway. SHA-256 checksum files are available in the [release assets](https://github.com/hyhy111/game-assets-maker/releases/latest).
 
