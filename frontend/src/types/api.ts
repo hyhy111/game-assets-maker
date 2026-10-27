@@ -115,6 +115,7 @@ export interface PyWebViewWindow extends Window {
       check_app_update: () => Promise<AppUpdateInfo>;
       ignore_app_update: (version: string) => Promise<boolean>;
       open_app_update: () => Promise<boolean>;
+      open_github_repository: () => Promise<boolean>;
       /** 打开订阅落地页隔离窗（js_api=None，token 走 postMessage） */
       open_subscription_window: (url: string) => Promise<boolean>;
 

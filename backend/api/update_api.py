@@ -120,6 +120,13 @@ class UpdateAPI:
                 return False
             return True
 
+    def open_repository(self) -> bool:
+        """Open the fixed project homepage independently of release checks."""
+        try:
+            return webbrowser.open(f"https://github.com/{REPOSITORY}")
+        except (OSError, webbrowser.Error):
+            return False
+
     def open_release(self) -> bool:
         with self._lock:
             if self._state is None or self._state["status"] != "available":

@@ -96,6 +96,9 @@ export default {
   },
   updates: {
     title: '版本与更新',
+    starHint: '喜欢 Game Assets Maker？给项目一颗 Star，支持持续更新。',
+    starAction: '在 GitHub 上支持我们',
+    starOpenFailed: '无法打开 GitHub，请重试。',
     currentVersion: '当前版本 v{version}',
     checking: '正在检查新版本…',
     available: '发现新版本 v{version}',

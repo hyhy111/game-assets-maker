@@ -895,6 +895,10 @@ class API:
         """Open the validated release page for a manual download and installation."""
         return self._update_api.open_release()
 
+    def open_github_repository(self) -> bool:
+        """Open the project homepage in the system browser."""
+        return self._update_api.open_repository()
+
     def get_app_version(self) -> str:
         """Get application version"""
         return app_version()
