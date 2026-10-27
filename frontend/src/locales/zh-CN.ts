@@ -242,6 +242,7 @@ export default {
     nextPage: '下一页',
     pageStatus: '第 {current} / {total} 页',
     startWithAICreation: '从 AI 创作开始',
+    importLocalVideo: '从本地导入视频',
     addAction: '添加动画',
     addAnimationForRole: '为「{role}」添加动画',
     trimExport: '裁剪导出',

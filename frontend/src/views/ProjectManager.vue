@@ -164,13 +164,20 @@
           <h3 class="text-lg font-semibold text-white">
             {{ t('projectManager.noProjects') }}
           </h3>
-          <Button
-            class="mt-5"
-            @click="goToAICreation"
-          >
-            <ImagePlus class="mr-2 h-4 w-4" />
-            {{ t('projectManager.startWithAICreation') }}
-          </Button>
+          <div class="mt-5 flex flex-wrap justify-center gap-3">
+            <Button @click="goToAICreation">
+              <ImagePlus class="mr-2 h-4 w-4" />
+              {{ t('projectManager.startWithAICreation') }}
+            </Button>
+            <Button
+              variant="secondary"
+              data-test="import-local-video-empty"
+              @click="goToCreate()"
+            >
+              <FolderOpen class="mr-2 h-4 w-4" />
+              {{ t('projectManager.importLocalVideo') }}
+            </Button>
+          </div>
           <button
             type="button"
             class="mt-3 text-sm text-gray-500 underline-offset-4 transition-colors hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50"

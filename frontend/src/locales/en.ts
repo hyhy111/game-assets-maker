@@ -245,6 +245,7 @@ export default {
     nextPage: 'Next page',
     pageStatus: 'Page {current} / {total}',
     startWithAICreation: 'Start with AI Creation',
+    importLocalVideo: 'Import Local Video',
     addAction: 'Add Animation',
     addAnimationForRole: 'Add an animation for “{role}”',
     trimExport: 'Trim & Export',
