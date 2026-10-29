@@ -11,6 +11,7 @@ import { useI18n } from 'vue-i18n';
 import { Coins } from 'lucide-vue-next';
 import { useBillingStore } from '@/stores/billing';
 import CreditBucketRow from './CreditBucketRow.vue';
+import { useCreditUsageStore } from '@/stores/creditUsage';
 
 const emit = defineEmits<{
   (e: 'subscribe'): void;
@@ -18,13 +19,19 @@ const emit = defineEmits<{
 
 const { t } = useI18n();
 const billingStore = useBillingStore();
+const creditUsage = useCreditUsageStore();
 
 const buckets = computed(() => billingStore.buckets);
 const isEmpty = computed(() => buckets.value.length === 0);
+const hasBonus = computed(() => creditUsage.ready && (creditUsage.data?.account.bonusAvailable ?? 0) > 0);
+function bonusDetail(bucketId: string) {
+  return creditUsage.ready ? creditUsage.data?.account.buckets.find(row => row.bucket.bucketId === bucketId && row.bucket.creditClass === 'BONUS' && row.bucket.remainAmount > 0) : undefined;
+}
 
 function onOpen() {
   // 打开即拉最新（支付回来/消耗后同步）
   billingStore.refreshAccount();
+  void creditUsage.refresh();
 }
 
 function onSubscribe() {
@@ -59,6 +66,7 @@ function onSubscribe() {
       >
         <div class="px-4 py-3 border-b border-dark-border">
           <p class="text-sm font-semibold text-white">{{ t('billing.title') }}</p>
+          <p v-if="hasBonus" class="mt-1 text-xs text-gray-300">{{ t('creditUsage.balance', { general: creditUsage.data?.account.generalAvailable, bonus: creditUsage.data?.account.bonusAvailable }) }}</p>
         </div>
 
         <div
@@ -83,11 +91,11 @@ function onSubscribe() {
           v-else
           class="max-h-72 overflow-y-auto px-3 py-3 flex flex-col gap-2.5"
         >
-          <CreditBucketRow
-            v-for="b in buckets"
-            :key="b.bucketId"
-            :bucket="b"
-          />
+          <div v-for="b in buckets" :key="b.bucketId">
+            <CreditBucketRow :bucket="b" />
+            <p v-if="bonusDetail(b.bucketId)" class="mt-1 px-2 text-xs text-gray-400">{{ t('creditUsage.bonusScope', { scope: bonusDetail(b.bucketId)?.usageSummary }) }}</p>
+            <p v-if="bonusDetail(b.bucketId)?.message" class="px-2 text-xs text-warning">{{ bonusDetail(b.bucketId)?.message }}</p>
+          </div>
         </div>
       </PopoverPanel>
     </transition>

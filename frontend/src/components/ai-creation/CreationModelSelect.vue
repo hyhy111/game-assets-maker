@@ -40,6 +40,7 @@
             v-slot="{ active, selected }"
             as="template"
             :value="option.value"
+            :disabled="option.disabled"
           >
             <li
               class="flex cursor-pointer items-center justify-between gap-4 rounded-lg px-3 py-2 text-sm whitespace-nowrap"
@@ -49,7 +50,7 @@
                   ? 'bg-[#303030] text-white'
                   : 'text-gray-400'"
             >
-              <span>{{ option.label }}</span>
+              <span :class="option.disabled ? 'opacity-50' : ''">{{ option.label }}<small v-if="option.reason" class="block max-w-64 whitespace-normal text-gray-400">{{ option.reason }}</small></span>
               <Check
                 v-if="selected"
                 :size="14"
@@ -72,12 +73,16 @@ import { Check, ChevronDown, Sparkles } from 'lucide-vue-next';
 interface ModelOption {
   value: string;
   label: string;
+  disabled?: boolean;
+  reason?: string;
 }
 
 const props = defineProps<{
   modelValue: string;
   options: ModelOption[];
   label: string;
+  disabled?: boolean;
+  reason?: string;
   testId: string;
 }>();
 
@@ -87,7 +92,7 @@ const emit = defineEmits<{
 
 const selectedValue = computed({
   get: () => props.modelValue,
-  set: (value: string) => emit('update:modelValue', value),
+  set: (value: string) => { if (!props.options.find(option => option.value === value)?.disabled) emit('update:modelValue', value); },
 });
 
 const selectedLabel = computed(() => (

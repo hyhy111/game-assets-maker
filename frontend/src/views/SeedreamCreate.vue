@@ -195,7 +195,7 @@
                     type="button"
                     class="rounded-lg px-3 py-2 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-30"
                     :class="form.resolution === resolution ? 'bg-primary/20 text-primary-200 shadow-sm' : 'text-gray-400 hover:bg-white/[0.05] hover:text-gray-200'"
-                    :disabled="!supportedResolutions.includes(resolution)"
+                    :disabled="!supportedResolutions.includes(resolution) || (platformGenerationSelected && !creditUsage.canPay('image', form.model, resolution, undefined, form.count))"
                     :aria-pressed="form.resolution === resolution"
                     :data-value="resolution"
                     @click="form.resolution = resolution"
@@ -239,7 +239,8 @@
           <div class="ml-auto flex min-w-0 items-center gap-3 pl-2">
             <div v-if="showCreditEstimate" class="text-right" data-test="generation-credits" aria-live="polite">
               <p v-if="quoteLoading" class="text-sm text-gray-500">{{ t('aiCreation.platformQuoteLoading') }}</p>
-              <p v-else-if="platformQuoteTotal !== null" class="text-sm text-gray-300">{{ t('aiCreation.estimatedCredits', { credits: platformQuoteTotal }) }}</p>
+              <p v-else-if="platformQuoteTotal !== null" class="text-sm text-gray-300">{{ t('aiCreation.estimatedCredits', { credits: platformQuoteTotal }) }}<span v-if="bonusPayment" class="ml-1 text-xs text-primary">({{ t('creditUsage.payment', bonusPayment) }})</span></p>
+              <p v-else-if="creditUsage.error" class="max-w-[16rem] text-xs leading-5 text-warning">{{ t('creditUsage.unavailable') }} <button type="button" class="underline" @click="creditUsage.refresh()">{{ t('creditUsage.refresh') }}</button></p>
               <p v-else-if="quoteError" class="max-w-[16rem] text-xs leading-5 text-warning">{{ t('aiCreation.platformQuoteFailed', { message: quoteError }) }}</p>
               <p v-else class="text-sm text-gray-500">{{ t('aiCreation.creditsUnavailable') }}</p>
             </div>
@@ -254,7 +255,7 @@
             <button
               type="submit"
               class="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#ffbd5c] text-[#242424] transition hover:bg-[#ffc975] disabled:cursor-not-allowed disabled:bg-[#4a4a4a] disabled:text-[#777]"
-              :disabled="submitting || capabilitiesBlocked || !form.prompt.trim()"
+              :disabled="submitting || platformConfirmBlocked || capabilitiesBlocked || !form.prompt.trim()"
               :aria-label="t('seedream.create.createBatch')"
               :title="t('seedream.create.createBatch')"
               data-test="seedream-submit"
@@ -323,7 +324,7 @@
           </Button>
           <Button
             :loading="submitting"
-            :disabled="submitting"
+            :disabled="submitting || platformConfirmBlocked"
             data-test="seedream-confirm-submit"
             @click="confirmSubmit"
           >
@@ -357,6 +358,7 @@ import { useRoute, useRouter } from 'vue-router';
 import DraftClearConfirmation from '@/components/ai-creation/DraftClearConfirmation.vue';
 import GenerationAccessDialog from '@/components/ai-creation/GenerationAccessDialog.vue';
 import CreationModelSelect from '@/components/ai-creation/CreationModelSelect.vue';
+import { useCreditUsageStore } from '@/stores/creditUsage';
 import Button from '@/components/common/Button.vue';
 import SeedreamBatchList from '@/components/seedream/SeedreamBatchList.vue';
 import SeedreamShell from '@/components/seedream/SeedreamShell.vue';
@@ -405,6 +407,7 @@ const keySettingsStore = useSeedanceStore();
 const configStore = useConfigStore();
 const authStore = useAuthStore();
 const workspace = useAICreationStore();
+const creditUsage = useCreditUsageStore();
 // 平台能力清单的加载时机：登录后 / 切到平台源 / 登出清空。
 const { reload: reloadCapabilities } = usePlatformCapabilities();
 
@@ -420,7 +423,7 @@ const localImageModelOptions = (): ModelOption[] => [
 ];
 const modelOptions = computed<ModelOption[]>(() => (
   platformGenerationSelected.value
-    ? platformModelOptions(platformImageModels.value)
+    ? platformModelOptions(platformImageModels.value).map(option => ({ ...option, disabled: !creditUsage.canPay('image', option.value), reason: creditUsage.canPay('image', option.value) ? '' : t(creditUsage.ready ? 'creditUsage.optionUnavailable' : 'creditUsage.loading') }))
     : localImageModelOptions()
 ));
 
@@ -443,7 +446,7 @@ const showCreditEstimate = computed(() => (
 ));
 const quoteReady = computed(() => (
   platformGenerationSelected.value && authStore.isLoggedIn && modelDefaultsReady.value
-  && !capabilitiesBlocked.value && !workspace.capabilitiesLoading
+  && !capabilitiesBlocked.value && !workspace.capabilitiesLoading && creditUsage.ready
 ));
 // 平台源报价：单价来自服务端（model + size），总数 = 单价 × 生成数量（N 张 = N 个平台任务）。
 const quoteLoading = ref(false);
@@ -452,6 +455,13 @@ const quoteError = ref('');
 const platformQuoteTotal = computed(() => (
   quoteUnit.value === null ? null : quoteUnit.value * form.count
 ));
+const bonusPayment = computed(() => {
+  if (!creditUsage.ready || platformQuoteTotal.value === null) return null;
+  const row = creditUsage.matching('image', form.model, form.resolution)[0];
+  const bonus = Math.min(row?.bonusAvailable ?? 0, platformQuoteTotal.value);
+  return bonus > 0 ? { bonus, general: platformQuoteTotal.value - bonus } : null;
+});
+const platformConfirmBlocked = computed(() => platformGenerationSelected.value && (!creditUsage.canPay('image', form.model, form.resolution, undefined, form.count) || quoteLoading.value || !!quoteError.value || quoteUnit.value === null));
 const QUOTE_DEBOUNCE_MS = 350;
 let quoteTimer: ReturnType<typeof setTimeout> | null = null;
 let quoteRequestId = 0;
@@ -470,7 +480,12 @@ async function refreshPlatformQuote() {
   }
   quoteLoading.value = true;
   quoteError.value = '';
-  const data = await store.quoteImage(createRequest(form));
+  let data: { quote: number } | null = null;
+  let paymentError = '';
+  try {
+    const result = await creditUsage.quote('image', { model: form.model, size: form.resolution });
+    if (result.canSubmit) data = result; else paymentError = result.message;
+  } catch (error) { paymentError = error instanceof Error ? error.message : t('creditUsage.unavailable'); }
   // 只接受最后一次请求的结果，避免快速切模型时旧响应覆盖新报价。
   if (requestId !== quoteRequestId) return;
   quoteLoading.value = false;
@@ -479,7 +494,7 @@ async function refreshPlatformQuote() {
     return;
   }
   quoteUnit.value = null;
-  quoteError.value = store.error?.message ?? t('aiCreation.creditsUnavailable');
+  quoteError.value = paymentError || t('aiCreation.creditsUnavailable');
 }
 
 function scheduleQuoteRefresh() {
@@ -573,8 +588,7 @@ onMounted(async () => {
     ratio: settings?.default_ratio ?? '16:9',
   }, settings?.default_model_id);
   modelDefaultsReady.value = true;
-  if (platformGenerationSelected.value) clampToPlatformModel();
-  else fixResolution();
+  if (!platformGenerationSelected.value) fixResolution();
   const regenerateId = typeof route.query.regenerate === 'string' ? route.query.regenerate : '';
   if (regenerateId) {
     // Restore an editable draft from a previous batch. This does NOT call
@@ -584,12 +598,11 @@ onMounted(async () => {
       const request = draft.request;
       form.prompt = request.prompt ?? '';
       form.model = (request.model as SeedreamModel) ?? form.model;
-      form.resolution = correctResolution(form.model, (request.resolution as SeedreamResolution) ?? form.resolution);
+      form.resolution = platformGenerationSelected.value ? ((request.resolution as SeedreamResolution) ?? form.resolution) : correctResolution(form.model, (request.resolution as SeedreamResolution) ?? form.resolution);
       form.ratio = (request.ratio as SeedreamRatio) ?? form.ratio;
       form.count = request.count ?? form.count;
       form.reference_image = request.reference_image ?? '';
       workspace.imagePreviewUrls.reference = draft.reference_image_url ?? '';
-      if (platformGenerationSelected.value) clampToPlatformModel();
     }
     return;
   }
@@ -635,15 +648,12 @@ function selectModel(model: string) {
 
 // 切模型/分辨率刷新平台报价；数量是本地倍率，改数量无需重查。
 watch(
-  () => [quoteReady.value, quoteSignature()].join('#'),
+  () => [quoteReady.value, creditUsage.data?.asOf, quoteSignature()].join('#'),
   () => scheduleQuoteRefresh(),
   { immediate: true },
 );
 
-// 清单是异步到达的：到了之后收敛一次（也覆盖"清单刷新导致档位变少"）。
-watch(platformImageModels, () => {
-  if (platformGenerationSelected.value) clampToPlatformModel();
-});
+// Capability refreshes preserve the draft; the user must explicitly choose a replacement.
 
 function selectGenerationSource(source: string) {
   const next = source as GenerationSource;
@@ -732,7 +742,7 @@ onBeforeUnmount(() => {
 });
 
 async function confirmSubmit() {
-  if (submitting.value) return;
+  if (submitting.value || platformConfirmBlocked.value) return;
   submitting.value = true;
   try {
     const request = createRequest(form);
