@@ -342,84 +342,13 @@ class ProjectAPI:
         return name
 
     def _calculate_background_color_from_cache(self, cache_dir: str, sample_count: int = 3) -> tuple | None:
-        """
-        Calculate background color by sampling from random frames in cache.
-        Randomly selects `sample_count` frames and averages their corner colors.
+        """Use the same edge-patch estimator as extraction and hole punching."""
+        from backend.core.background_color import detect_background_hsv
 
-        Args:
-            cache_dir: Path to cache directory containing frames
-            sample_count: Number of frames to sample (default 3)
-
-        Returns:
-            Tuple of (H, S, V) or None if calculation failed
-        """
-        import random
-        from pathlib import Path
-
-        import cv2
-        import numpy as np
-
-        print(f"[DEBUG] Calculating background color from cache: {cache_dir}")
-
-        cache_path = Path(cache_dir)
-        if not cache_path.exists():
-            print(f"[DEBUG] Cache path does not exist: {cache_dir}")
+        try:
+            return detect_background_hsv(cache_dir, sample_count)
+        except (OSError, ValueError):
             return None
-
-        frames = sorted(cache_path.glob("frame_*.png"))
-        print(f"[DEBUG] Found {len(frames)} frames in cache")
-
-        if not frames:
-            return None
-
-        # Randomly sample frames.
-        sampled_frames = frames if len(frames) <= sample_count else random.sample(list(frames), sample_count)
-
-        print(f"[DEBUG] Sampled {len(sampled_frames)} frames for background calculation")
-
-        all_corner_colors = []
-
-        for frame_path in sampled_frames:
-            try:
-                # Read image
-                img_array = np.fromfile(str(frame_path), dtype=np.uint8)
-                img_bgr = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
-
-                if img_bgr is None:
-                    print(f"[DEBUG] Failed to read image: {frame_path}")
-                    continue
-
-                # Convert to HSV and sample corners
-                hsv = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2HSV)
-                h, w = img_bgr.shape[:2]
-
-                # Sample from four corners
-                corners = [
-                    (5, 5),  # top-left
-                    (5, w - 5),  # top-right
-                    (h - 5, 5),  # bottom-left
-                    (h - 5, w - 5),  # bottom-right
-                ]
-
-                for y, x in corners:
-                    y = max(0, min(y, h - 1))
-                    x = max(0, min(x, w - 1))
-                    all_corner_colors.append(hsv[y, x])
-
-                print(f"[DEBUG] Sampled corners from {frame_path.name}: {[hsv[y, x].tolist() for y, x in corners]}")
-
-            except Exception as e:
-                print(f"[Warning] Failed to sample from {frame_path}: {e}")
-                continue
-
-        if not all_corner_colors:
-            print("[DEBUG] No corner colors collected")
-            return None
-
-        # Calculate average HSV
-        avg_hsv = tuple(int(x) for x in np.mean(all_corner_colors, axis=0).astype(int))
-        print(f"[DEBUG] Calculated average HSV: {avg_hsv} from {len(all_corner_colors)} corner samples")
-        return avg_hsv
 
     def _update_background_color_in_config(self, project_path: str, bg_hsv: tuple) -> bool:
         """
@@ -494,7 +423,7 @@ class ProjectAPI:
             config["background_color"] = {
                 "hsv": [int(x) for x in bg_hsv],
                 "rgb": [int(x) for x in rgb],
-                "sampled_from": "random_3_frames_corners",
+                "sampled_from": "edge_patches",
             }
             print(f"[DEBUG] Updated config background_color: {config['background_color']}")
 

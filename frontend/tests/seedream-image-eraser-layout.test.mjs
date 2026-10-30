@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 import ts from 'typescript';
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
+import { eraseBrushSegment } from '../src/utils/magic-wand.ts';
 
 const source = await readFile(new URL('../src/components/seedream/SeedreamImageEraser.vue', import.meta.url), 'utf8');
 const script = source.match(/<script setup lang="ts">([\s\S]*?)<\/script>/)[1]
@@ -11,20 +12,26 @@ const javascript = ts.transpileModule(script, {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None },
 }).outputText;
 
-function editor(generationLayout = null, height = 1000) {
+function editor(generationLayout = null, height = 1000, options = {}) {
   const emitted = [];
   const setup = new Function(
-    'ref', 'computed', 'onMounted', 'onBeforeUnmount', 'defineProps', 'withDefaults', 'defineEmits', 'useI18n',
+    'defineExpose', 'ref', 'computed', 'watch', 'onMounted', 'onBeforeUnmount', 'defineProps', 'withDefaults', 'defineEmits', 'useI18n', 'eraseBrushSegment',
     `${javascript}\nreturn {
       resizeTargetRatio, resizeBottomMarginRatio, imageHeight, sourceResizeTop, sourceResizeBottom,
       targetHeightPixels, bottomDistancePixels, canApplyResize, currentGenerationLayout,
       normalizeResizeRatios, updateResizeRatio, resetResizeGuides, applyResize, undo, redo, apply,
-      initializeCanvas(canvas) { canvasRef.value = canvas; editSourceCanvas = canvas; }
+      drawPoint, drawLine, finishStroke, brushSize, brushFeather, dirty, onKeydown, tool, wandTolerance,
+      initializeStroke(view, source, before, bounds) {
+        canvasRef.value = view; editSourceCanvas = source; strokeBefore = before;
+        strokeAfter = { ...before, data: new Uint8ClampedArray(before.data) };
+        strokeBounds = bounds; drawing.value = true;
+      },
+      initializeCanvas(canvas) { loading.value = false; canvasRef.value = canvas; editSourceCanvas = canvas; }
     };`,
   );
-  const state = setup(ref, computed, () => {}, () => {},
-    () => ({ generationLayout }), (props) => props,
-    () => (...args) => emitted.push(args), () => ({ t: (key) => key }));
+  const state = setup(() => {}, ref, computed, watch, () => {}, () => {},
+    () => ({ generationLayout, ...options }), (props) => props,
+    () => (...args) => emitted.push(args), () => ({ t: (key) => key }), eraseBrushSegment);
   state.imageHeight.value = height;
   state.resetResizeGuides();
   const context = { fillRect() {}, clearRect() {}, drawImage() {} };
@@ -130,4 +137,85 @@ test('pixel rounding on an odd canvas does not place the character outside the c
   assert.equal(state.resizeTargetRatio.value, 50);
   assert.equal(state.resizeBottomMarginRatio.value, 50);
   assert.equal(state.currentGenerationLayout.value.target_height + state.currentGenerationLayout.value.bottom_distance, 101);
+});
+
+test('component soft eraser records the complete stroke and restores all feather pixels on undo and redo', () => {
+  const state = editor(null, 11, { magicWandEnabled: true });
+  assert.equal(state.brushSize.value, 5);
+  assert.equal(state.brushFeather.value, 0);
+  state.brushFeather.value = 2;
+  let pixels = new Uint8ClampedArray(11 * 11 * 4);
+  for (let i = 0; i < 121; i++) pixels.set([120, 130, 140, 200], i * 4);
+  const original = new Uint8ClampedArray(pixels);
+  const context = {
+    createImageData(width, height) { return { width, height, data: new Uint8ClampedArray(width * height * 4) }; },
+    getImageData(x, y, width, height) {
+      const result = this.createImageData(width, height);
+      for (let row = 0; row < height; row++) {
+        result.data.set(pixels.slice(((y + row) * 11 + x) * 4, ((y + row) * 11 + x + width) * 4), row * width * 4);
+      }
+      return result;
+    },
+    putImageData(image, dx, dy, x = 0, y = 0, width = image.width, height = image.height) {
+      for (let row = y; row < y + height; row++) {
+        pixels.set(image.data.slice((row * image.width + x) * 4, (row * image.width + x + width) * 4), ((dy + row) * 11 + dx + x) * 4);
+      }
+    },
+  };
+  const sourceCanvas = { getContext: () => context };
+  const viewCanvas = { width: 11, height: 11, getContext: () => ({ clearRect() {}, drawImage() {} }), hasPointerCapture: () => false };
+  state.initializeStroke(viewCanvas, sourceCanvas, context.getImageData(0, 0, 11, 11), {left:0,top:0,right:11,bottom:11});
+  state.drawPoint(context, {x:3.5,y:5.5}, 5);
+  state.drawLine(context, {x:3.5,y:5.5}, {x:7.5,y:5.5}, 5);
+  state.finishStroke({pointerId:1});
+  const erased = new Uint8ClampedArray(pixels);
+  assert.equal(pixels[(5 * 11 + 5) * 4 + 3], 0);
+  assert.ok(pixels[(7 * 11 + 5) * 4 + 3] > 0 && pixels[(7 * 11 + 5) * 4 + 3] < 200);
+  assert.equal(state.dirty.value, true);
+  state.undo();
+  assert.deepEqual(pixels, original);
+  assert.equal(state.dirty.value, false);
+  state.redo();
+  assert.deepEqual(pixels, erased);
+});
+
+test('plus/minus changes only the active tool parameter, repeats, clamps and ignores text entry and modifiers', () => {
+  const state = editor(null, 11, {magicWandEnabled:true});
+  const previous = globalThis.Element;
+  class Target { constructor(editable = false) { this.editable = editable; } closest() { return this.editable; } }
+  globalThis.Element = Target;
+  function press(key, options = {}) {
+    const event = { key, target:new Target(), preventDefault() { this.defaultPrevented = true; }, ...options };
+    state.onKeydown(event);
+    return event;
+  }
+  try {
+    assert.equal(state.wandTolerance.value, 20);
+    assert.equal(press('+').defaultPrevented, true);
+    press('=', {repeat:true}); press('-');
+    assert.equal(state.wandTolerance.value, 21);
+    assert.equal(state.brushSize.value, 5);
+    for (const options of [{target:new Target(true)}, {ctrlKey:true}, {metaKey:true}, {altKey:true}, {isComposing:true}, {defaultPrevented:true}]) {
+      press('+', options);
+      assert.equal(state.wandTolerance.value, 21);
+    }
+    state.wandTolerance.value = 100; press('+'); assert.equal(state.wandTolerance.value, 100);
+    state.wandTolerance.value = 0; press('_'); assert.equal(state.wandTolerance.value, 0);
+    state.tool.value = 'brush';
+    press('+'); assert.equal(state.brushSize.value, 6);
+    press('-'); assert.equal(state.brushSize.value, 5);
+    state.brushSize.value = 200; press('='); assert.equal(state.brushSize.value, 200);
+    state.brushSize.value = 1; press('-'); assert.equal(state.brushSize.value, 1);
+    assert.equal(state.brushFeather.value, 0, 'parameter keys never change feather');
+    state.tool.value = 'browse';
+    assert.equal(press('+').defaultPrevented, undefined);
+    assert.equal(state.brushSize.value, 1);
+    assert.equal(state.wandTolerance.value, 0);
+    const legacy = editor();
+    legacy.onKeydown({key:'+',target:new Target(),preventDefault(){ throw Error('legacy editor must ignore frame tool shortcuts'); }});
+    assert.equal(legacy.brushSize.value, 5);
+  } finally {
+    if (previous === undefined) delete globalThis.Element;
+    else globalThis.Element = previous;
+  }
 });

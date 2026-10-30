@@ -6,9 +6,12 @@ import { ref, computed } from 'vue';
 import { api } from '@/api';
 import { useProjectStore } from './project';
 import { usePlayerStore } from './player';
+import { createNavigationGuard } from '@/utils/navigation-guard';
 import type { ModelStatus, Step1Params, Step2Params, Step3Params, TaskStatus } from '@/types';
 
 export const useProcessStore = defineStore('process', () => {
+  const navigation = createNavigationGuard();
+
   // State
   const currentStep = ref(1);
   const maxStep = ref(3);
@@ -101,7 +104,8 @@ export const useProcessStore = defineStore('process', () => {
   // Actions
   function goToStep(step: number) {
     if (step >= 1 && step <= maxStep.value) {
-      currentStep.value = step;
+      if (step === currentStep.value) return;
+      return navigation.run(() => { currentStep.value = step; });
     }
   }
 
@@ -111,13 +115,13 @@ export const useProcessStore = defineStore('process', () => {
 
   function nextStep() {
     if (canGoNext.value) {
-      currentStep.value++;
+      return goToStep(currentStep.value + 1);
     }
   }
 
   function prevStep() {
     if (canGoPrev.value) {
-      currentStep.value--;
+      return goToStep(currentStep.value - 1);
     }
   }
 
@@ -141,6 +145,7 @@ export const useProcessStore = defineStore('process', () => {
   }
 
   async function startProcessing(projectId: string, step: number, customParams?: Partial<Step1Params | Step2Params | Step3Params>) {
+    if (!await navigation.check()) return;
     const playerStore = usePlayerStore();
 
     let params: Step1Params | Step2Params | Step3Params;
@@ -363,5 +368,6 @@ export const useProcessStore = defineStore('process', () => {
     initProgressListeners,
     preloadModel,
     retryModel,
+    setNavigationGuard: navigation.set,
   };
 });

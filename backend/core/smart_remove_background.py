@@ -19,6 +19,7 @@ import cv2
 import numpy as np
 from PIL import Image
 
+from backend.core.background_color import background_hsv_from_images, detect_background_hsv
 from src.utils.data_paths import data_root, models_root
 
 
@@ -141,83 +142,13 @@ def preload_model(model: str = "u2net") -> bool:
 
 
 def sample_background_color_from_corners(img: np.ndarray) -> tuple[int, int, int] | None:
-    """
-    Sample background color from image corners (original image background still present)
-
-    Args:
-        img: BGR original image
-    Returns:
-        (H, S, V) background color HSV average value
-    """
-    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-    h, w = img.shape[:2]
-
-    # Sample from four corners (usually background area)
-    corners = [
-        (5, 5),  # top-left
-        (5, w - 5),  # top-right
-        (h - 5, 5),  # bottom-left
-        (h - 5, w - 5),  # bottom-right
-    ]
-
-    bg_colors = []
-    for y, x in corners:
-        y = max(0, min(y, h - 1))
-        x = max(0, min(x, w - 1))
-        bg_colors.append(hsv[y, x])
-
-    if not bg_colors:
-        return None
-
-    return tuple(np.mean(bg_colors, axis=0).astype(int))
+    """Estimate legacy HSV metadata from multiple edge patches in the original image."""
+    return background_hsv_from_images([img])
 
 
 def detect_background_color_from_frames(input_dir: str, sample_count: int = 5) -> tuple[int, int, int] | None:
-    """
-    Detect background color by sampling from multiple frames in the input directory.
-    This is called during Step 1 completion.
-
-    Args:
-        input_dir: Directory containing extracted frames
-        sample_count: Number of frames to sample (default 5)
-
-    Returns:
-        (H, S, V) background color HSV tuple, or None if detection failed
-    """
-    input_path = Path(input_dir)
-    if not input_path.exists():
-        return None
-
-    frames = sorted(input_path.glob("*.png"))
-    if not frames:
-        return None
-
-    # Sample frames evenly
-    step = max(1, len(frames) // sample_count)
-    sampled_colors = []
-
-    for i in range(0, len(frames), step):
-        if len(sampled_colors) >= sample_count:
-            break
-
-        try:
-            # Read original frame
-            img_array = np.fromfile(str(frames[i]), dtype=np.uint8)
-            img_bgr = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
-
-            if img_bgr is not None:
-                bg_hsv = sample_background_color_from_corners(img_bgr)
-                if bg_hsv is not None:
-                    sampled_colors.append(bg_hsv)
-        except Exception as e:
-            print(f"[Warning] Failed to sample background from {frames[i]}: {e}")
-            continue
-
-    if not sampled_colors:
-        return None
-
-    # Average all sampled colors
-    return tuple(np.mean(sampled_colors, axis=0).astype(int))
+    """Estimate background metadata without directly averaging circular hue values."""
+    return detect_background_hsv(input_dir, sample_count)
 
 
 def remove_background_single_rembg(

@@ -12,6 +12,8 @@ import type {
   LegacyMigrationResult,
   LegacyProjectImportResult,
   FramesResponse,
+  EditableFrame,
+  SavedFrameEdit,
   HiddenFramesResponse,
   VideoInfo,
   VideoValidation,
@@ -207,6 +209,14 @@ export const frameApi = {
     useCache: boolean = true
   ): Promise<FramesResponse> {
     return callApi<FramesResponse>('get_frames', 'getFrames', projectId, step, page, pageSize, useCache);
+  },
+
+  async getEditableFrame(projectId: string, filename: string, step: number = 3): Promise<EditableFrame> {
+    return callApi<EditableFrame>('get_editable_frame', 'getEditableFrame', projectId, filename, step);
+  },
+
+  async saveFrameEdit(projectId: string, filename: string, imageDataUrl: string, revision: string, step: number = 3): Promise<SavedFrameEdit> {
+    return callApi<SavedFrameEdit>('save_frame_edit', 'saveFrameEdit', projectId, filename, imageDataUrl, revision, step);
   },
 
   async getFrameImage(framePath: string): Promise<string> {

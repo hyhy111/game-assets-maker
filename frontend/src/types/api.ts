@@ -11,6 +11,8 @@ import type {
   LegacyMigrationResult,
   LegacyProjectImportResult,
   FramesResponse,
+  EditableFrame,
+  SavedFrameEdit,
   HiddenFramesResponse,
   VideoInfo,
   VideoValidation,
@@ -73,6 +75,8 @@ export interface PyWebViewWindow extends Window {
 
       // Frame API
       get_frames: (project_id: string, step: number, page?: number, page_size?: number) => Promise<FramesResponse>;
+      get_editable_frame: (project_id: string, filename: string, step?: number) => Promise<EditableFrame>;
+      save_frame_edit: (project_id: string, filename: string, image_data_url: string, revision: string, step?: number) => Promise<SavedFrameEdit>;
       get_frame_image: (frame_path: string) => Promise<string>;
       get_frame_thumbnail: (frame_path: string, size?: number) => Promise<string>;
       get_frame_url: (frame_path: string) => Promise<string>;

@@ -8,30 +8,48 @@
     @mousemove="handleMouseMove"
     @mouseup="handleMouseUp"
     @mouseleave="handleMouseUp"
+    @auxclick.prevent
   >
     <!-- Canvas for frame display -->
     <canvas
+      v-show="!editing"
       ref="canvasRef"
       class="absolute top-1/2 left-1/2 max-w-none max-h-none"
       :style="canvasStyle"
       @dragstart.prevent
     />
 
+    <slot />
+
     <!-- Info overlay -->
-    <div class="absolute top-4 left-4 px-3 py-1.5 bg-black/60 rounded-lg text-xs text-gray-300">
+    <div class="pointer-events-none absolute top-4 left-4 z-10 px-3 py-1.5 bg-black/60 rounded-lg text-xs text-gray-300">
       <span>{{ currentIndex }} / {{ endFrame }}</span>
       <span class="mx-2">|</span>
       <span>{{ Math.round(zoom * 100) }}%</span>
     </div>
 
     <!-- Zoom controls (floating) -->
-    <div class="absolute bottom-4 right-4 flex flex-col gap-2">
+    <div class="absolute bottom-4 right-4 z-20 flex flex-col gap-2" @mousedown.stop @wheel.stop>
+      <Button v-if="retouchEnabled" :variant="activeTool === 'wand' ? 'primary' : 'ghost'" size="sm" :disabled="toolsDisabled"
+        :class="activeTool === 'wand' ? '' : 'bg-black/60'"
+        :title="`${t('magicWand.wand')} (W)`" :aria-label="t('magicWand.wand')" :aria-pressed="activeTool === 'wand'"
+        data-test="frame-wand-tool" @click="emit('tool', 'wand')"><Wand2 class="h-5 w-5" /></Button>
+      <Button v-if="retouchEnabled" :variant="activeTool === 'brush' ? 'primary' : 'ghost'" size="sm" :disabled="toolsDisabled"
+        :class="activeTool === 'brush' ? '' : 'bg-black/60'"
+        :title="`${t('magicWand.eraser')} (E)`" :aria-label="t('magicWand.eraser')" :aria-pressed="activeTool === 'brush'"
+        data-test="frame-eraser-tool" @click="emit('tool', 'brush')"><Eraser class="h-5 w-5" /></Button>
+      <Button :variant="activeTool === 'browse' ? 'primary' : 'ghost'" size="sm" :disabled="toolsDisabled"
+        :class="activeTool === 'browse' ? '' : 'bg-black/60'"
+        :title="retouchEnabled ? `${t('magicWand.browse')} (V)` : t('magicWand.browse')" :aria-label="t('magicWand.browse')" :aria-pressed="activeTool === 'browse'"
+        data-test="frame-browse-tool" @click="emit('tool', 'browse')"><Move class="h-5 w-5" /></Button>
       <Button
         v-for="control in zoomControls"
         :key="control.action"
         variant="ghost"
         size="sm"
         class="bg-black/60 hover:bg-black/80 backdrop-blur-sm"
+        :title="t(`magicWand.${control.action}`)"
+        :aria-label="t(`magicWand.${control.action}`)"
         @click="control.handler"
       >
         <component
@@ -46,11 +64,21 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { storeToRefs } from 'pinia';
-import { ZoomIn, ZoomOut, Maximize, Move } from 'lucide-vue-next';
+import { ZoomIn, ZoomOut, Maximize, Move, Wand2, Eraser } from 'lucide-vue-next';
+import { useI18n } from 'vue-i18n';
 import { usePlayerStore } from '@/stores/player';
 import { api } from '@/api';
 import Button from '../common/Button.vue';
 
+const props = withDefaults(defineProps<{
+  keyboardDisabled?: boolean;
+  editing?: boolean;
+  retouchEnabled?: boolean;
+  toolsDisabled?: boolean;
+  activeTool?: 'wand' | 'brush' | 'browse';
+}>(), { activeTool: 'browse' });
+const emit = defineEmits<{ tool: [tool: 'wand' | 'brush' | 'browse'] }>();
+const { t } = useI18n();
 const playerStore = usePlayerStore();
 const { currentFrame, zoom, panX, panY, currentIndex, startFrame, endFrame, currentImage, isPlaying, canvasBgColorValue } = storeToRefs(playerStore);
 
@@ -75,8 +103,7 @@ const canvasStyle = computed(() => ({
 const zoomControls = [
   { action: 'zoomIn', icon: ZoomIn, handler: () => playerStore.zoomIn() },
   { action: 'zoomOut', icon: ZoomOut, handler: () => playerStore.zoomOut() },
-  { action: 'reset', icon: Maximize, handler: () => playerStore.resetView() },
-  { action: 'pan', icon: Move, handler: () => { /* Pan mode indicator */ } }
+  { action: 'reset', icon: Maximize, handler: () => playerStore.resetView() }
 ];
 
 function drawCachedImage(img: HTMLImageElement) {
@@ -90,7 +117,9 @@ function drawCachedImage(img: HTMLImageElement) {
 }
 
 // Load and render frame
+let renderVersion = 0;
 async function renderFrame() {
+  const version = ++renderVersion;
   if (!canvasRef.value) return;
   const canvas = canvasRef.value;
   const ctx = canvas.getContext('2d');
@@ -98,7 +127,7 @@ async function renderFrame() {
 
   // If currentImage is set (preview mode), render it
   if (playerStore.currentImage) {
-    renderBase64Image(playerStore.currentImage);
+    renderBase64Image(playerStore.currentImage, undefined, version);
     return;
   }
 
@@ -118,17 +147,19 @@ async function renderFrame() {
     playerStore.loadingPaths.add(framePath);
     const img = new Image();
     img.crossOrigin = 'anonymous';
+    const frameUrl = currentFrame.value.url;
     img.onload = () => {
+      if (!playerStore.frames.some(frame => frame.path === framePath && frame.url === frameUrl)) return;
       playerStore.imageElementCache.set(framePath, img);
       playerStore.loadingPaths.delete(framePath);
       // Only draw if this frame is still the current one
-      if (currentFrame.value?.path === framePath) {
+      if (version === renderVersion && currentFrame.value?.path === framePath) {
         drawCachedImage(img);
       }
     };
     img.onerror = () => {
       playerStore.loadingPaths.delete(framePath);
-      loadFrameViaBase64();
+      if (version === renderVersion) void loadFrameViaBase64(version);
     };
     img.src = currentFrame.value.url;
   }
@@ -151,7 +182,7 @@ async function preloadNearbyFrames(centerIndex: number, radius: number) {
 }
 
 // Fallback: Load frame via base64
-async function loadFrameViaBase64() {
+async function loadFrameViaBase64(version: number) {
   if (!currentFrame.value || !canvasRef.value) return;
 
   const canvas = canvasRef.value;
@@ -162,14 +193,14 @@ async function loadFrameViaBase64() {
 
   try {
     const imageData = await api.frame.getFrameImage(framePath);
-    renderBase64Image(imageData, framePath);
+    renderBase64Image(imageData, framePath, version);
   } catch (e) {
     console.error('Failed to load frame via base64:', e);
   }
 }
 
 // Render base64 image data
-function renderBase64Image(base64Data: string, intendedPath?: string) {
+function renderBase64Image(base64Data: string, intendedPath?: string, version = renderVersion) {
   if (!canvasRef.value) return;
 
   const canvas = canvasRef.value;
@@ -178,14 +209,14 @@ function renderBase64Image(base64Data: string, intendedPath?: string) {
 
   const img = new Image();
   img.onload = () => {
-    if (intendedPath && currentFrame.value?.path !== intendedPath) return;
+    if (version !== renderVersion || (intendedPath && currentFrame.value?.path !== intendedPath)) return;
     if (canvas.width !== img.width) canvas.width = img.width;
     if (canvas.height !== img.height) canvas.height = img.height;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(img, 0, 0);
   };
   img.onerror = () => {
-    if (intendedPath && currentFrame.value?.path !== intendedPath) return;
+    if (version !== renderVersion || (intendedPath && currentFrame.value?.path !== intendedPath)) return;
     console.error('Failed to render base64 image');
   };
   // Ensure proper data URI format
@@ -224,14 +255,25 @@ watch(isPlaying, (playing) => {
 // Mouse wheel zoom
 function handleWheel(e: WheelEvent) {
   e.preventDefault();
+  const container = containerRef.value;
+  if (!container || !e.deltaY) return;
+  const rect = container.getBoundingClientRect();
+  const pointX = e.clientX - rect.left - rect.width / 2;
+  const pointY = e.clientY - rect.top - rect.height / 2;
+  const oldZoom = zoom.value;
   const delta = e.deltaY > 0 ? 0.9 : 1.1;
-  playerStore.setZoom(zoom.value * delta);
+  playerStore.setZoom(oldZoom * delta);
+  const ratio = zoom.value / oldZoom;
+  playerStore.setPan(
+    pointX - (pointX - panX.value) * ratio,
+    pointY - (pointY - panY.value) * ratio
+  );
 }
 
 // Drag panning
 function handleMouseDown(e: MouseEvent) {
   // Left button or middle button
-  if (e.button === 0 || e.button === 1) {
+  if (e.button === 1 || (e.button === 0 && props.activeTool === 'browse')) {
     isDragging.value = true;
     dragStart.value = { x: e.clientX, y: e.clientY };
     panStart.value = { x: panX.value, y: panY.value };
@@ -277,21 +319,29 @@ function stopArrowRepeat() {
   heldArrowKey = null;
 }
 
+watch(() => props.keyboardDisabled, (disabled) => { if (disabled) stopArrowRepeat(); });
+
 function handleKeydown(e: KeyboardEvent) {
+  if (props.keyboardDisabled || e.defaultPrevented || (e.target instanceof Element && e.target.closest('input, textarea, select, [contenteditable="true"]'))) return;
   if (e.key === ' ' && !e.repeat) {
     e.preventDefault();
     playerStore.togglePlay();
-  } else if (e.key === 'ArrowRight') {
+  } else if (e.key === 'ArrowRight' && !props.editing) {
     e.preventDefault();
     if (heldArrowKey !== 'ArrowRight') {
       playerStore.nextFrame();
       startArrowRepeat('ArrowRight');
     }
-  } else if (e.key === 'ArrowLeft') {
+  } else if (e.key === 'ArrowLeft' && !props.editing) {
     e.preventDefault();
     if (heldArrowKey !== 'ArrowLeft') {
       playerStore.prevFrame();
       startArrowRepeat('ArrowLeft');
+    }
+  } else if (props.editing && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
+    e.preventDefault();
+    if (!e.repeat) {
+      if (e.key === 'ArrowRight') playerStore.nextFrame(); else playerStore.prevFrame();
     }
   } else if (e.key === 'ArrowUp') {
     e.preventDefault();

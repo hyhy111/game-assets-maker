@@ -1,7 +1,11 @@
 """Frame API - Frame retrieval and image operations"""
 
 import base64
+import binascii
+import hashlib
 import io
+import os
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -119,6 +123,94 @@ class FrameAPI:
     def restore_hidden_frames(self, project_id: str) -> dict[str, Any]:
         project_path = resolve_project_path(self._projects_root, project_id)
         return {"success": True, "hidden_frames": restore_hidden_frames(project_path)}
+
+    def _editable_frame_path(self, project_id: str, filename: str, step: int = 3) -> Path:
+        if type(step) is not int or step not in (2, 3):
+            raise ValueError("FRAME_EDIT_INVALID_STEP")
+        if (
+            not isinstance(filename, str)
+            or not filename
+            or Path(filename).name != filename
+            or "/" in filename
+            or "\\" in filename
+            or Path(filename).suffix.lower() != ".png"
+        ):
+            raise ValueError("FRAME_EDIT_INVALID_FILENAME")
+        if (
+            not isinstance(project_id, str)
+            or "\\" in project_id
+            or len(project_id.split("/")) not in (1, 2)
+            or any(part in ("", ".", "..") for part in project_id.split("/"))
+        ):
+            raise ValueError("FRAME_EDIT_INVALID_PROJECT")
+        project = resolve_project_path(self._projects_root, project_id).resolve()
+        if not project.is_relative_to(self._projects_root.resolve()) or project == self._projects_root.resolve():
+            raise ValueError("FRAME_EDIT_INVALID_PROJECT")
+        directory = project / "output" / {2: "02_no_bg", 3: "03_hole_punched"}[step]
+        frame = directory / filename
+        if directory.resolve() != directory or frame.is_symlink() or not frame.is_file():
+            raise ValueError("FRAME_EDIT_NOT_FOUND")
+        return frame
+
+    def get_editable_frame(self, project_id: str, filename: str, step: int = 3) -> dict[str, Any]:
+        """Open a Step 2/3 output frame with an optimistic concurrency revision."""
+        frame = self._editable_frame_path(project_id, filename, step)
+        payload = frame.read_bytes()
+        with Image.open(io.BytesIO(payload)) as image:
+            width, height = image.size
+        return {
+            "image_data_url": "data:image/png;base64," + base64.b64encode(payload).decode("ascii"),
+            "revision": hashlib.sha256(payload).hexdigest(),
+            "width": width,
+            "height": height,
+        }
+
+    def save_frame_edit(
+        self, project_id: str, filename: str, image_data_url: str, revision: str, step: int = 3
+    ) -> dict[str, Any]:
+        """Validate dimensions and preserve the pre-edit frame before an atomic PNG replacement."""
+        frame = self._editable_frame_path(project_id, filename, step)
+        current = frame.read_bytes()
+        if not isinstance(revision, str) or hashlib.sha256(current).hexdigest() != revision:
+            raise ValueError("FRAME_EDIT_STALE")
+        prefix = "data:image/png;base64,"
+        if (
+            not isinstance(image_data_url, str)
+            or not image_data_url.startswith(prefix)
+            or len(image_data_url) > 64 * 1024 * 1024
+        ):
+            raise ValueError("FRAME_EDIT_INVALID_PNG")
+        try:
+            payload = base64.b64decode(image_data_url[len(prefix) :], validate=True)
+            with Image.open(io.BytesIO(payload)) as opened:
+                if opened.format != "PNG":
+                    raise ValueError("FRAME_EDIT_INVALID_PNG")
+                edited = opened.convert("RGBA")
+            with Image.open(io.BytesIO(current)) as original:
+                if edited.size != original.size:
+                    raise ValueError("FRAME_EDIT_SIZE_CHANGED")
+        except (OSError, binascii.Error) as error:
+            raise ValueError("FRAME_EDIT_INVALID_PNG") from error
+        project = resolve_project_path(self._projects_root, project_id).resolve()
+        backups = project / "cache" / "frame_edits" / revision
+        if not backups.resolve().is_relative_to(project):
+            raise ValueError("FRAME_EDIT_INVALID_BACKUP")
+        backups.mkdir(parents=True, exist_ok=True)
+        backup = backups / filename
+        if not backup.exists():
+            backup.write_bytes(current)
+        temporary_path = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                dir=frame.parent, prefix=".frame-edit-", suffix=".tmp", delete=False
+            ) as temporary:
+                temporary_path = Path(temporary.name)
+                edited.save(temporary, format="PNG")
+            os.replace(temporary_path, frame)
+        finally:
+            if temporary_path is not None:
+                temporary_path.unlink(missing_ok=True)
+        return {"success": True, "path": str(frame), "revision": hashlib.sha256(frame.read_bytes()).hexdigest()}
 
     def get_frame_image(self, frame_path: str) -> str:
         """Get frame image as base64 encoded string"""

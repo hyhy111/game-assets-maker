@@ -56,7 +56,7 @@ Game Assets Maker（GAM）是一款开源桌面工具，面向独立游戏开发
 
 打开 GAM，在动画库创建角色 / 动作项目并导入视频。建议第一次先用一段短动作，走通流程后再批量制作。
 
-**当前去背流程针对均匀、纯色的亮绿色背景优化。** 非绿底素材的背景与内部孔洞清除效果不保证；主体含相近绿色时也可能被误删。先检查素材背景、角色轮廓和动作完整性。
+**去背流程支持以任意单一底色为主的背景，并容忍轻微不均匀。** 背景颜色从原始帧边缘自动采样；角色用色应与背景明显区分，相近颜色仍可能被误删。先检查素材背景、角色轮廓和动作完整性。
 
 没有视频时，可先在“图片生成”准备角色图，再在“视频生成”中以角色图为首帧生成动作视频；AI 配置见下方说明。
 
@@ -66,9 +66,11 @@ Game Assets Maker（GAM）是一款开源桌面工具，面向独立游戏开发
 | --- | --- | --- |
 | **01 帧提取** | 选择起止帧、帧提取间隔，点击“开始提取”。 | 起势和收招是否完整，循环是否顺畅。 |
 | **02 背景移除** | 首次按提示选择来源并下载 U2Net 模型（约 176 MB），再运行去背景。 | 头发、武器、细线和半透明边缘。 |
-| **03 挖孔与对齐** | 清理手臂、武器之间的残留绿底；按动作需要启用水平居中或底部对齐。 | 是否误删主体绿色、跳跃高度或有意位移是否被改变。 |
+| **03 挖孔与对齐** | 清理手臂、武器之间的残留背景色；按动作需要启用水平居中或底部对齐。 | 是否误删主体绿色、跳跃高度或有意位移是否被改变。 |
 
 每步完成后先播放检查。步骤 02 / 03 可隐藏异常帧，也可恢复；重新抽帧会使下游旧处理结果失效。模型就绪后，本地处理可以离线进行。
+
+步骤 03 完成后，点击 **预览右下角的魔棒或橡皮擦**，自动暂停并在当前预览中修整；顶部显示工具参数，预览窗内显示简要操作提示。魔棒点击选区、Shift 点击追加、Delete 删除；橡皮擦用左键拖动擦除。滚轮缩放、中键拖动画布，空格仍控制播放。保留当前预览背景、缩放和平移，背景仍可切换。点击“保存当前帧”后保持工具选中，撤销记录以此次保存为起点；切回浏览工具保留未保存修改。播放、切帧、切步骤或离开页面前，未保存修改会提示保存、放弃或留在当前帧。取消丢弃本次未保存修改。修整只修改步骤 03 的这一帧，重新运行步骤 03 会覆盖修整。W / E / V 分别切换魔棒、橡皮擦和移动工具；+ / - 调整当前工具的颜色容差或橡皮擦大小。橡皮擦默认大小 5px、羽化 0px；魔棒羽化从选区内最外圈向内过渡，选区外保持原样。
 
 #### 3. 裁剪与导出
 
@@ -124,7 +126,7 @@ npx skills add hyhy111/gam-skills -g --skill "*"
 
 **能直接导出 Godot 场景吗？** 通过独立的 `gam-export` Skill 导入 Godot 4。它读取 GAM 的裁剪结果、逐帧偏移与音效，并生成资源和预览场景；这一步需要 Agent 与 Godot 项目目录。
 
-**去背后有残绿、缺边或动画抖动？** 先检查源素材是否为均匀绿底，再检查去背景参数、挖孔强度和对齐开关。逐帧裁剪结果导入引擎时应应用偏移，不能只加载 PNG。
+**去背后有残绿、缺边或动画抖动？** 先检查源素材是否为单色背景、主体用色是否与背景分离，再检查背景色容差、去背景参数和对齐开关。逐帧裁剪结果导入引擎时应应用偏移，不能只加载 PNG。
 
 重命名、默认模型和更新提示的详细行为见 [使用参考](USAGE.md)。模型下载与路径见 [MODELS.md](MODELS.md)。遇到问题请到 [Issues](https://github.com/hyhy111/game-assets-maker/issues) 提供应用版本、系统 / 架构、操作步骤与脱敏截图。
 
@@ -170,7 +172,7 @@ Intel Mac and Linux installers are not currently provided. The macOS package is 
 
 Open GAM, create a character / action project in the animation library, and import a video. Start with one short action before processing a larger set.
 
-**The current background-removal workflow is optimized for a uniform, solid bright green background.** Other backgrounds may leave residue or internal holes; green parts of the character may also be removed. Check the source silhouette and motion first.
+**The workflow supports any single background color with slight unevenness.** Background colors are sampled automatically from original-frame edges; subject colors must remain distinct to avoid accidental removal. Check the source silhouette and motion first.
 
 If you need source material, create a character in Image Generation, then use that image as the first frame in Video Generation. See the AI setup options below.
 
@@ -180,9 +182,11 @@ If you need source material, create a character in Image Generation, then use th
 | --- | --- | --- |
 | **01 Extract frames** | Choose the start, end, and extraction interval, then start extraction. | Complete motion and a clean loop. |
 | **02 Remove background** | On first use, select a source and download U2Net (~176 MB), then process the frames. | Hair, weapons, thin lines, and soft edges. |
-| **03 Clean holes and align** | Remove green areas between limbs and weapons; enable horizontal centering or bottom alignment when needed. | Green character details, jump height, and intentional movement. |
+| **03 Clean holes and align** | Remove residual background colors between limbs and weapons; enable horizontal centering or bottom alignment when needed. | Green character details, jump height, and intentional movement. |
 
 Play the result after each step. You can hide and restore unwanted frames in steps 02 / 03. Re-extracting frames invalidates older downstream results. Once the model is ready, local processing works offline.
+
+After Step 03, choose the **magic wand or eraser at the preview’s bottom right** to pause and retouch the current frame in place. Tool settings appear at the top, with brief instructions inside the preview. Click to select, Shift-click to add, and Delete to remove; left-drag to erase. Scroll to zoom, middle-drag to pan, and use Space for playback. The preview keeps its background, zoom and pan; background switching remains available. Saving keeps the tool selected and starts a new undo history. Browse mode keeps unsaved edits. Before playback, frame/step navigation or leaving the page, choose to save, discard or stay. Cancel discards unsaved changes. Edits affect only this frame in Step 03. Re-running Step 03 replaces manual edits. W / E / V select the wand, eraser and pan tools; + / - adjust the active tool’s color tolerance or eraser size. The eraser defaults to 5px with 0px feathering. Wand feathering starts at the outermost selected pixels and extends inward, leaving unselected pixels unchanged.
 
 #### 3. Trim and export
 
@@ -238,7 +242,7 @@ Install and open GAM before controlling the client, and allow your agent to acce
 
 **Can I export a Godot scene?** The separate `gam-export` Skill imports trim results, frame offsets, and audio into Godot 4, creating resources and a preview scene. It requires an agent and a Godot project directory.
 
-**Green residue, missing edges, or jitter?** Check the uniform green background, removal parameters, hole-cleanup strength, and alignment options. Apply the saved offsets when importing tight per-frame crops.
+**Green residue, missing edges, or jitter?** Check the solid background, separation from subject colors, background color tolerance, removal parameters, and alignment options. Apply the saved offsets when importing tight per-frame crops.
 
 See [Usage reference](USAGE.md#english) for renaming, default models, and update behavior, or [MODELS.md](MODELS.md) for model downloads and paths. Report problems in [Issues](https://github.com/hyhy111/game-assets-maker/issues) with the app version, OS / architecture, reproduction steps, and redacted screenshots.
 

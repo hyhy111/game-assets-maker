@@ -44,6 +44,12 @@ These instructions apply to the entire repository.
 - Do not store API keys, credentials, tokens, personal project data, generated media, or downloaded models in the repository.
 - Add dependencies through `pyproject.toml` and `uv.lock`; do not extend legacy `requirements.txt` for new dependencies.
 
+## Upgrade Compatibility
+
+- Preserve older saved projects, configuration, and PyWebView bridge calls. Give new fields safe defaults and keep existing argument defaults and persisted names compatible; test legacy data when changing these contracts.
+- For frontend delivery or release changes, verify that a persistent WebView cache loads the current UI after an upgrade. Tie the packaged entry URL to the application version and frontend build content, including same-version rebuilds, while preserving the storage origin and user state. Cover invalidation in `tests/test_frontend_entry_url.py`.
+- Before release, perform a packaged upgrade smoke test using an existing WebView profile and confirm the updated UI appears. Report checks that were not performed; source or development-mode checks alone do not verify installed upgrades.
+
 ## Validation
 
 - Run backend commands from the repository root and frontend commands from `frontend/`.

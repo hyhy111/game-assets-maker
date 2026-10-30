@@ -6,8 +6,11 @@ import { ref, computed } from 'vue';
 import { useProcessStore } from './process';
 import { api } from '@/api';
 import type { Frame } from '@/types';
+import { createNavigationGuard } from '@/utils/navigation-guard';
 
 export const usePlayerStore = defineStore('player', () => {
+  const navigation = createNavigationGuard();
+
   // State
   const frames = ref<Frame[]>([]);
   const currentIndex = ref(0);
@@ -52,6 +55,7 @@ export const usePlayerStore = defineStore('player', () => {
   // Image cache for frame playback
   const imageElementCache = new Map<string, HTMLImageElement>();
   const loadingPaths = new Set<string>();
+  let imageLoadGeneration = 0;
 
   // Getters
   const currentFrame = computed(() => frames.value[currentIndex.value]);
@@ -69,8 +73,10 @@ export const usePlayerStore = defineStore('player', () => {
     const path = frame.path;
     if (imageElementCache.has(path) || loadingPaths.has(path)) return;
     loadingPaths.add(path);
+    const generation = imageLoadGeneration;
     try {
       const url = frame.url || await api.frame.getFrameUrl(path);
+      if (generation !== imageLoadGeneration) return;
       const img = new Image();
       img.crossOrigin = 'anonymous';
       await new Promise<void>((resolve, reject) => {
@@ -78,19 +84,21 @@ export const usePlayerStore = defineStore('player', () => {
         img.onerror = () => reject();
         img.src = url;
       });
-      imageElementCache.set(path, img);
+      if (generation === imageLoadGeneration) imageElementCache.set(path, img);
     } catch {
       // ignore preload errors
     } finally {
-      loadingPaths.delete(path);
+      if (generation === imageLoadGeneration) loadingPaths.delete(path);
     }
   }
 
   async function preloadFrames(framesToLoad: Frame[], concurrency = 3) {
+    const generation = imageLoadGeneration;
     let idx = 0;
     const running = new Set<Promise<void>>();
 
     while (idx < framesToLoad.length || running.size > 0) {
+      if (generation !== imageLoadGeneration) return;
       while (running.size < concurrency && idx < framesToLoad.length) {
         const frame = framesToLoad[idx++];
         if (imageElementCache.has(frame.path) || loadingPaths.has(frame.path)) continue;
@@ -110,7 +118,8 @@ export const usePlayerStore = defineStore('player', () => {
 
   // Actions
   function loadFrames(newFrames: Frame[]) {
-    // Clear stale image cache to prevent displaying old frames after re-processing
+    // Pending image loads from the previous frame set must not overwrite edited frames.
+    imageLoadGeneration += 1;
     imageElementCache.clear();
     loadingPaths.clear();
     frames.value = newFrames;
@@ -154,6 +163,7 @@ export const usePlayerStore = defineStore('player', () => {
 
   async function play() {
     if (isPlaying.value) return;
+    if (!await navigation.check()) return;
     // Hard guard: don't auto-play while any processing task is running
     const processStore = useProcessStore();
     if (processStore.isProcessing) return;
@@ -202,39 +212,54 @@ export const usePlayerStore = defineStore('player', () => {
   }
 
   function goToFrame(index: number) {
-    // Manual navigation should preempt any scheduled auto-play frame
-    clearPlayTimer();
-    // Clamp to valid range and playback range
-    const clamped = Math.max(startFrame.value, Math.min(endFrame.value, index));
-    if (clamped >= 0 && clamped < frames.value.length) {
-      currentIndex.value = clamped;
-      // Clear preview image when switching frames
-      currentImage.value = '';
-    }
+    return navigation.run(() => {
+      // Manual navigation should preempt any scheduled auto-play frame
+      clearPlayTimer();
+      // Clamp to valid range and playback range
+      const clamped = Math.max(startFrame.value, Math.min(endFrame.value, index));
+      if (clamped >= 0 && clamped < frames.value.length) {
+        currentIndex.value = clamped;
+        // Clear preview image when switching frames
+        currentImage.value = '';
+      }
+    });
   }
 
   function nextFrame() {
-    clearPlayTimer();
-    const next = currentIndex.value + 1;
-    if (next <= endFrame.value && next < frames.value.length) {
-      currentIndex.value = next;
-    } else {
-      currentIndex.value = startFrame.value;
-    }
-    // Clear preview image
-    currentImage.value = '';
+    return navigation.run(() => {
+      clearPlayTimer();
+      const next = currentIndex.value + 1;
+      if (next <= endFrame.value && next < frames.value.length) {
+        currentIndex.value = next;
+      } else {
+        currentIndex.value = startFrame.value;
+      }
+      // Clear preview image
+      currentImage.value = '';
+    });
   }
 
   function prevFrame() {
-    clearPlayTimer();
-    const prev = currentIndex.value - 1;
-    if (prev >= startFrame.value && prev >= 0) {
-      currentIndex.value = prev;
-    } else {
-      currentIndex.value = endFrame.value;
-    }
-    // Clear preview image
+    return navigation.run(() => {
+      clearPlayTimer();
+      const prev = currentIndex.value - 1;
+      if (prev >= startFrame.value && prev >= 0) {
+        currentIndex.value = prev;
+      } else {
+        currentIndex.value = endFrame.value;
+      }
+      // Clear preview image
+      currentImage.value = '';
+    });
+  }
+
+  function replaceFrameImage(filename: string, imageDataUrl: string) {
+    imageLoadGeneration += 1;
+    imageElementCache.clear();
+    loadingPaths.clear();
+    frames.value = frames.value.map(frame => frame.filename === filename ? { ...frame, url: imageDataUrl } : frame);
     currentImage.value = '';
+    void preloadFrames(frames.value.slice(currentIndex.value, currentIndex.value + 6), 3);
   }
 
   function setZoom(newZoom: number) {
@@ -359,6 +384,8 @@ export const usePlayerStore = defineStore('player', () => {
     setPlaybackRange,
     setCanvasBgColor,
     clearPlayTimer,
-    setFrameAdvanceHook
+    setFrameAdvanceHook,
+    replaceFrameImage,
+    setNavigationGuard: navigation.set
   };
 });
