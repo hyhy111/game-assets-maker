@@ -544,6 +544,7 @@ async function onDeleteSelected() {
 }
 
 function onKeyDown(e: KeyboardEvent) {
+  if (e.defaultPrevented || document.querySelector('[role="dialog"][aria-modal="true"]')) return;
   const target = e.target as HTMLElement | null;
   const isEditing =
     target?.tagName === 'INPUT' ||

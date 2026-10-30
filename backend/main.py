@@ -3,6 +3,7 @@ Game Assets Maker - PyWebView Backend
 Desktop application using PyWebView + Vue 3 frontend
 """
 
+import hashlib
 import json
 import mimetypes
 import os
@@ -737,6 +738,21 @@ class API:
         """Restore all project frames to Step 2/3 preview and export."""
         return self._frame_api.restore_hidden_frames(project_id)
 
+    @_project_write(existing=True)
+    def get_editable_frame(self, project_id: str, filename: str, step: int = 3) -> dict[str, Any]:
+        """Return a revisioned PNG for local manual frame cleanup."""
+        return self._frame_api.get_editable_frame(project_id, filename, step)
+
+    @_project_write(existing=True)
+    def save_frame_edit(
+        self, project_id: str, filename: str, image_data_url: str, revision: str, step: int = 3
+    ) -> dict[str, Any]:
+        """Keep manual saves mutually exclusive with processing and project renames."""
+        with self._process_api._control_lock:
+            if self._process_api.has_active_writes():
+                raise ValueError("PROCESSING_ACTIVE")
+            return self._frame_api.save_frame_edit(project_id, filename, image_data_url, revision, step)
+
     # ==================== Process API ====================
 
     @_project_write(existing=True)
@@ -1240,8 +1256,9 @@ class MainApp:
             else:
                 frontend_path = Path(__file__).parent.parent / "frontend" / "dist" / "index.html"
             if frontend_path.exists():
-                # Refresh cached HTML after upgrades while preserving the storage origin.
-                return f"{frontend_path}?v={app_version()}"
+                # Invalidate cached HTML for upgrades and same-version rebuilds without changing the origin.
+                frontend_revision = hashlib.sha256(frontend_path.read_bytes()).hexdigest()[:16]
+                return f"{frontend_path}?v={app_version()}&ui={frontend_revision}"
             else:
                 # Fallback to dev server if dist not built
                 print(f"Warning: Frontend build not found at {frontend_path}")

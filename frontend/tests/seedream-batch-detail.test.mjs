@@ -112,7 +112,7 @@ test('Seedream eraser provides background fill, adjustable brush, and local undo
   const source = await import('node:fs/promises').then(({ readFile }) =>
     readFile(new URL('../src/components/seedream/SeedreamImageEraser.vue', import.meta.url), 'utf8'));
   assert.match(source, /HISTORY_LIMIT = 20/);
-  assert.match(source, /:min="5"/);
+  assert.match(source, /:min="1"/);
   assert.match(source, /:max="200"/);
   assert.match(source, /seedream-eraser-undo/);
   assert.match(source, /seedream-eraser-redo/);

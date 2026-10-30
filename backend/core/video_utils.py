@@ -7,7 +7,6 @@ from collections.abc import Callable
 from pathlib import Path
 
 import cv2
-import numpy as np
 from PIL import Image
 
 
@@ -223,73 +222,7 @@ def validate_video(video_path: str) -> dict:
 
 
 def detect_background_color_from_frames(input_dir: str, sample_count: int = 5) -> tuple[int, int, int] | None:
-    """
-    Detect background color by sampling from multiple frames in the input directory.
-    This is called during Step 1 completion.
+    """Estimate background metadata from original-frame edge patches."""
+    from backend.core.background_color import detect_background_hsv
 
-    Args:
-        input_dir: Directory containing extracted frames
-        sample_count: Number of frames to sample (default 5)
-
-    Returns:
-        (H, S, V) background color HSV tuple, or None if detection failed
-    """
-    print(f"[DEBUG] detect_background_color_from_frames called with input_dir: {input_dir}")
-
-    input_path = Path(input_dir)
-    if not input_path.exists():
-        print(f"[DEBUG] Input path does not exist: {input_dir}")
-        return None
-
-    frames = sorted(input_path.glob("*.png"))
-    print(f"[DEBUG] Found {len(frames)} frames in {input_dir}")
-
-    if not frames:
-        return None
-
-    # Sample frames evenly
-    step = max(1, len(frames) // sample_count)
-    sampled_colors = []
-
-    for i in range(0, len(frames), step):
-        if len(sampled_colors) >= sample_count:
-            break
-
-        try:
-            # Read original frame
-            img_array = np.fromfile(str(frames[i]), dtype=np.uint8)
-            img_bgr = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
-
-            if img_bgr is not None:
-                # Sample from corners
-                hsv = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2HSV)
-                h, w = img_bgr.shape[:2]
-                corners = [
-                    (5, 5),  # top-left
-                    (5, w - 5),  # top-right
-                    (h - 5, 5),  # bottom-left
-                    (h - 5, w - 5),  # bottom-right
-                ]
-
-                bg_colors = []
-                for y, x in corners:
-                    y = max(0, min(y, h - 1))
-                    x = max(0, min(x, w - 1))
-                    bg_colors.append(hsv[y, x])
-
-                if bg_colors:
-                    avg_color = tuple(int(x) for x in np.mean(bg_colors, axis=0).astype(int))
-                    sampled_colors.append(avg_color)
-                    print(f"[DEBUG] Sampled frame {frames[i].name}, avg corner HSV: {avg_color}")
-        except Exception as e:
-            print(f"[Warning] Failed to sample background from {frames[i]}: {e}")
-            continue
-
-    if not sampled_colors:
-        print("[DEBUG] No sampled colors collected")
-        return None
-
-    # Average all sampled colors
-    final_color = tuple(int(x) for x in np.mean(sampled_colors, axis=0).astype(int))
-    print(f"[DEBUG] Final background color HSV: {final_color} from {len(sampled_colors)} frames")
-    return final_color
+    return detect_background_hsv(input_dir, sample_count)

@@ -41,7 +41,7 @@
       v-if="s3Params.enabled"
       class="space-y-4 pl-4 border-l-2 border-dark-border"
     >
-      <!-- Green Intensity Slider -->
+      <!-- Background color tolerance; retain the saved field name for compatibility. -->
       <div class="space-y-3">
         <div class="flex justify-between items-center">
           <label class="block text-sm font-medium text-gray-400">{{ t('step3.greenIntensity') }}</label>

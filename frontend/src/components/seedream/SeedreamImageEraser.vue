@@ -1,14 +1,15 @@
 <template>
   <div
-    class="fixed inset-0 z-50 flex flex-col bg-black/90 p-4"
-    role="dialog"
-    aria-modal="true"
+    :class="embedded ? 'absolute inset-0' : 'fixed inset-0 z-50 flex flex-col bg-black/90 p-4'"
+    :role="embedded ? 'group' : 'dialog'"
+    :aria-modal="embedded ? undefined : true"
     :aria-label="title || t('seedream.detail.eraserTitle')"
     data-test="seedream-eraser-editor"
   >
-    <div class="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-3 rounded-xl border border-dark-border bg-dark-surface p-3">
-      <h2 class="mr-auto text-base font-semibold text-white">{{ title || t('seedream.detail.eraserTitle') }}</h2>
-      <div class="flex items-center gap-2 text-sm text-gray-300">
+    <Teleport :to="toolbarTarget || 'body'" :disabled="!embedded">
+    <div :class="embedded ? 'flex h-11 items-center gap-2 px-3' : 'mx-auto flex w-full max-w-6xl flex-wrap items-center gap-3 rounded-xl border border-dark-border bg-dark-surface p-3'">
+      <h2 class="mr-auto min-w-0 truncate text-sm font-semibold text-white">{{ title || t('seedream.detail.eraserTitle') }}</h2>
+      <div v-if="!magicWandEnabled" class="flex items-center gap-2 text-sm text-gray-300">
         <span>{{ t('seedream.detail.backgroundColor') }}</span>
         <span class="h-5 w-5 rounded border border-white/30" :style="{ backgroundColor: backgroundCss }" />
         <span class="font-mono text-xs">{{ backgroundCss }}</span>
@@ -16,7 +17,7 @@
       <Button
         variant="secondary"
         size="sm"
-        :disabled="undoStack.length === 0"
+        :disabled="saving || loading || undoStack.length === 0"
         data-test="seedream-eraser-undo"
         @click="undo"
       >
@@ -25,13 +26,13 @@
       <Button
         variant="secondary"
         size="sm"
-        :disabled="redoStack.length === 0"
+        :disabled="saving || loading || redoStack.length === 0"
         data-test="seedream-eraser-redo"
         @click="redo"
       >
         <Redo2 :size="16" /> {{ t('common.redo') }}
       </Button>
-      <span class="min-w-14 text-center text-sm text-gray-400" data-test="seedream-eraser-zoom">
+      <span v-if="!embedded" class="min-w-14 text-center text-sm text-gray-400" data-test="seedream-eraser-zoom">
         {{ Math.round(zoom * 100) }}%
       </span>
       <Button variant="secondary" size="sm" :disabled="saving" @click="emit('cancel')">
@@ -41,7 +42,7 @@
         v-if="resizeEnabled"
         type="button"
         class="inline-flex h-8 items-center justify-center rounded-lg bg-success px-3 text-sm font-medium text-white transition-colors hover:bg-success/80 disabled:cursor-not-allowed disabled:opacity-50"
-        :disabled="saving || loading || (undoStack.length === 0 && !externalRestoreAvailable)"
+        :disabled="saving || loading || (!dirty && !externalRestoreAvailable)"
         data-test="image-editor-restore-original"
         @click="restoreOriginal"
       >
@@ -51,16 +52,34 @@
         variant="primary"
         size="sm"
         :loading="saving"
-        :disabled="saving || loading || undoStack.length === 0"
+        :disabled="saving || loading || !dirty"
         data-test="seedream-eraser-apply"
         @click="apply"
       >
-        {{ t('seedream.detail.applyEraser') }}
+        {{ magicWandEnabled ? t('magicWand.save') : t('seedream.detail.applyEraser') }}
       </Button>
     </div>
 
-    <div class="mx-auto mt-3 grid w-full max-w-6xl gap-3 lg:grid-cols-[220px_minmax(0,1fr)]">
-      <aside class="rounded-xl border border-dark-border bg-dark-surface p-4">
+    <fieldset v-if="embedded" :disabled="saving || loading || suspended"
+      class="flex h-20 min-w-0 items-center gap-4 overflow-x-auto border-t border-dark-border px-3" data-test="frame-tool-options">
+      <template v-if="tool === 'wand'">
+        <Slider v-model="wandTolerance" class="w-36 shrink-0" :min="0" :max="100" :step="1" :label="`${t('magicWand.tolerance')} (+/-)`" :value-formatter="v => `${v}%`" />
+        <Slider v-model="wandFeather" class="w-36 shrink-0" :min="0" :max="12" :step="1" :label="t('magicWand.feather')" :value-formatter="v => `${v}px`" />
+        <label class="flex shrink-0 items-center gap-2 text-xs text-gray-300"><input v-model="wandContiguous" type="checkbox" />{{ t('magicWand.contiguous') }}</label>
+        <span class="shrink-0 text-xs text-gray-400">{{ t('magicWand.selected', { count: selectedCount }) }}</span>
+        <Button variant="danger" size="sm" :disabled="!selectedCount" @click="deleteWandSelection">{{ t('magicWand.delete') }}</Button>
+        <Button variant="secondary" size="sm" :disabled="!selectedCount" @click="clearWandSelection">{{ t('magicWand.clear') }}</Button>
+      </template>
+      <template v-else-if="tool === 'brush'">
+        <Slider v-model="brushSize" class="w-56 shrink-0" :min="1" :max="200" :step="1" :label="magicWandEnabled ? `${t('seedream.detail.eraserSize')} (+/-)` : t('seedream.detail.eraserSize')" :value-formatter="v => `${v}px`" data-test="frame-eraser-size" />
+        <Slider v-model="brushFeather" class="w-36 shrink-0" :min="0" :max="12" :step="1" :label="t('magicWand.feather')" :value-formatter="v => `${v}px`" data-test="frame-eraser-feather" />
+      </template>
+      <span v-else class="text-xs text-gray-400">{{ t('magicWand.browseHint') }}</span>
+    </fieldset>
+    </Teleport>
+
+    <div :class="embedded ? 'h-full' : 'mx-auto mt-3 grid w-full max-w-6xl gap-3 lg:grid-cols-[220px_minmax(0,1fr)]'">
+      <aside v-if="!embedded" class="rounded-xl border border-dark-border bg-dark-surface p-4">
         <p
           v-if="imageWidth > 0 && imageHeight > 0"
           class="mb-4 text-xs text-gray-500"
@@ -68,14 +87,46 @@
         >
           {{ t('seedream.detail.originalResolution') }}：{{ imageWidth }} × {{ imageHeight }} px
         </p>
+        <div v-if="magicWandEnabled" class="mb-4 space-y-3">
+          <div class="flex gap-2">
+            <Button size="sm" :variant="tool === 'wand' ? 'primary' : 'secondary'" data-test="magic-wand-tool" @click="tool = 'wand'">{{ t('magicWand.wand') }}</Button>
+            <Button size="sm" :variant="tool === 'brush' ? 'primary' : 'secondary'" @click="tool = 'brush'">{{ t('magicWand.eraser') }}</Button>
+          </div>
+          <p class="text-xs leading-5 text-gray-400">{{ t('magicWand.hint') }}</p>
+          <template v-if="tool === 'wand'">
+            <Slider v-model="wandTolerance" :min="0" :max="100" :step="1" :label="`${t('magicWand.tolerance')} (+/-)`" :value-formatter="(v) => `${v}%`" data-test="magic-wand-tolerance" />
+            <Slider v-model="wandFeather" :min="0" :max="12" :step="1" :label="t('magicWand.feather')" :value-formatter="(v) => `${v}px`" data-test="magic-wand-feather" />
+            <label class="flex gap-2 text-sm text-gray-300"><input v-model="wandContiguous" type="checkbox" data-test="magic-wand-contiguous" />{{ t('magicWand.contiguous') }}</label>
+            <p class="text-xs text-gray-400">{{ t('magicWand.selected', { count: selectedCount }) }}</p>
+            <Button class="w-full" variant="danger" size="sm" :disabled="!selectedCount || saving || loading" data-test="magic-wand-delete" @click="deleteWandSelection">{{ t('magicWand.delete') }}</Button>
+            <Button class="w-full" variant="secondary" size="sm" :disabled="!selectedCount" @click="clearWandSelection">{{ t('magicWand.clear') }}</Button>
+          </template>
+          <label class="block text-xs text-gray-400">{{ t('magicWand.preview') }}
+            <select v-model="previewBackground" class="mt-1 w-full rounded border border-dark-border bg-dark-bg p-2 text-white">
+              <option value="checker">{{ t('magicWand.checker') }}</option>
+              <option value="white">{{ t('magicWand.white') }}</option>
+              <option value="dark">{{ t('magicWand.dark') }}</option>
+            </select>
+          </label>
+        </div>
         <Slider
+          v-if="!magicWandEnabled || tool === 'brush'"
           v-model="brushSize"
-          :min="5"
+          :min="1"
           :max="200"
           :step="1"
-          :label="t('seedream.detail.eraserSize')"
+          :label="magicWandEnabled ? `${t('seedream.detail.eraserSize')} (+/-)` : t('seedream.detail.eraserSize')"
           :value-formatter="(value) => `${value}px`"
           data-test="seedream-eraser-size"
+        />
+        <Slider
+          v-if="magicWandEnabled && tool === 'brush'"
+          v-model="brushFeather"
+          class="mt-3"
+          :min="0" :max="12" :step="1"
+          :label="t('magicWand.feather')"
+          :value-formatter="v => `${v}px`"
+          data-test="seedream-eraser-feather"
         />
         <div v-if="resizeEnabled" class="mt-5 border-t border-dark-border pt-4">
           <div class="space-y-3" data-test="image-editor-resize-controls">
@@ -141,8 +192,7 @@
 
       <div
         ref="viewportRef"
-        class="relative flex min-h-0 items-center justify-center overflow-hidden rounded-xl border border-dark-border bg-dark-bg p-3"
-        :class="{ 'cursor-grabbing': panning }"
+        :class="[embedded ? 'relative h-full overflow-hidden' : 'relative flex min-h-0 items-center justify-center overflow-hidden rounded-xl border border-dark-border bg-dark-bg p-3', { 'cursor-grabbing': panning }]"
         data-test="seedream-eraser-viewport"
         @wheel.prevent="zoomCanvas"
         @pointerdown="startPan"
@@ -153,13 +203,14 @@
       >
         <div v-if="loading" class="absolute inset-0 z-10 flex items-center justify-center text-sm text-gray-400">{{ t('common.loading') }}</div>
         <div
-          class="relative max-h-[calc(100vh-9rem)] max-w-full"
-          :class="{ invisible: loading }"
+          :class="[embedded ? 'absolute left-1/2 top-1/2' : 'relative max-h-[calc(100vh-9rem)] max-w-full', { invisible: loading }]"
           :style="canvasTransformStyle"
         >
           <canvas
             ref="canvasRef"
-            class="block max-h-[calc(100vh-9rem)] max-w-full touch-none rounded-lg cursor-none"
+            :tabindex="magicWandEnabled ? 0 : undefined"
+            class="block touch-none focus:outline-none"
+            :class="[embedded ? 'max-w-none' : 'max-h-[calc(100vh-9rem)] max-w-full rounded-lg', tool === 'browse' ? 'cursor-grab' : magicWandEnabled && tool === 'wand' ? 'cursor-crosshair' : 'cursor-none']"
             data-test="seedream-eraser-canvas"
             @pointerdown="startStroke"
             @pointermove="moveStroke"
@@ -168,6 +219,26 @@
             @pointerenter="showCursor = true"
             @pointerleave="onPointerLeave"
           />
+          <canvas v-if="magicWandEnabled" ref="selectionCanvasRef" class="pointer-events-none absolute inset-0 h-full w-full" data-test="magic-wand-selection" />
+          <svg
+            v-if="magicWandEnabled && selectionOutlinePath"
+            class="pointer-events-none absolute inset-0 h-full w-full overflow-visible"
+            :viewBox="`0 0 ${imageWidth} ${imageHeight}`"
+            aria-hidden="true"
+            data-test="magic-wand-outline"
+          >
+            <path
+              v-for="(color, index) in ['#111', '#fff']"
+              :key="color"
+              :d="selectionOutlinePath"
+              fill="none"
+              :stroke="color"
+              :stroke-width="1.5 / selectionOutlineScale"
+              :stroke-dasharray="`${4 / selectionOutlineScale} ${4 / selectionOutlineScale}`"
+              :stroke-dashoffset="index * 4 / selectionOutlineScale"
+              vector-effect="non-scaling-stroke"
+            />
+          </svg>
           <template v-if="resizeEnabled && imageHeight > 0">
             <div
               class="pointer-events-none absolute left-0 right-0 z-10 border-t border-dashed border-primary"
@@ -209,8 +280,13 @@
             />
           </template>
         </div>
+        <p v-if="embedded" class="pointer-events-none absolute bottom-4 left-4 right-20 z-10 w-fit max-w-[calc(100%-6rem)] rounded-lg bg-black/50 px-3 py-2 text-xs leading-5 text-gray-200" data-test="frame-tool-hint">
+          {{ t(tool === 'wand' ? 'magicWand.wandHint' : tool === 'brush' ? 'magicWand.eraserHint' : 'magicWand.browseHint') }}
+        </p>
+        <p v-if="embedded && (error || loadError)" class="absolute left-4 right-20 top-16 rounded bg-black/80 p-3 text-sm text-danger" role="alert">{{ error || loadError }}</p>
+        <div v-if="embedded && (saving || suspended)" class="absolute inset-0 z-10 cursor-wait" />
         <div
-          v-if="showCursor && !panning"
+          v-if="showCursor && !panning && (!magicWandEnabled || tool === 'brush')"
           class="pointer-events-none absolute rounded-full border border-white shadow-[0_0_0_1px_rgba(0,0,0,0.8)]"
           :style="cursorStyle"
         />
@@ -220,12 +296,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { Redo2, Undo2 } from 'lucide-vue-next';
 import { useI18n } from 'vue-i18n';
 import Button from '@/components/common/Button.vue';
 import Slider from '@/components/common/Slider.vue';
 import type { GenerationLayout } from '@/types';
+import { deleteSelection, eraseBrushSegment, selectColorRegion, selectionBounds, selectionOutline } from '@/utils/magic-wand';
 
 interface EraseHistoryPatch {
   kind: 'erase';
@@ -250,18 +327,33 @@ interface Point {
 
 const props = withDefaults(defineProps<{
   imageUrl: string;
+  embedded?: boolean;
+  toolbarTarget?: HTMLElement | null;
+  activeTool?: 'wand' | 'brush' | 'browse';
+  viewZoom?: number;
+  viewPanX?: number;
+  viewPanY?: number;
+  suspended?: boolean;
   editSourceUrl?: string;
   saving: boolean;
   error?: string;
   title?: string;
   resizeEnabled?: boolean;
+  magicWandEnabled?: boolean;
   externalRestoreAvailable?: boolean;
   generationLayout?: GenerationLayout | null;
 }>(), {
+  embedded: false,
+  toolbarTarget: null,
+  viewZoom: 1,
+  viewPanX: 0,
+  viewPanY: 0,
+  suspended: false,
   error: '',
   editSourceUrl: '',
   title: '',
   resizeEnabled: false,
+  magicWandEnabled: false,
   externalRestoreAvailable: false,
   generationLayout: null,
 });
@@ -278,18 +370,36 @@ const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 8;
 const viewportRef = ref<HTMLDivElement | null>(null);
 const canvasRef = ref<HTMLCanvasElement | null>(null);
+const selectionCanvasRef = ref<HTMLCanvasElement | null>(null);
+const tool = ref<'wand' | 'brush' | 'browse'>(props.magicWandEnabled ? 'wand' : 'brush');
+watch(() => props.activeTool, value => { if (value) tool.value = value; }, { immediate: true });
+const wandTolerance = ref(20);
+const wandFeather = ref(1);
+const wandContiguous = ref(true);
+const previewBackground = ref('checker');
+const selection = ref<Uint8Array>(new Uint8Array(0));
+const selectionOutlinePath = ref('');
+let wandSeeds: Point[] = [];
+const selectedCount = computed(() => selection.value.reduce((sum, value) => sum + value, 0));
+watch([wandTolerance, wandContiguous], () => updateWandSelection());
+watch(tool, () => clearWandSelection());
 const loading = ref(true);
 const loadError = ref('');
-const brushSize = ref(40);
+const brushSize = ref(5);
+const brushFeather = ref(0);
 const backgroundColor = ref<[number, number, number]>([0, 0, 0]);
 const undoStack = ref<HistoryPatch[]>([]);
 const redoStack = ref<HistoryPatch[]>([]);
+const historyTruncated = ref(false);
+const dirty = computed(() => historyTruncated.value || undoStack.value.length > 0);
 const drawing = ref(false);
 const showCursor = ref(false);
 const cursorX = ref(0);
 const cursorY = ref(0);
 const cursorDiameter = ref(0);
 const zoom = ref(1);
+// CSS zoom on the canvas wrapper also scales SVG strokes and dash lengths.
+const selectionOutlineScale = computed(() => props.embedded ? props.viewZoom : zoom.value);
 const panX = ref(0);
 const panY = ref(0);
 const panning = ref(false);
@@ -304,6 +414,7 @@ const resizeBottomMarginRatio = ref<number | null>(null);
 const currentGenerationLayout = ref<GenerationLayout | null>(null);
 const resizeError = ref('');
 let strokeBefore: ImageData | null = null;
+let strokeAfter: ImageData | null = null;
 let originalImageData: ImageData | null = null;
 let editSourceCanvas: HTMLCanvasElement | null = null;
 let strokeBounds: { left: number; top: number; right: number; bottom: number } | null = null;
@@ -317,9 +428,18 @@ const cursorStyle = computed(() => ({
   width: `${cursorDiameter.value}px`,
   height: `${cursorDiameter.value}px`,
 }));
-const canvasTransformStyle = computed(() => ({
+const canvasTransformStyle = computed(() => props.embedded ? {
+  width: `${imageWidth.value}px`, height: `${imageHeight.value}px`,
+  transform: `translate(-50%, -50%) translate(${props.viewPanX}px, ${props.viewPanY}px) scale(${props.viewZoom})`,
+} : ({
   transform: `translate(${panX.value}px, ${panY.value}px) scale(${zoom.value})`,
   transformOrigin: 'center center',
+  ...(props.magicWandEnabled ? {
+    backgroundColor: previewBackground.value === 'white' ? '#fff' : '#25282c',
+    backgroundImage: previewBackground.value === 'checker'
+      ? 'conic-gradient(#41464d 25%, #292d32 0 50%, #41464d 0 75%, #292d32 0)' : 'none',
+    backgroundSize: '20px 20px',
+  } : {}),
 }));
 const sourceMeasuredHeight = computed(() => Math.max(0, sourceResizeBottom.value - sourceResizeTop.value));
 const guideMeasuredHeight = computed(() => Math.max(0, resizeBottom.value - resizeTop.value));
@@ -614,7 +734,7 @@ function applyResize() {
     beforeLayout,
     afterLayout: generationLayout,
   });
-  if (undoStack.value.length > HISTORY_LIMIT) undoStack.value.shift();
+  if (undoStack.value.length > HISTORY_LIMIT) { undoStack.value.shift(); historyTruncated.value = true; }
   redoStack.value = [];
   resizeTop.value = Math.max(0, targetBottom - targetHeight);
   resizeBottom.value = targetBottom;
@@ -629,11 +749,13 @@ function restoreOriginal() {
   }
   const canvas = canvasRef.value;
   const sourceContext = editSourceCanvas?.getContext('2d');
-  if (!canvas || !sourceContext || !originalImageData || undoStack.value.length === 0) return;
+  if (!canvas || !sourceContext || !originalImageData || !dirty.value) return;
   sourceContext.putImageData(originalImageData, 0, 0);
   undoStack.value = [];
   redoStack.value = [];
+  historyTruncated.value = false;
   strokeBefore = null;
+  strokeAfter = null;
   strokeBounds = null;
   lastPoint = null;
   drawing.value = false;
@@ -659,7 +781,7 @@ function canvasPoint(event: PointerEvent): Point | null {
 
 function zoomCanvas(event: WheelEvent) {
   const viewport = viewportRef.value;
-  if (!viewport || loading.value || drawing.value) return;
+  if (props.embedded || !viewport || loading.value || drawing.value) return;
   const rect = viewport.getBoundingClientRect();
   const oldZoom = zoom.value;
   const nextZoom = Math.min(
@@ -677,7 +799,7 @@ function zoomCanvas(event: WheelEvent) {
 }
 
 function startPan(event: PointerEvent) {
-  if (event.button !== 1) return;
+  if (props.embedded || event.button !== 1) return;
   const viewport = viewportRef.value;
   if (!viewport) return;
   event.preventDefault();
@@ -706,7 +828,17 @@ function finishPan(event: PointerEvent) {
 }
 
 function startStroke(event: PointerEvent) {
-  if (event.button !== 0) return;
+  if (tool.value === 'browse' || event.button !== 0 || props.saving || props.suspended || loading.value) return;
+  if (props.magicWandEnabled) canvasRef.value?.focus({ preventScroll: true });
+  if (props.magicWandEnabled && tool.value === 'wand') {
+    const point = canvasPoint(event);
+    if (!point) return;
+    if (!event.shiftKey) wandSeeds = [];
+    wandSeeds.push(point);
+    updateWandSelection();
+    event.preventDefault();
+    return;
+  }
   const canvas = canvasRef.value;
   const sourceContext = editSourceCanvas?.getContext('2d', { willReadFrequently: true });
   const displayPoint = canvasPoint(event);
@@ -715,6 +847,10 @@ function startStroke(event: PointerEvent) {
   drawing.value = true;
   showCursor.value = true;
   strokeBefore = sourceContext.getImageData(0, 0, canvas.width, canvas.height);
+  if (props.magicWandEnabled) {
+    strokeAfter = sourceContext.createImageData(strokeBefore.width, strokeBefore.height);
+    strokeAfter.data.set(strokeBefore.data);
+  }
   strokeBounds = null;
   const point = displayToSourcePoint(displayPoint);
   lastPoint = point;
@@ -753,6 +889,7 @@ function finishStroke(event: PointerEvent) {
   if (canvas?.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
   if (!canvas || !sourceContext || !strokeBefore || !strokeBounds) {
     strokeBefore = null;
+    strokeAfter = null;
     strokeBounds = null;
     return;
   }
@@ -770,10 +907,11 @@ function finishStroke(event: PointerEvent) {
       before: cropImageData(sourceContext, strokeBefore, x, y, width, height),
       after: sourceContext.getImageData(x, y, width, height),
     });
-    if (undoStack.value.length > HISTORY_LIMIT) undoStack.value.shift();
+    if (undoStack.value.length > HISTORY_LIMIT) { undoStack.value.shift(); historyTruncated.value = true; }
     redoStack.value = [];
   }
   strokeBefore = null;
+  strokeAfter = null;
   strokeBounds = null;
 }
 
@@ -796,13 +934,25 @@ function extendBounds(point: Point, sourceBrushSize: number) {
 }
 
 function drawPoint(context: CanvasRenderingContext2D, point: Point, sourceBrushSize: number) {
+  if (props.magicWandEnabled) {
+    drawLine(context, point, point, sourceBrushSize);
+    return;
+  }
   context.fillStyle = backgroundCss.value;
   context.beginPath();
   context.arc(point.x, point.y, sourceBrushSize / 2, 0, Math.PI * 2);
+  if (props.magicWandEnabled) context.globalCompositeOperation = 'destination-out';
   context.fill();
+  context.globalCompositeOperation = 'source-over';
 }
 
 function drawLine(context: CanvasRenderingContext2D, from: Point, to: Point, sourceBrushSize: number) {
+  if (props.magicWandEnabled && strokeBefore && strokeAfter) {
+    const feather = brushFeather.value / (currentGenerationLayout.value?.scale ?? 1);
+    const bounds = eraseBrushSegment(strokeAfter, strokeBefore, from, to, sourceBrushSize, feather);
+    context.putImageData(strokeAfter, 0, 0, bounds.x, bounds.y, bounds.width, bounds.height);
+    return;
+  }
   context.strokeStyle = backgroundCss.value;
   context.lineWidth = sourceBrushSize;
   context.lineCap = 'round';
@@ -810,7 +960,9 @@ function drawLine(context: CanvasRenderingContext2D, from: Point, to: Point, sou
   context.beginPath();
   context.moveTo(from.x, from.y);
   context.lineTo(to.x, to.y);
+  if (props.magicWandEnabled) context.globalCompositeOperation = 'destination-out';
   context.stroke();
+  context.globalCompositeOperation = 'source-over';
 }
 
 function cropImageData(
@@ -831,6 +983,8 @@ function cropImageData(
 }
 
 function undo() {
+  if (props.saving || loading.value) return;
+  clearWandSelection();
   const patch = undoStack.value.pop();
   if (!patch) return;
   if (patch.kind === 'erase') {
@@ -844,6 +998,8 @@ function undo() {
 }
 
 function redo() {
+  if (props.saving || loading.value) return;
+  clearWandSelection();
   const patch = redoStack.value.pop();
   if (!patch) return;
   if (patch.kind === 'erase') {
@@ -874,6 +1030,28 @@ function syncGuidesFromLayout() {
 }
 
 function onKeydown(event: KeyboardEvent) {
+  if (props.saving || props.suspended || loading.value || event.defaultPrevented) return;
+  if (event.target instanceof Element && event.target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="textbox"]')) return;
+  if (props.magicWandEnabled && !event.ctrlKey && !event.metaKey && !event.altKey
+    && !event.isComposing && !drawing.value && tool.value !== 'browse') {
+    const delta = event.key === '+' || event.key === '=' ? 1 : event.key === '-' || event.key === '_' ? -1 : 0;
+    if (delta) {
+      event.preventDefault();
+      if (tool.value === 'wand') wandTolerance.value = Math.max(0, Math.min(100, wandTolerance.value + delta));
+      else brushSize.value = Math.max(1, Math.min(200, brushSize.value + delta));
+      return;
+    }
+  }
+  if (props.magicWandEnabled && (event.key === 'Delete' || event.key === 'Backspace')) {
+    event.preventDefault();
+    deleteWandSelection();
+    return;
+  }
+  if (event.key === 'Escape' && selectedCount.value) {
+    event.preventDefault();
+    clearWandSelection();
+    return;
+  }
   if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'z') {
     event.preventDefault();
     if (event.shiftKey) redo(); else undo();
@@ -889,9 +1067,77 @@ function onPointerLeave() {
   if (!drawing.value) showCursor.value = false;
 }
 
+function clearWandSelection() {
+  wandSeeds = [];
+  selection.value = new Uint8Array(0);
+  selectionOutlinePath.value = '';
+  const canvas = selectionCanvasRef.value;
+  if (canvas) canvas.getContext('2d')?.clearRect(0, 0, canvas.width, canvas.height);
+}
+
+function updateWandSelection() {
+  const source = editSourceCanvas;
+  const context = source?.getContext('2d', { willReadFrequently: true });
+  const overlay = selectionCanvasRef.value;
+  if (!source || !context || !overlay || !wandSeeds.length) return;
+  const pixels = context.getImageData(0, 0, source.width, source.height);
+  const mask = new Uint8Array(source.width * source.height);
+  for (const point of wandSeeds) {
+    const added = selectColorRegion(pixels, point.x, point.y, wandTolerance.value, wandContiguous.value);
+    for (let index = 0; index < mask.length; index++) if (added[index]) mask[index] = 1;
+  }
+  selection.value = mask;
+  selectionOutlinePath.value = selectionOutline(mask, source.width, source.height);
+  overlay.width = source.width;
+  overlay.height = source.height;
+  const overlayContext = overlay.getContext('2d');
+  if (!overlayContext) return;
+  const tint = overlayContext.createImageData(source.width, source.height);
+  for (let index = 0; index < mask.length; index++) {
+    if (!mask[index]) continue;
+    tint.data.set([190, 95, 255, 115], index * 4);
+  }
+  overlayContext.putImageData(tint, 0, 0);
+}
+
+function deleteWandSelection() {
+  const source = editSourceCanvas;
+  const context = source?.getContext('2d', { willReadFrequently: true });
+  if (!source || !context || !selectedCount.value || props.saving) return;
+  const before = context.getImageData(0, 0, source.width, source.height);
+  const bounds = selectionBounds(selection.value, source.width, source.height);
+  if (!bounds) return;
+  const pixels = deleteSelection(before, selection.value, wandFeather.value);
+  const after = context.createImageData(source.width, source.height);
+  after.data.set(pixels);
+  context.putImageData(after, 0, 0);
+  undoStack.value.push({
+    kind: 'erase', x: bounds.x, y: bounds.y,
+    before: cropImageData(context, before, bounds.x, bounds.y, bounds.width, bounds.height),
+    after: context.getImageData(bounds.x, bounds.y, bounds.width, bounds.height),
+  });
+  if (undoStack.value.length > HISTORY_LIMIT) { undoStack.value.shift(); historyTruncated.value = true; }
+  redoStack.value = [];
+  clearWandSelection();
+  renderFromSource();
+}
+
+function markSaved() {
+  undoStack.value = [];
+  redoStack.value = [];
+  historyTruncated.value = false;
+  clearWandSelection();
+}
+
+function getImageData() {
+  return canvasRef.value?.toDataURL('image/png');
+}
+
+defineExpose({ dirty, busy: computed(() => loading.value || drawing.value), markSaved, getImageData });
+
 function apply() {
   const canvas = canvasRef.value;
-  if (!canvas || !editSourceCanvas || undoStack.value.length === 0) return;
+  if (!canvas || !editSourceCanvas || !dirty.value) return;
   emit(
     'apply',
     canvas.toDataURL('image/png'),

@@ -209,10 +209,23 @@ export interface Step2Params {
   processing_time?: number;      // processing time in seconds
 }
 
+export interface EditableFrame {
+  image_data_url: string;
+  revision: string;
+  width: number;
+  height: number;
+}
+
+export interface SavedFrameEdit {
+  success: boolean;
+  path: string;
+  revision: string;
+}
+
 // Step 3: Post-processing (hole punching + alignment)
 export interface Step3Params {
   enabled: boolean;              // whether hole punching is enabled, default true
-  // Green intensity level (1-5): 1=bright green, 5=dark green
+  // Background color tolerance (1-5); legacy field name retained for saved projects.
   green_intensity: number;       // 1-5, default 3
   feather_radius: number;        // Feather radius (0-10 pixels), default 3
   min_hole_size: number;         // Minimum hole area in pixels (0-500), default 5

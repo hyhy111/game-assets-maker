@@ -19,6 +19,7 @@ import numpy as np
 from filelock import FileLock
 
 from backend.api.project_paths import resolve_project_path
+from backend.core.background_color import batch_punch_holes_color, validate_color_params
 from backend.core.model_preloader import ModelLoader, ModelPreloader, ModelStatus, RembgModelLoader
 from backend.core.smart_remove_background import batch_remove_background
 
@@ -148,6 +149,9 @@ class ProcessAPI:
             model = params.get("model", "u2net")
             if self.get_model_status(model)["phase"] != "ready":
                 raise RuntimeError("MODEL_NOT_READY")
+
+        if step == 3 and params.get("enabled", True):
+            validate_color_params(params)
 
         task_id = str(uuid.uuid4())
         task = Task(task_id, project_id, step, params)
@@ -336,11 +340,7 @@ class ProcessAPI:
         if not input_dir.exists():
             raise ValueError("Step 2 output not found. Please run Step 2 first.")
 
-        # Clear output directory if exists
-        if output_dir.exists():
-            shutil.rmtree(output_dir)
-        output_dir.mkdir(parents=True, exist_ok=True)
-
+        # Color processing validates its source inputs before replacing prior output.
         # Check if hole punching is enabled
         enabled = task.params.get("enabled", True)
 
@@ -354,19 +354,25 @@ class ProcessAPI:
             self._emit_progress(task.task_id, task.progress, current, total, "running")
 
         if enabled:
-            # Get green detection parameters
+            # Keep the saved intensity field compatible with existing projects.
             params = {
                 "green_intensity": task.params.get("green_intensity", 3),
                 "feather_radius": task.params.get("feather_radius", 3),
                 "min_hole_size": task.params.get("min_hole_size", 5),
             }
 
-            # Import here to avoid circular dependency
-            from backend.core.smart_remove_background import batch_punch_holes_green
-
-            batch_punch_holes_green(str(input_dir), str(output_dir), params=params, progress_callback=progress_callback)
+            batch_punch_holes_color(
+                str(input_dir),
+                str(output_dir),
+                str(project_path / "output" / "01_frames"),
+                params=params,
+                progress_callback=progress_callback,
+            )
         else:
-            # Hole punching disabled, just copy files
+            # Hole punching disabled, just copy files.
+            if output_dir.exists():
+                shutil.rmtree(output_dir)
+            output_dir.mkdir(parents=True, exist_ok=True)
             frames = sorted(input_dir.glob("*.png"))
             total = len(frames)
             for i, frame_path in enumerate(frames):
@@ -466,7 +472,7 @@ class ProcessAPI:
         config["background_color"] = {
             "hsv": [int(x) for x in bg_hsv],
             "rgb": [int(x) for x in rgb],
-            "sampled_from": "corners",
+            "sampled_from": "edge_patches",
         }
         print(f"[DEBUG] Updated background_color in config: {config['background_color']}")
 

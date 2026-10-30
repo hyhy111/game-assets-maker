@@ -18,20 +18,37 @@
       </aside>
 
       <!-- Center - Player -->
-      <div class="flex-1 flex flex-col p-4">
+      <div class="min-w-0 flex-1 flex flex-col p-4">
         <!-- Step navigator -->
         <StepNavigator class="mb-4" />
 
         <!-- Player container -->
-        <div class="flex-1 min-h-0 bg-black rounded-xl overflow-hidden border border-dark-border">
-          <FramePlayer v-if="playerStore.frames.length > 0" />
-          <div
-            v-else
-            class="h-full flex items-center justify-center text-gray-500"
-          >
-            <div class="text-center">
-              <Film class="w-16 h-16 mx-auto mb-4 opacity-30" />
-              <p>{{ hiddenFrames.length > 0 ? t('frameVisibility.allHidden') : t('common.loading') }}</p>
+        <div class="flex flex-1 min-h-0 flex-col bg-black rounded-xl overflow-hidden border border-dark-border">
+          <div v-if="frameRetouchEnabled" ref="frameToolbar" class="h-32 shrink-0 bg-dark-surface" data-test="frame-retouch-toolbar">
+            <p v-if="!frameEditor" class="flex h-full items-center px-4 text-sm text-gray-400">{{ t('magicWand.idleHint') }}</p>
+          </div>
+          <div class="relative min-h-0 flex-1">
+            <FramePlayer v-if="playerStore.frames.length > 0"
+              :keyboard-disabled="frameEditorLoading || frameEditorSaving || navigationPending"
+              :editing="!!frameEditor" :retouch-enabled="frameRetouchEnabled"
+              :tools-disabled="frameEditorLoading || frameEditorSaving || navigationPending || processStore.isProcessing"
+              :active-tool="frameEditor ? frameEditorTool : 'browse'" @tool="selectFrameTool">
+              <SeedreamImageEraser v-if="frameEditor" ref="frameEditorRef"
+                :image-url="frameEditor.imageUrl" :saving="frameEditorSaving" :magic-wand-enabled="true"
+                :embedded="true" :toolbar-target="frameToolbar" :active-tool="frameEditorTool"
+                :view-zoom="playerStore.zoom" :view-pan-x="playerStore.panX" :view-pan-y="playerStore.panY"
+                :suspended="navigationPending || processStore.isProcessing" :error="frameEditorError"
+                :title="t('magicWand.title', { filename: frameEditor.filename })"
+                @cancel="closeFrameEditor" @apply="saveCurrentFrameEdit" />
+            </FramePlayer>
+            <div
+              v-else
+              class="h-full flex items-center justify-center text-gray-500"
+            >
+              <div class="text-center">
+                <Film class="w-16 h-16 mx-auto mb-4 opacity-30" />
+                <p>{{ hiddenFrames.length > 0 ? t('frameVisibility.allHidden') : t('common.loading') }}</p>
+              </div>
             </div>
           </div>
         </div>
@@ -84,14 +101,30 @@
             </Button>
           </div>
         </div>
+        <p v-if="frameEditorError && !frameEditor" class="mt-2 text-sm text-danger" role="alert">{{ frameEditorError }}</p>
       </div>
     </main>
+    <div v-if="navigationPending" class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+      @keydown.esc.prevent="resolveFrameNavigation('stay')"
+      @keydown="trapModalTab($event, $event.currentTarget as HTMLElement)">
+      <section role="alertdialog" aria-modal="true" aria-labelledby="frame-unsaved-title" aria-describedby="frame-unsaved-hint"
+        class="w-full max-w-lg rounded-xl border border-dark-border bg-dark-surface p-6 shadow-xl" data-test="frame-unsaved-dialog">
+        <h2 id="frame-unsaved-title" class="text-lg font-semibold text-white">{{ t('magicWand.unsavedTitle') }}</h2>
+        <p id="frame-unsaved-hint" class="mt-3 text-sm text-gray-400">{{ t('magicWand.unsavedHint') }}</p>
+        <p v-if="frameEditorError" class="mt-3 text-sm text-danger" role="alert">{{ frameEditorError }}</p>
+        <div class="mt-5 flex flex-wrap justify-end gap-2">
+          <Button variant="primary" :loading="frameEditorSaving" @click="resolveFrameNavigation('save')">{{ t('magicWand.saveContinue') }}</Button>
+          <Button ref="stayButton" variant="secondary" :disabled="frameEditorSaving" @click="resolveFrameNavigation('stay')">{{ t('magicWand.stay') }}</Button>
+          <Button variant="danger" :disabled="frameEditorSaving" @click="resolveFrameNavigation('discard')">{{ t('magicWand.discard') }}</Button>
+        </div>
+      </section>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue';
-import { useRouter, useRoute } from 'vue-router';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { onBeforeRouteLeave, useRouter, useRoute } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import { useI18n } from 'vue-i18n';
 import { EyeOff, Film, Undo2 } from 'lucide-vue-next';
@@ -99,6 +132,7 @@ import { useProjectStore } from '@/stores/project';
 import { useProcessStore } from '@/stores/process';
 import { usePlayerStore } from '@/stores/player';
 import { api } from '@/api';
+import { trapModalTab } from '@/modal-focus';
 import Header from '@/components/layout/Header.vue';
 import StepNavigator from '@/components/layout/StepNavigator.vue';
 import FramePlayer from '@/components/player/FramePlayer.vue';
@@ -107,6 +141,7 @@ import Button from '@/components/common/Button.vue';
 import Step1Extract from './Step1Extract.vue';
 import Step2Background from './Step2Background.vue';
 import Step3PostProcess from './Step3PostProcess.vue';
+import SeedreamImageEraser from '@/components/seedream/SeedreamImageEraser.vue';
 
 const router = useRouter();
 const route = useRoute();
@@ -124,6 +159,138 @@ const hiddenFrames = ref<string[]>([]);
 const timelineFrameCount = ref(0);
 const visibilityUpdating = ref(false);
 let frameLoadRequestId = 0;
+const frameEditor = ref<{ projectId: string; filename: string; imageUrl: string; revision: string; step: number } | null>(null);
+const frameEditorLoading = ref(false);
+const frameEditorSaving = ref(false);
+const frameEditorError = ref('');
+const frameEditorTool = ref<'wand' | 'brush' | 'browse'>('browse');
+const frameToolbar = ref<HTMLElement | null>(null);
+const frameEditorRef = ref<InstanceType<typeof SeedreamImageEraser> | null>(null);
+const stayButton = ref<InstanceType<typeof Button> | null>(null);
+const navigationPending = ref(false);
+let resolveNavigation: ((allowed: boolean) => void) | null = null;
+
+function beforeFrameNavigation(): boolean | Promise<boolean> {
+  if (frameEditorLoading.value || frameEditorSaving.value || navigationPending.value || frameEditorRef.value?.busy) return false;
+  if (!frameEditor.value) return true;
+  if (!frameEditorRef.value?.dirty) {
+    closeFrameEditor();
+    return true;
+  }
+  navigationPending.value = true;
+  void nextTick(() => stayButton.value?.$el.focus());
+  return new Promise(resolve => { resolveNavigation = resolve; });
+}
+
+async function resolveFrameNavigation(choice: 'save' | 'discard' | 'stay') {
+  if (frameEditorSaving.value || !resolveNavigation) return;
+  if (choice === 'save') {
+    const imageData = frameEditorRef.value?.getImageData();
+    if (!imageData || !await saveCurrentFrameEdit(imageData)) return;
+  }
+  const resolve = resolveNavigation;
+  resolveNavigation = null;
+  navigationPending.value = false;
+  if (choice !== 'stay') closeFrameEditor();
+  resolve(choice !== 'stay');
+}
+
+playerStore.setNavigationGuard(beforeFrameNavigation);
+processStore.setNavigationGuard(beforeFrameNavigation);
+onBeforeRouteLeave(beforeFrameNavigation);
+
+function beforeUnload(event: BeforeUnloadEvent) {
+  if (!frameEditorRef.value?.dirty) return;
+  event.preventDefault();
+  event.returnValue = '';
+}
+
+function onToolShortcut(event: KeyboardEvent) {
+  if (event.defaultPrevented || event.repeat || event.ctrlKey || event.metaKey || event.altKey
+    || !frameRetouchEnabled.value || processStore.isProcessing
+    || frameEditorRef.value?.busy) return;
+  if (event.target instanceof Element
+    && event.target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="textbox"]')) return;
+  const key = event.key.toLowerCase();
+  const tool = key === 'w' ? 'wand' : key === 'e' ? 'brush' : key === 'v' ? 'browse' : null;
+  if (!tool) return;
+  event.preventDefault();
+  selectFrameTool(tool);
+}
+
+onMounted(() => {
+  window.addEventListener('beforeunload', beforeUnload);
+  window.addEventListener('keydown', onToolShortcut);
+});
+onBeforeUnmount(() => {
+  playerStore.setNavigationGuard(null);
+  processStore.setNavigationGuard(null);
+  resolveNavigation?.(false);
+  window.removeEventListener('beforeunload', beforeUnload);
+  window.removeEventListener('keydown', onToolShortcut);
+});
+
+function selectFrameTool(tool: 'wand' | 'brush' | 'browse') {
+  if (frameEditorSaving.value || frameEditorLoading.value || navigationPending.value) return;
+  if (frameEditor.value) frameEditorTool.value = tool;
+  else if (tool !== 'browse') void openFrameEditor(tool);
+}
+
+
+function frameEditError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  if (message.includes('FRAME_EDIT_STALE')) return t('magicWand.stale');
+  if (message.includes('PROCESSING_ACTIVE')) return t('magicWand.processing');
+  return t('magicWand.failed');
+}
+
+async function openFrameEditor(tool: 'wand' | 'brush') {
+  const project = currentProject.value;
+  const frame = playerStore.currentFrame;
+  const step = currentStep.value;
+  if (!project || !frame || !frameRetouchEnabled.value || processStore.isProcessing || frameEditorLoading.value) return;
+  playerStore.pause();
+  frameEditorLoading.value = true;
+  frameEditorError.value = '';
+  try {
+    const editable = await api.frame.getEditableFrame(project.id, frame.filename, step);
+    if (currentProject.value?.id !== project.id || currentStep.value !== step || playerStore.currentFrame?.filename !== frame.filename) return;
+    frameEditorTool.value = tool;
+    frameEditor.value = { projectId: project.id, filename: frame.filename, imageUrl: editable.image_data_url, revision: editable.revision, step };
+  } catch (error) {
+    frameEditorError.value = frameEditError(error);
+  } finally {
+    frameEditorLoading.value = false;
+  }
+}
+
+function closeFrameEditor() {
+  if (frameEditorSaving.value) return;
+  frameEditor.value = null;
+  frameEditorTool.value = 'browse';
+  frameEditorError.value = '';
+}
+
+async function saveCurrentFrameEdit(imageDataUrl: string) {
+  const editing = frameEditor.value;
+  if (!editing || frameEditorSaving.value) return false;
+  if (processStore.isProcessing) { frameEditorError.value = t('magicWand.processing'); return false; }
+  frameEditorSaving.value = true;
+  frameEditorError.value = '';
+  try {
+    const saved = await api.frame.saveFrameEdit(editing.projectId, editing.filename, imageDataUrl, editing.revision, editing.step);
+    editing.revision = saved.revision;
+    editing.imageUrl = imageDataUrl;
+    frameEditorRef.value?.markSaved();
+    playerStore.replaceFrameImage(editing.filename, imageDataUrl);
+    return true;
+  } catch (error) {
+    frameEditorError.value = frameEditError(error);
+    return false;
+  } finally {
+    frameEditorSaving.value = false;
+  }
+}
 
 // Step components mapping
 const stepComponents = {
@@ -141,9 +308,12 @@ const frameVisibilityEnabled = computed(() => (
   && projectStore.isStepCompleted(currentStep.value)
 ));
 
+const frameRetouchEnabled = computed(() => currentStep.value === 3 && frameVisibilityEnabled.value);
+
 // Load frames when step changes or project data changes
 watch([currentStep, currentProject], async ([step]) => {
   if (!currentProject.value) return;
+  if (frameEditor.value?.projectId === currentProject.value.id && frameEditor.value.step === step) return;
   const projectId = currentProject.value.id;
   const loaded = await loadFramesForStep(step);
   if (loaded && paramsLoaded.value && currentProject.value?.id === projectId && currentStep.value === step) signalEditorReady();
@@ -231,6 +401,7 @@ async function loadFramesForStep(step: number) {
 }
 
 async function hideCurrentFrame() {
+  if (!await beforeFrameNavigation()) return;
   const project = currentProject.value;
   const frame = playerStore.currentFrame;
   if (!project || !frame) return;
@@ -249,6 +420,7 @@ async function hideCurrentFrame() {
 }
 
 async function restoreLastHiddenFrame() {
+  if (!await beforeFrameNavigation()) return;
   const project = currentProject.value;
   const filename = hiddenFrames.value[hiddenFrames.value.length - 1];
   if (!project || !filename) return;
@@ -264,6 +436,7 @@ async function restoreLastHiddenFrame() {
 }
 
 async function restoreAllHiddenFrames() {
+  if (!await beforeFrameNavigation()) return;
   const project = currentProject.value;
   if (!project || hiddenFrames.value.length === 0) return;
 
