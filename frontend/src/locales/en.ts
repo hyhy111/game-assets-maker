@@ -43,6 +43,7 @@ export default {
     title: 'My Credits',
     fallbackName: 'Credits',
     acquired: 'Acquired {date}',
+    remainingOfTotal: 'Remaining {remain} / {total}',
     usedOfTotal: 'Used {used} / {total}',
     remainingExpires: '{remain} left · expires {date}',
     usedUp: 'Used up',

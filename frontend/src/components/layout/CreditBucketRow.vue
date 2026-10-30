@@ -1,9 +1,9 @@
 /**
  * 积分桶行 - 单个积分来源的明细展示
  *
- * 展示：积分名字（skuName 快照）、获得时间、已用/共 N 进度条、剩余与单桶到期。
+ * Shows source name, acquisition date, remaining balance and expiry.
  * 已用完（remain=0）整行置灰；剩余有效期 ≤7 天到期时间醒目展示。
- * 排序由 store 保证（最先到期在前）。
+ * Ordering is supplied by the V2 account endpoint.
  */
 <script setup lang="ts">
 import { computed } from 'vue';
@@ -35,7 +35,6 @@ function fmtDate(s?: string | null): string {
 
 const total = computed(() => Number(props.bucket.totalAmount || 0));
 const remain = computed(() => Number(props.bucket.remainAmount || 0));
-const used = computed(() => Math.max(0, total.value - remain.value));
 
 /** 待生效 = 续费排队中的桶（生效日在未来） */
 const isPending = computed(() => {
@@ -43,10 +42,10 @@ const isPending = computed(() => {
   return !!eff && eff.getTime() > Date.now();
 });
 
-const usedPercent = computed(() =>
+const remainingPercent = computed(() =>
   isPending.value || total.value <= 0
     ? 0
-    : Math.min(100, Math.round((used.value / total.value) * 100))
+    : Math.min(100, Math.round((remain.value / total.value) * 100))
 );
 const isUsedUp = computed(() => !isPending.value && remain.value === 0);
 
@@ -62,10 +61,10 @@ const acquiredLabel = computed(() =>
     ? t('billing.pendingTag')
     : t('billing.acquired', { date: fmtDate((props.bucket as { createTime?: string }).createTime ?? props.bucket.effectiveFrom) })
 );
-const usedLabel = computed(() =>
+const amountLabel = computed(() =>
   isPending.value
     ? t('billing.pendingOfTotal', { total: total.value.toLocaleString() })
-    : t('billing.usedOfTotal', { used: used.value.toLocaleString(), total: total.value.toLocaleString() })
+    : t('billing.remainingOfTotal', { remain: remain.value.toLocaleString(), total: total.value.toLocaleString() })
 );
 const remainLabel = computed(() => {
   if (isPending.value) {
@@ -108,12 +107,12 @@ const remainLabel = computed(() => {
       <div
         class="h-full rounded-full transition-[width] duration-700"
         :class="isUsedUp || isPending ? 'bg-dark-border' : 'bg-gradient-to-r from-amber-600 to-primary'"
-        :style="{ width: usedPercent + '%' }"
+        :style="{ width: remainingPercent + '%' }"
       />
     </div>
 
     <div class="mt-1.5 flex items-baseline justify-between gap-3 text-[11.5px] tabular-nums">
-      <span class="text-gray-500">{{ usedLabel }}</span>
+      <span class="text-gray-500">{{ amountLabel }}</span>
       <span
         :class="isPending ? 'text-amber-600' : isUsedUp ? 'text-gray-500' : isExpiring ? 'font-bold text-primary' : 'text-gray-500'"
         data-test="bucket-expire"

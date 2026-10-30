@@ -43,6 +43,7 @@ export default {
     title: '我的积分',
     fallbackName: '积分',
     acquired: '{date} 获得',
+    remainingOfTotal: '剩余 {remain} / 共 {total}',
     usedOfTotal: '已用 {used} / 共 {total}',
     remainingExpires: '剩 {remain} · {date} 到期',
     usedUp: '已用完',
