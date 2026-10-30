@@ -574,14 +574,16 @@ function clampToPlatformModel() {
 const paidConfirmationEnabled = computed(() => configStore.config?.paid_generation_confirmation_enabled !== false);
 
 // Only an untouched initial draft may receive an automatic payable default.
-const initialSelectionPending = ref(!workspace.imageDraftChanged() && !route.query.regenerate && !route.query.continue && !route.query.handoff);
+const initialSelectionPending = ref(!workspace.imageInitialized && !form.prompt && !form.reference_image && !route.query.regenerate && !route.query.continue && !route.query.handoff);
 let initialDraftSignature = '';
 watch(
   () => [modelDefaultsReady.value, creditUsage.ready, creditUsage.data?.asOf, platformGenerationSelected.value, platformImageModels.value],
   () => {
     if (!initialSelectionPending.value || !initialDraftSignature || !modelDefaultsReady.value || !platformGenerationSelected.value || !creditUsage.ready || !platformImageModels.value.length) return;
     initialSelectionPending.value = false;
-    if (JSON.stringify(form) !== initialDraftSignature) return;
+    const original = JSON.parse(initialDraftSignature);
+    const automaticModel = form.model === original.model || form.model === store.settings?.default_model_id || form.model === store.settings?.default_model;
+    if (!automaticModel || Object.keys(original).some(key => key !== 'model' && (form as unknown as Record<string, unknown>)[key] !== original[key])) return;
     const current = creditUsage.canPay('image', form.model, form.resolution, undefined, form.count);
     if (current) return;
     const next = creditUsage.data?.combinations.find(row => row.context.mediaType === 'image'
@@ -663,6 +665,7 @@ function clearReferenceImage() {
 }
 
 function selectModel(model: string) {
+  initialSelectionPending.value = false;
   form.model = model as SeedreamModel;
   if (platformGenerationSelected.value) clampToPlatformModel();
   else fixResolution();

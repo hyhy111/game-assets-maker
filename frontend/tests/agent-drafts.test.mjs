@@ -246,3 +246,22 @@ test('changing the generation source during capability loading cancels the patch
   await assert.rejects(patch, /DRAFT_CHANGED/);
   assert.equal(JSON.stringify(store.imageDraft), original);
 });
+
+
+test('platform source defaults do not mark an uninitialized draft as restored', async () => {
+  createScriptedPyWebViewBridge({});
+  setActivePinia(createPinia());
+  const { useAICreationStore, defaultVideoDraft } = await loadFrontendModule('/src/stores/aiCreation.ts');
+  const { defaultForm } = await loadFrontendModule('/src/seedream-ui.ts');
+  const store = useAICreationStore();
+  store.setGenerationSource('forfuner-ai');
+  assert.equal(store.imageInitialized, false);
+  assert.equal(store.videoInitialized, false);
+  store.initializeImageDraft(defaultForm(), 'server-image-default');
+  store.initializeVideoDraft(defaultVideoDraft(), 'server-video-default');
+  assert.equal(store.imageInitialized, true);
+  assert.equal(store.videoInitialized, true);
+  store.imageDraft.prompt = 'saved draft';
+  store.initializeImageDraft(defaultForm(), 'other-default');
+  assert.equal(store.imageDraft.prompt, 'saved draft');
+});

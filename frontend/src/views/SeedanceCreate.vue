@@ -652,14 +652,16 @@ async function copyPrompt() {
 }
 
 // Only an untouched initial draft may receive an automatic payable default.
-const initialSelectionPending = ref(!workspace.videoDraftChanged() && !route.query.regenerate && !route.query.continue && !route.query.handoff);
+const initialSelectionPending = ref(!workspace.videoInitialized && !form.prompt && !form.first_frame && !form.last_frame && !route.query.regenerate && !route.query.continue && !route.query.handoff);
 let initialDraftSignature = '';
 watch(
   () => [modelDefaultsReady.value, creditUsage.ready, creditUsage.data?.asOf, platformGenerationSelected.value, platformVideoModels.value],
   () => {
     if (!initialSelectionPending.value || !initialDraftSignature || !modelDefaultsReady.value || !platformGenerationSelected.value || !creditUsage.ready || !platformVideoModels.value.length) return;
     initialSelectionPending.value = false;
-    if (JSON.stringify(form) !== initialDraftSignature) return;
+    const original = JSON.parse(initialDraftSignature);
+    const automaticModel = form.model === original.model || form.model === store.settings?.default_model_id || form.model === store.settings?.default_model;
+    if (!automaticModel || Object.keys(original).some(key => key !== 'model' && (form as unknown as Record<string, unknown>)[key] !== original[key])) return;
     const current = creditUsage.canPay('video', form.model, form.resolution, form.duration);
     if (current) return;
     const next = creditUsage.data?.combinations.find(row => row.context.mediaType === 'video'
@@ -799,6 +801,7 @@ function clampToPlatformModel() {
 }
 
 function selectModel(model: string) {
+  initialSelectionPending.value = false;
   form.model = model as SeedanceModel;
   if (platformGenerationSelected.value) clampToPlatformModel();
   else fixResolution();
