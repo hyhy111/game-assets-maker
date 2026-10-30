@@ -309,7 +309,7 @@
           <div class="ml-auto flex min-w-0 items-center gap-3 pl-2">
             <div v-if="showCreditEstimate" class="text-right" data-test="generation-credits" aria-live="polite">
               <p v-if="quoteLoading" class="text-sm text-gray-500">{{ t('aiCreation.platformQuoteLoading') }}</p>
-              <p v-else-if="quoteValue !== null" class="text-sm text-gray-300">{{ t('aiCreation.estimatedCredits', { credits: quoteValue }) }}<span v-if="bonusPayment" class="ml-1 text-xs text-primary">({{ t(bonusPayment.general > 0 ? 'creditUsage.payment' : 'creditUsage.bonusOnly', bonusPayment) }})</span></p>
+              <p v-else-if="quoteValue !== null" class="text-sm text-gray-300">{{ t('aiCreation.estimatedCredits', { credits: quoteValue }) }}</p>
               <p v-else-if="creditUsage.error" class="max-w-[16rem] text-xs leading-5 text-warning">{{ t('creditUsage.unavailable') }} <button type="button" class="underline" @click="creditUsage.refresh()">{{ t('creditUsage.refresh') }}</button></p>
               <p v-else-if="quoteError" class="max-w-[16rem] text-xs leading-5 text-warning">{{ t('aiCreation.platformQuoteFailed', { message: quoteError }) }}</p>
               <p v-else class="text-sm text-gray-500">{{ t('aiCreation.creditsUnavailable') }}</p>
@@ -547,12 +547,6 @@ const quoteReady = computed(() => (
 // 平台源报价（quote-preview）：编辑页参数一变就刷新，弹窗确认前必须有值。
 const quoteLoading = ref(false);
 const quoteValue = ref<number | null>(null);
-const bonusPayment = computed(() => {
-  if (!creditUsage.ready || quoteValue.value === null) return null;
-  const row = creditUsage.matching('video', form.model, form.resolution, form.duration)[0];
-  const bonus = Math.min(row?.bonusAvailable ?? 0, quoteValue.value);
-  return bonus > 0 ? { bonus, general: quoteValue.value - bonus } : null;
-});
 const quoteError = ref('');
 const platformConfirmBlocked = computed(() => (
   platformGenerationSelected.value && (quoteLoading.value || quoteError.value !== '' || quoteValue.value === null)

@@ -239,7 +239,7 @@
           <div class="ml-auto flex min-w-0 items-center gap-3 pl-2">
             <div v-if="showCreditEstimate" class="text-right" data-test="generation-credits" aria-live="polite">
               <p v-if="quoteLoading" class="text-sm text-gray-500">{{ t('aiCreation.platformQuoteLoading') }}</p>
-              <p v-else-if="platformQuoteTotal !== null" class="text-sm text-gray-300">{{ t('aiCreation.estimatedCredits', { credits: platformQuoteTotal }) }}<span v-if="bonusPayment" class="ml-1 text-xs text-primary">({{ t(bonusPayment.general > 0 ? 'creditUsage.payment' : 'creditUsage.bonusOnly', bonusPayment) }})</span></p>
+              <p v-else-if="platformQuoteTotal !== null" class="text-sm text-gray-300">{{ t('aiCreation.estimatedCredits', { credits: platformQuoteTotal }) }}</p>
               <p v-else-if="creditUsage.error" class="max-w-[16rem] text-xs leading-5 text-warning">{{ t('creditUsage.unavailable') }} <button type="button" class="underline" @click="creditUsage.refresh()">{{ t('creditUsage.refresh') }}</button></p>
               <p v-else-if="quoteError" class="max-w-[16rem] text-xs leading-5 text-warning">{{ t('aiCreation.platformQuoteFailed', { message: quoteError }) }}</p>
               <p v-else class="text-sm text-gray-500">{{ t('aiCreation.creditsUnavailable') }}</p>
@@ -455,12 +455,6 @@ const quoteError = ref('');
 const platformQuoteTotal = computed(() => (
   quoteUnit.value === null ? null : quoteUnit.value * form.count
 ));
-const bonusPayment = computed(() => {
-  if (!creditUsage.ready || platformQuoteTotal.value === null) return null;
-  const row = creditUsage.matching('image', form.model, form.resolution)[0];
-  const bonus = Math.min(row?.bonusAvailable ?? 0, platformQuoteTotal.value);
-  return bonus > 0 ? { bonus, general: platformQuoteTotal.value - bonus } : null;
-});
 const platformConfirmBlocked = computed(() => platformGenerationSelected.value && (!creditUsage.canPay('image', form.model, form.resolution, undefined, form.count) || quoteLoading.value || !!quoteError.value || quoteUnit.value === null));
 const QUOTE_DEBOUNCE_MS = 350;
 let quoteTimer: ReturnType<typeof setTimeout> | null = null;

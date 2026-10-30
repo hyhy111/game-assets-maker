@@ -6,8 +6,6 @@ export default {
     refresh: 'Refresh credits',
     balance: 'General credits {general} · Bonus credits {bonus}',
     insufficient: 'Insufficient eligible credits. You need {amount} more.',
-    bonusOnly: 'Bonus {bonus}',
-    payment: 'Bonus {bonus} + general {general}',
     invalidSelection: 'This model or specification is unavailable. Choose another combination.',
     priority: 'Eligible bonus credits are used first, ordered by expiry. General credits cover the rest. This estimate is checked again on submission.',
     scope: 'View credit usage rules',
