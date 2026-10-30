@@ -92,9 +92,7 @@ function onSubscribe() {
           class="max-h-72 overflow-y-auto px-3 py-3 flex flex-col gap-2.5"
         >
           <div v-for="b in buckets" :key="b.bucketId">
-            <CreditBucketRow :bucket="b" />
-            <p v-if="bonusDetail(b.bucketId)" class="mt-1 px-2 text-xs text-gray-400">{{ t('creditUsage.bonusScope', { scope: bonusDetail(b.bucketId)?.usageSummary }) }}</p>
-            <p v-if="bonusDetail(b.bucketId)?.message" class="px-2 text-xs text-warning">{{ bonusDetail(b.bucketId)?.message }}</p>
+            <CreditBucketRow :bucket="b" :scope="bonusDetail(b.bucketId)?.usageSummary" :scope-message="bonusDetail(b.bucketId)?.message" />
           </div>
         </div>
       </PopoverPanel>

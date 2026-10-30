@@ -1,5 +1,7 @@
 export default {
   creditUsage: {
+    availableModels: 'Available models: ',
+    viewModels: 'View all eligible models and specifications',
     bonusScope: 'Bonus credits · {scope}',
     loading: 'Updating credit availability…',
     unavailable: 'Credit availability could not be loaded. Refresh to retry.',

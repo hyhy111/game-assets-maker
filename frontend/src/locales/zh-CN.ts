@@ -1,5 +1,7 @@
 export default {
   creditUsage: {
+    availableModels: '可用模型：',
+    viewModels: '查看完整可用模型及规格',
     bonusScope: '赠送积分 · {scope}',
     loading: '正在更新积分使用范围…',
     unavailable: '暂时无法获取积分使用范围，请刷新后重试。',
