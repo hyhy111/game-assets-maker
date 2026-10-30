@@ -239,7 +239,7 @@
           <div class="ml-auto flex min-w-0 items-center gap-3 pl-2">
             <div v-if="showCreditEstimate" class="text-right" data-test="generation-credits" aria-live="polite">
               <p v-if="quoteLoading" class="text-sm text-gray-500">{{ t('aiCreation.platformQuoteLoading') }}</p>
-              <p v-else-if="platformQuoteTotal !== null" class="text-sm text-gray-300">{{ t('aiCreation.estimatedCredits', { credits: platformQuoteTotal }) }}<span v-if="bonusPayment" class="ml-1 text-xs text-primary">({{ t('creditUsage.payment', bonusPayment) }})</span></p>
+              <p v-else-if="platformQuoteTotal !== null" class="text-sm text-gray-300">{{ t('aiCreation.estimatedCredits', { credits: platformQuoteTotal }) }}<span v-if="bonusPayment" class="ml-1 text-xs text-primary">({{ t(bonusPayment.general > 0 ? 'creditUsage.payment' : 'creditUsage.bonusOnly', bonusPayment) }})</span></p>
               <p v-else-if="creditUsage.error" class="max-w-[16rem] text-xs leading-5 text-warning">{{ t('creditUsage.unavailable') }} <button type="button" class="underline" @click="creditUsage.refresh()">{{ t('creditUsage.refresh') }}</button></p>
               <p v-else-if="quoteError" class="max-w-[16rem] text-xs leading-5 text-warning">{{ t('aiCreation.platformQuoteFailed', { message: quoteError }) }}</p>
               <p v-else class="text-sm text-gray-500">{{ t('aiCreation.creditsUnavailable') }}</p>
@@ -573,6 +573,27 @@ function clampToPlatformModel() {
 }
 const paidConfirmationEnabled = computed(() => configStore.config?.paid_generation_confirmation_enabled !== false);
 
+// Only an untouched initial draft may receive an automatic payable default.
+const initialSelectionPending = ref(!workspace.imageDraftChanged() && !route.query.regenerate && !route.query.continue && !route.query.handoff);
+let initialDraftSignature = '';
+watch(
+  () => [modelDefaultsReady.value, creditUsage.ready, creditUsage.data?.asOf, platformGenerationSelected.value, platformImageModels.value],
+  () => {
+    if (!initialSelectionPending.value || !initialDraftSignature || !modelDefaultsReady.value || !platformGenerationSelected.value || !creditUsage.ready || !platformImageModels.value.length) return;
+    initialSelectionPending.value = false;
+    if (JSON.stringify(form) !== initialDraftSignature) return;
+    const current = creditUsage.canPay('image', form.model, form.resolution, undefined, form.count);
+    if (current) return;
+    const next = creditUsage.data?.combinations.find(row => row.context.mediaType === 'image'
+      && platformImageModels.value.some(model => model.model === row.context.model)
+      && creditUsage.canPay('image', row.context.model, row.context.sizeLabel ?? undefined, undefined, form.count));
+    if (!next) return;
+    form.model = next.context.model as typeof form.model;
+    form.resolution = next.context.sizeLabel as typeof form.resolution;
+  },
+  { flush: 'post' },
+);
+
 onMounted(async () => {
   if (!store.settings) {
     await store.loadSettings();
@@ -587,6 +608,7 @@ onMounted(async () => {
     resolution: correctResolution(settings?.default_model ?? 'pro', settings?.default_resolution ?? '2K'),
     ratio: settings?.default_ratio ?? '16:9',
   }, settings?.default_model_id);
+  initialDraftSignature = JSON.stringify(form);
   modelDefaultsReady.value = true;
   if (!platformGenerationSelected.value) fixResolution();
   const regenerateId = typeof route.query.regenerate === 'string' ? route.query.regenerate : '';

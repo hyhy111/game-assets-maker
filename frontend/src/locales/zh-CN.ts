@@ -6,6 +6,7 @@ export default {
     refresh: '刷新积分',
     balance: '通用积分 {general} · 赠送积分 {bonus}',
     insufficient: '当前组合可用积分不足，还差 {amount} 积分。',
+    bonusOnly: '赠送 {bonus}',
     payment: '赠送 {bonus} + 通用 {general}',
     invalidSelection: '当前模型或规格已不可用，请手动选择其他组合。',
     priority: '符合范围的赠送积分优先按到期时间使用，不足由通用积分补足。分摊为估算，提交时重新校验。',

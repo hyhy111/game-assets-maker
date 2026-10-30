@@ -309,7 +309,7 @@
           <div class="ml-auto flex min-w-0 items-center gap-3 pl-2">
             <div v-if="showCreditEstimate" class="text-right" data-test="generation-credits" aria-live="polite">
               <p v-if="quoteLoading" class="text-sm text-gray-500">{{ t('aiCreation.platformQuoteLoading') }}</p>
-              <p v-else-if="quoteValue !== null" class="text-sm text-gray-300">{{ t('aiCreation.estimatedCredits', { credits: quoteValue }) }}<span v-if="bonusPayment" class="ml-1 text-xs text-primary">({{ t('creditUsage.payment', bonusPayment) }})</span></p>
+              <p v-else-if="quoteValue !== null" class="text-sm text-gray-300">{{ t('aiCreation.estimatedCredits', { credits: quoteValue }) }}<span v-if="bonusPayment" class="ml-1 text-xs text-primary">({{ t(bonusPayment.general > 0 ? 'creditUsage.payment' : 'creditUsage.bonusOnly', bonusPayment) }})</span></p>
               <p v-else-if="creditUsage.error" class="max-w-[16rem] text-xs leading-5 text-warning">{{ t('creditUsage.unavailable') }} <button type="button" class="underline" @click="creditUsage.refresh()">{{ t('creditUsage.refresh') }}</button></p>
               <p v-else-if="quoteError" class="max-w-[16rem] text-xs leading-5 text-warning">{{ t('aiCreation.platformQuoteFailed', { message: quoteError }) }}</p>
               <p v-else class="text-sm text-gray-500">{{ t('aiCreation.creditsUnavailable') }}</p>
@@ -651,6 +651,28 @@ async function copyPrompt() {
   }
 }
 
+// Only an untouched initial draft may receive an automatic payable default.
+const initialSelectionPending = ref(!workspace.videoDraftChanged() && !route.query.regenerate && !route.query.continue && !route.query.handoff);
+let initialDraftSignature = '';
+watch(
+  () => [modelDefaultsReady.value, creditUsage.ready, creditUsage.data?.asOf, platformGenerationSelected.value, platformVideoModels.value],
+  () => {
+    if (!initialSelectionPending.value || !initialDraftSignature || !modelDefaultsReady.value || !platformGenerationSelected.value || !creditUsage.ready || !platformVideoModels.value.length) return;
+    initialSelectionPending.value = false;
+    if (JSON.stringify(form) !== initialDraftSignature) return;
+    const current = creditUsage.canPay('video', form.model, form.resolution, form.duration);
+    if (current) return;
+    const next = creditUsage.data?.combinations.find(row => row.context.mediaType === 'video'
+      && platformVideoModels.value.some(model => model.model === row.context.model)
+      && creditUsage.canPay('video', row.context.model, row.context.resolution ?? undefined, row.context.durationSec ?? undefined));
+    if (!next) return;
+    form.model = next.context.model as typeof form.model;
+    form.resolution = next.context.resolution as typeof form.resolution;
+    form.duration = next.context.durationSec as typeof form.duration;
+  },
+  { flush: 'post' },
+);
+
 onMounted(async () => {
   await store.loadSettings();
   const settings = store.settings;
@@ -671,6 +693,7 @@ onMounted(async () => {
   if (platformGenerationSelected.value) {
     form.return_last_frame = false;
   }
+  initialDraftSignature = JSON.stringify(form);
 
   const regenerateId = typeof route.query.regenerate === 'string' ? route.query.regenerate : '';
   const continuationId = typeof route.query.continue === 'string' ? route.query.continue : '';
