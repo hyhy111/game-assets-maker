@@ -42,6 +42,7 @@ export default {
     sessionExpired: 'Session expired',
   },
   billing: {
+    expiresAt: 'Expires {date}',
     title: 'My Credits',
     fallbackName: 'Credits',
     acquired: 'Acquired {date}',

@@ -27,4 +27,6 @@ test('model scope belongs to its card and expiry does not repeat the balance', a
   assert.match(html, /truncate[^>]*>可用模型：model-a/);
   assert.match(html, /查看完整可用模型及规格/);
   assert.doesNotMatch(html, /剩 100 ·/);
+  assert.match(html, /2099-01-01 到期/);
+  assert.doesNotMatch(html, /billing\.expiresAt/);
 });

@@ -42,6 +42,7 @@ export default {
     sessionExpired: '登录已过期',
   },
   billing: {
+    expiresAt: '{date} 到期',
     title: '我的积分',
     fallbackName: '积分',
     acquired: '{date} 获得',
