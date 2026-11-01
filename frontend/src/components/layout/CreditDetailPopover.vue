@@ -36,8 +36,8 @@ function onSubscribe() {
   <Popover class="relative">
     <PopoverButton
       type="button"
-      class="flex items-center gap-1 px-2 py-1 rounded-lg text-sm text-gray-300 hover:bg-dark-border transition-colors"
-      :title="t('header.creditBalance')"
+      class="control-tooltip control-tooltip--below flex items-center gap-1 px-2 py-1 rounded-lg text-sm text-gray-300 hover:bg-dark-border transition-colors"
+      :aria-label="t('header.creditBalance')"
       data-test="credit-balance-button"
     >
       <Coins class="w-4 h-4 text-primary" />

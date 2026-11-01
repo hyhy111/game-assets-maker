@@ -135,7 +135,8 @@
           type="button"
           class="rounded border border-dark-border px-2 py-1 text-gray-300 transition hover:border-gray-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
           :disabled="!hasValidSelection || !audioBuffer || audioMuted"
-          :title="audioMuted ? '已静音' : ''"
+          :class="{ 'control-tooltip': audioMuted }"
+          :data-tooltip="audioMuted ? '已静音' : undefined"
           data-test="preview-audio-selection"
           @click="previewSelection"
         >

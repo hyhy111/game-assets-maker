@@ -157,6 +157,21 @@ def api(isolated_workspace):
         api_instance._seedance_api_instance.shutdown()
 
 
+def wait_for_model(api, timeout: float = 60.0) -> None:
+    deadline = time.time() + timeout
+    status = api.get_model_status("u2net")
+    if status["phase"] == "needs_download":
+        pytest.skip(
+            "u2net rembg model is not installed; prepare it explicitly with "
+            "`uv run python scripts/download_models.py u2net`"
+        )
+    status = api.preload_model("u2net")
+    while status["phase"] not in {"ready", "failed"} and time.time() < deadline:
+        time.sleep(0.1)
+        status = api.get_model_status("u2net")
+    assert status["phase"] == "ready", f"Step 2 model preparation failed: {status}"
+
+
 def wait_for_task(api, task_id: str, timeout: float = 20.0):
     deadline = time.time() + timeout
     while time.time() < deadline:

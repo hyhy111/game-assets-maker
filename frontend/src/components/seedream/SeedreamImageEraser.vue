@@ -43,7 +43,8 @@
         type="button"
         class="inline-flex h-8 items-center justify-center rounded-lg bg-success px-3 text-sm font-medium text-white transition-colors hover:bg-success/80 disabled:cursor-not-allowed disabled:opacity-50"
         :disabled="saving || loading || suspended || drawing || (magicWandEnabled ? !originalImageUrl : !dirty && !externalRestoreAvailable)"
-        :title="magicWandEnabled ? t(originalImageUrl ? 'magicWand.restoreInitialHint' : initialRestoreUnsupported ? 'magicWand.restoreRestartRequired' : 'magicWand.initialUnavailable') : undefined"
+        :class="magicWandEnabled ? 'control-tooltip control-tooltip--below control-tooltip--end' : ''"
+        :data-tooltip="magicWandEnabled ? t(originalImageUrl ? 'magicWand.restoreInitialHint' : initialRestoreUnsupported ? 'magicWand.restoreRestartRequired' : 'magicWand.initialUnavailable') : undefined"
         data-test="image-editor-restore-original"
         @click="restoreOriginal"
       >

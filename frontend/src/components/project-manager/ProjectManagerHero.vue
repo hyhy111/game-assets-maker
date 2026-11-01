@@ -3,7 +3,8 @@
     class="project-manager-hero relative overflow-hidden border-b border-dark-border"
     data-test="project-manager-hero"
   >
-    <div class="relative mx-auto flex max-w-[1320px] flex-col items-center gap-10 px-4 py-14 sm:px-6 lg:flex-row lg:py-20">
+    <!-- Compensate the 80% scale to retain the library's 1320px grid and gutters. -->
+    <div class="relative mx-auto flex max-w-[1650px] flex-col items-center gap-10 px-5 py-14 sm:px-[30px] lg:flex-row lg:py-20">
       <div class="flex-1 text-center lg:text-left">
         <h1 class="text-4xl font-bold leading-[1.1] tracking-tight text-white sm:text-5xl lg:text-6xl">
           Prompt →<br>
@@ -25,14 +26,14 @@
           </Button>
         </div>
 
-        <div class="mt-10 flex flex-wrap items-center justify-center gap-x-6 gap-y-3 text-xs text-gray-500 lg:justify-start">
+        <div class="mt-10 flex flex-wrap items-center justify-center gap-x-6 gap-y-3 text-base text-gray-500 lg:justify-start">
           <span
             v-for="capability in capabilities"
             :key="capability.label"
-            class="flex items-center gap-1.5"
+            class="flex items-center gap-2"
           >
             <span
-              class="h-2 w-2 rounded-sm"
+              class="h-3 w-3 rounded-sm"
               :class="capability.color"
             />
             {{ capability.label }}
@@ -40,7 +41,7 @@
         </div>
       </div>
 
-      <div class="flex w-full flex-1 items-center justify-center lg:justify-end">
+      <div class="flex w-full flex-1 items-center justify-center">
         <div
           class="creation-flow"
           :aria-label="t('projectManager.heroFlowLabel')"
@@ -325,6 +326,7 @@ function advanceFlow() {
 <style scoped>
 .project-manager-hero {
   background: #171717;
+  zoom: 0.8;
 }
 
 .creation-flow {

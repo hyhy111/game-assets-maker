@@ -534,6 +534,15 @@ class BatchTrimAPI:
     def _execute_trim(self, params: dict[str, Any]) -> list[dict[str, Any]]:
         project_ids = params.get("projectIds", [])
         mode = params.get("mode", "global")
+        retry_box = params.get("globalCropBox") if mode == "global" else None
+        if retry_box is not None and (
+            not isinstance(retry_box, (list, tuple))
+            or len(retry_box) != 4
+            or any(type(value) is not int or value < 0 for value in retry_box)
+            or retry_box[0] >= retry_box[2]
+            or retry_box[1] >= retry_box[3]
+        ):
+            raise ValueError("Invalid global crop bounds")
         role_output_roots = self._get_role_output_roots(project_ids)
 
         results = []
@@ -548,7 +557,8 @@ class BatchTrimAPI:
                     all_frames_data.extend(frames)
 
             # Compute global bounds.
-            global_bbox = self._compute_global_bbox(all_frames_data)
+            # Retrying a subset must keep the first export's shared canvas size.
+            global_bbox = tuple(retry_box) if retry_box is not None else self._compute_global_bbox(all_frames_data)
 
             # Crop all projects.
             for project_id in project_ids:
@@ -600,4 +610,7 @@ class BatchTrimAPI:
                         }
                     )
 
+        if mode == "global" and global_bbox[2] > global_bbox[0] and global_bbox[3] > global_bbox[1]:
+            for result in results:
+                result["globalCropBox"] = list(global_bbox)
         return results

@@ -2,28 +2,15 @@ from __future__ import annotations
 
 import base64
 import json
-import time
 from pathlib import Path
 
 import pytest
 from PIL import Image
 
 from backend.core.smart_remove_background import check_model_available
-from tests.conftest import wait_for_task
+from tests.conftest import wait_for_model, wait_for_task
 
 MODEL_PREPARATION = "uv run python scripts/download_models.py u2net"
-
-
-def _wait_for_model(api, timeout: float = 60.0) -> None:
-    deadline = time.time() + timeout
-    status = api.get_model_status("u2net")
-    if status["phase"] == "needs_download":
-        pytest.skip(f"u2net rembg model is not installed; prepare it explicitly with `{MODEL_PREPARATION}`")
-    status = api.preload_model("u2net")
-    while status["phase"] not in {"ready", "failed"} and time.time() < deadline:
-        time.sleep(0.1)
-        status = api.get_model_status("u2net")
-    assert status["phase"] == "ready", f"Step 2 model preparation failed: {status}"
 
 
 def _run_step(api, project_id: str, step: int, params: dict, timeout: float) -> None:
@@ -62,7 +49,7 @@ def test_real_local_media_reaches_preview_and_both_batch_trim_modes(api, test_as
     with Image.open(step1_frames["frames"][0]["path"]) as image:
         expected_size = image.size
 
-    _wait_for_model(api)
+    wait_for_model(api)
     assert api.get_model_status("u2net")["phase"] == "ready"
     _run_step(
         api,
@@ -93,7 +80,7 @@ def test_real_local_media_reaches_preview_and_both_batch_trim_modes(api, test_as
     preview = api.get_frames(project["id"], 3, page=1, page_size=10)
     assert preview["total"] == expected_frame_count
     first_frame = preview["frames"][0]
-    assert first_frame["url"].startswith("http://localhost:8080/project/")
+    assert first_frame["url"].startswith("http://localhost:8080/project-media/")
     assert base64.b64decode(api.get_frame_image(first_frame["path"])).startswith(b"\x89PNG")
     assert base64.b64decode(api.get_frame_thumbnail(first_frame["path"], 32)).startswith(b"\x89PNG")
 
@@ -115,19 +102,15 @@ def test_real_local_media_reaches_preview_and_both_batch_trim_modes(api, test_as
         }
     ]
 
-    global_result = api.execute_batch_trim(
-        {"projectIds": [project["id"]], "mode": "global", "outputDir": ""}
-    )[0]
+    global_result = api.execute_batch_trim({"projectIds": [project["id"]], "mode": "global", "outputDir": ""})[0]
     assert global_result["status"] == "success"
     assert len(list(Path(global_result["outputPath"]).glob("*.png"))) == expected_frame_count
 
-    individual_result = api.execute_batch_trim(
-        {"projectIds": [project["id"]], "mode": "individual", "outputDir": ""}
-    )[0]
+    individual_result = api.execute_batch_trim({"projectIds": [project["id"]], "mode": "individual", "outputDir": ""})[
+        0
+    ]
     assert individual_result["status"] == "success"
-    metadata = json.loads(
-        (Path(individual_result["outputPath"]) / "_frame_data.json").read_text(encoding="utf-8")
-    )
+    metadata = json.loads((Path(individual_result["outputPath"]) / "_frame_data.json").read_text(encoding="utf-8"))
     assert metadata["project_id"] == project["id"]
     assert len(metadata["frames"]) == expected_frame_count
     assert all(set(frame["offset"]) == {"x", "y"} for frame in metadata["frames"])

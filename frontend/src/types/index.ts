@@ -572,12 +572,14 @@ export interface BatchTrimResult {
   audioClipCount?: number;
   audioSkippedCount?: number;
   audioErrors?: string[];
+  globalCropBox?: [number, number, number, number];
 }
 
 export interface BatchTrimParams {
   projectIds: string[];
   mode: 'global' | 'individual';
   outputDir: string;
+  globalCropBox?: [number, number, number, number];
 }
 
 /**

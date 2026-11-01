@@ -135,6 +135,9 @@
                 {{ t('seedance.ui.chooseFolder') }}
               </Button>
             </span>
+            <span class="mt-2 block text-xs text-[var(--seedance-muted)]">
+              {{ t('storage.projectDirHint') }}
+            </span>
           </label>
           <label class="text-sm text-gray-300">
             {{ t('storage.aiCacheDir') }}
@@ -143,6 +146,9 @@
               <Button type="button" class="h-[42px] shrink-0" @click="selectStorageDirectory('cache_dir')">
                 {{ t('seedance.ui.chooseFolder') }}
               </Button>
+            </span>
+            <span class="mt-2 block text-xs text-[var(--seedance-muted)]">
+              {{ t('storage.aiCacheDirHint') }}
             </span>
           </label>
         </div>
@@ -442,21 +448,26 @@
       aria-modal="true"
       aria-labelledby="unsaved-settings-title"
       aria-describedby="unsaved-settings-description"
+      :aria-busy="saving"
       @keydown="onLeaveKeydown"
       @click.self="continueEditing"
     >
-      <div class="max-w-md rounded-xl border border-dark-border bg-dark-surface p-6">
+      <div class="w-full max-w-xl rounded-xl border border-dark-border bg-dark-surface p-6">
         <h2 id="unsaved-settings-title" class="text-lg font-semibold text-white">
           {{ t('seedance.settings.unsavedTitle') }}
         </h2>
         <p id="unsaved-settings-description" class="mt-3 text-gray-300">
           {{ t('seedance.settings.unsavedDescription') }}
         </p>
-        <div class="mt-5 flex justify-end gap-2">
-          <Button type="button" variant="secondary" @click="continueEditing">
+        <p v-if="leaveError" class="mt-3 text-sm text-danger" role="alert">{{ leaveError }}</p>
+        <div class="mt-5 flex flex-wrap justify-end gap-2">
+          <Button type="button" :loading="saving" :disabled="!settingsReady" data-test="settings-save-and-leave" @click="saveAndLeave">
+            {{ t('seedance.settings.saveAndLeave') }}
+          </Button>
+          <Button type="button" variant="secondary" :disabled="saving" data-test="settings-continue-editing" @click="continueEditing">
             {{ t('seedance.settings.continueEditing') }}
           </Button>
-          <Button type="button" variant="danger" @click="discardAndLeave">
+          <Button type="button" variant="danger" :disabled="saving" @click="discardAndLeave">
             {{ t('seedance.settings.discardAndLeave') }}
           </Button>
         </div>
@@ -479,6 +490,7 @@ import GamSkillsSettings from '@/components/settings/GamSkillsSettings.vue';
 import SeedancePageBar from '@/components/seedance/SeedancePageBar.vue';
 import SeedancePanel from '@/components/seedance/SeedancePanel.vue';
 import { trapModalTab } from '@/modal-focus';
+import { storageRootForSelection } from '@/storage-paths';
 import { correctDuration, correctResolution, DURATION_OPTIONS, formatBytes, MODEL_RESOLUTIONS, validationIssueForApiError } from '@/seedance-ui';
 import {
   ALLOWED_COUNTS,
@@ -488,6 +500,7 @@ import {
   MODEL_RESOLUTIONS as SEEDREAM_MODEL_RESOLUTIONS,
 } from '@/seedream-ui';
 import { useConfigStore } from '@/stores/config';
+import { useProjectStore } from '@/stores/project';
 import { useSeedanceStore } from '@/stores/seedance';
 import { useSeedreamStore } from '@/stores/seedream';
 import type {
@@ -505,6 +518,7 @@ const router = useRouter();
 const store = useSeedanceStore();
 const seedreamStore = useSeedreamStore();
 const configStore = useConfigStore();
+const projectStore = useProjectStore();
 const apiKey = ref('');
 const connectionResult = ref('');
 const cleaned = ref<SeedanceCacheCleanResult | null>(null);
@@ -513,6 +527,7 @@ const clearModalRoot = ref<HTMLElement | null>(null);
 const confirmCacheClean = ref(false);
 const cacheCleanModalRoot = ref<HTMLElement | null>(null);
 const confirmLeave = ref(false);
+const leaveError = ref('');
 const leaveModalRoot = ref<HTMLElement | null>(null);
 const savedSnapshot = ref('');
 const pendingRoute = ref('');
@@ -692,6 +707,7 @@ onBeforeRouteLeave((to) => {
   // A committed migration makes this runtime stale: the only allowed exits
   // are the one-click restart or closing the app from the blocking overlay.
   if (restartRequired.value) return false;
+  if (saving.value) return false;
   if (!hasUnsavedChanges.value || allowPendingNavigation) {
     allowPendingNavigation = false;
     return true;
@@ -723,11 +739,13 @@ function markSettingsSaved() {
 
 function openLeaveConfirmation() {
   leaveTrigger = document.activeElement as HTMLElement;
+  leaveError.value = '';
   confirmLeave.value = true;
-  void nextTick(() => leaveModalRoot.value?.querySelector<HTMLElement>('button:not([disabled])')?.focus());
+  void nextTick(() => leaveModalRoot.value?.querySelector<HTMLElement>('[data-test="settings-continue-editing"]')?.focus());
 }
 
 function continueEditing() {
+  if (saving.value) return;
   confirmLeave.value = false;
   pendingRoute.value = '';
   leaveTrigger?.focus();
@@ -735,11 +753,36 @@ function continueEditing() {
 }
 
 async function discardAndLeave() {
+  if (saving.value) return;
   const destination = pendingRoute.value;
   confirmLeave.value = false;
   pendingRoute.value = '';
   allowPendingNavigation = true;
   await router.push(destination);
+}
+
+async function saveAndLeave() {
+  if (saving.value || !confirmLeave.value) return;
+  leaveError.value = '';
+  try {
+    const saved = await save();
+    if (migrationSummary.value) {
+      // Storage changes must finish the existing migration and restart flow.
+      confirmLeave.value = false;
+      pendingRoute.value = '';
+      return;
+    }
+    if (!saved) {
+      leaveError.value = settingsError.value || migrationError.value || t('seedance.settings.saveFailed');
+      return;
+    }
+    confirmLeave.value = false;
+    pendingRoute.value = '';
+    const failure = await router.push('/');
+    if (!failure) projectStore.setCurrentProject(null);
+  } catch {
+    leaveError.value = settingsError.value || migrationError.value || t('seedance.settings.saveFailed');
+  }
 }
 
 function onLeaveKeydown(event: KeyboardEvent) {
@@ -752,7 +795,11 @@ function onLeaveKeydown(event: KeyboardEvent) {
 
 async function selectStorageDirectory(field: 'project_dir' | 'cache_dir') {
   const path = await api.system.selectDirectory();
-  if (path) storageDraft[field] = path;
+  if (!path) return;
+  const currentRoot = field === 'project_dir'
+    ? storageSettings.value?.projects_root
+    : storageSettings.value?.ai_cache_root;
+  storageDraft[field] = storageRootForSelection(path, field === 'project_dir' ? 'project' : 'cache', currentRoot);
 }
 
 async function testConnection() {
@@ -824,15 +871,18 @@ function onCacheCleanKeydown(event: KeyboardEvent) {
 
 async function save() {
   if (!settingsReady.value) return;
+  if (saving.value) return false;
   saving.value = true;
   saveFeedback.value = '';
   migrationError.value = '';
-  if (storagePathsChanged.value) {
-    await saveWithMigrationCheck();
-  } else {
-    await savePlain();
+  try {
+    if (storagePathsChanged.value) {
+      return await saveWithMigrationCheck();
+    }
+    return await savePlain();
+  } finally {
+    saving.value = false;
   }
-  saving.value = false;
 }
 
 async function requestCliGenerationEnabled(enabled: boolean) {
@@ -892,6 +942,7 @@ async function savePlain() {
     markSettingsSaved();
     saveFeedback.value = t('seedance.settings.saved');
   }
+  return Boolean(seedreamSaved);
 }
 
 async function saveWithMigrationCheck() {
@@ -913,14 +964,14 @@ async function saveWithMigrationCheck() {
   const result = await api.storage.saveSettings(combined);
   if (!result.success) {
     migrationError.value = result.error.message;
-    return;
+    return false;
   }
   if (!result.migration_required) {
     // Plain save (equivalent path spellings): no migration to fail, so rebuild
     // the Seedance manager for a newly entered key like the normal flow does.
     if (apiKey.value) {
       const keySaved = await store.saveSettings({ api_key: apiKey.value });
-      if (!keySaved) return;
+      if (!keySaved) return false;
     }
     apiKey.value = '';
     if (storageSettings.value) {
@@ -932,9 +983,10 @@ async function saveWithMigrationCheck() {
     }
     markSettingsSaved();
     saveFeedback.value = t('seedance.settings.saved');
-    return;
+    return true;
   }
   migrationSummary.value = result.migration;
+  return false;
 }
 
 function closeMigrationConfirmation() {

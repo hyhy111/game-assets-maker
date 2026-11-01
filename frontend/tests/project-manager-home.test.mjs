@@ -142,7 +142,7 @@ test('project manager selects and directly trims animation cards', async () => {
   assert.match(manager, /:variant="selectedInRole\(selectedGroup\) > 0 \? 'primary' : 'ghost'"/);
   assert.match(manager, /api\.batchTrim\.executeTrim\(\{/);
   assert.match(manager, /mode: trimMode\.value/);
-  assert.match(manager, /:show="showTrimSuccessModal"/);
+  assert.match(manager, /:show="showTrimResultsModal"/);
   assert.match(manager, /v-for="path in trimOutputDirectories"/);
   assert.match(manager, /api\.system\.openProjectFolder\(path\)/);
   assert.match(manager, /@click="toggleRoleSelection\(selectedGroup\)"/);

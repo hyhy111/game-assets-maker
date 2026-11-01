@@ -136,7 +136,7 @@
         :aria-label="audioPlaybackEnabled ? t('player.mute') : t('player.unmute')"
         :aria-pressed="!audioPlaybackEnabled"
         :class="[
-          'control-tooltip grid h-9 w-9 place-items-center rounded-lg border transition-colors',
+          'control-tooltip control-tooltip--end grid h-9 w-9 place-items-center rounded-lg border transition-colors',
           audioPlaybackEnabled
             ? 'border-dark-border text-gray-400 hover:border-gray-500 hover:text-white'
             : 'border-primary bg-primary/15 text-primary'

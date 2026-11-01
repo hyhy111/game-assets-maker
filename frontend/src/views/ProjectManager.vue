@@ -194,6 +194,10 @@
           class="library-workbench"
           data-test="project-manager-library-workbench"
         >
+          <div v-if="trimResults.length" class="col-span-full flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dark-border bg-dark-surface px-4 py-3" data-test="trim-feedback-summary" role="status">
+            <p class="text-sm text-gray-300">{{ t('projectManager.trimSummary', trimSummary) }}</p>
+            <Button size="sm" variant="secondary" @click="showTrimResultsModal = true">{{ t('projectManager.viewTrimResults') }}</Button>
+          </div>
           <aside
             class="role-dock"
             data-test="project-manager-role-dock"
@@ -616,15 +620,15 @@
       </Dialog>
     </TransitionRoot>
 
-    <!-- Trim success modal -->
+    <!-- Keep every export outcome visible and recoverable. -->
     <TransitionRoot
       as="template"
-      :show="showTrimSuccessModal"
+      :show="showTrimResultsModal"
     >
       <Dialog
         as="div"
         class="relative z-50"
-        @close="showTrimSuccessModal = false"
+        @close="showTrimResultsModal = false"
       >
         <TransitionChild
           as="template"
@@ -649,22 +653,45 @@
               leave-from="opacity-100 scale-100"
               leave-to="opacity-0 scale-95"
             >
-              <DialogPanel class="w-full max-w-lg rounded-xl border border-dark-border bg-dark-surface p-6 shadow-2xl">
+              <DialogPanel class="w-full max-w-2xl rounded-xl border border-dark-border bg-dark-surface p-6 shadow-2xl" data-test="trim-results-dialog">
                 <div class="flex items-start gap-3">
-                  <span class="grid h-10 w-10 flex-none place-items-center rounded-full bg-success/15 text-success">
-                    <CheckCircle class="h-5 w-5" />
+                  <span class="grid h-10 w-10 flex-none place-items-center rounded-full" :class="failedTrimIds.length ? 'bg-warning/15 text-warning' : 'bg-success/15 text-success'">
+                    <AlertTriangle v-if="failedTrimIds.length" class="h-5 w-5" />
+                    <CheckCircle v-else class="h-5 w-5" />
                   </span>
                   <div class="min-w-0 flex-1">
                     <DialogTitle class="text-lg font-semibold text-white">
-                      {{ t('projectManager.trimSuccessTitle') }}
+                      {{ trimResultTitle }}
                     </DialogTitle>
                     <p class="mt-1 text-sm text-gray-400">
-                      {{ t('projectManager.outputDirectory') }}
+                      {{ t('projectManager.trimSummary', trimSummary) }}
                     </p>
                   </div>
                 </div>
 
-                <div class="mt-5 space-y-2">
+                <p v-if="trimExecutionError" class="mt-4 text-sm text-danger" role="alert">{{ trimExecutionError }}</p>
+                <div class="mt-5 max-h-[40vh] space-y-3 overflow-y-auto" data-test="trim-animation-results">
+                  <div v-for="result in trimResults" :key="result.projectId" class="rounded-lg border border-dark-border bg-dark-bg p-3">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                      <h3 class="min-w-0 break-all text-sm font-medium text-white">{{ result.projectName || result.projectId }}</h3>
+                      <span class="text-xs" :class="result.status === 'success' ? 'text-success' : result.status === 'partial' ? 'text-warning' : 'text-danger'">{{ t(`projectManager.trimStatus.${result.status}`) }}</span>
+                    </div>
+                    <p v-if="result.successCount !== undefined || result.failedCount !== undefined" class="mt-1 text-xs text-gray-400">{{ t('projectManager.trimFrameSummary', { success: result.successCount ?? 0, failed: result.failedCount ?? 0 }) }}</p>
+                    <p class="mt-2 break-words text-sm" :class="result.status === 'success' ? 'text-gray-300' : 'text-amber-200'">{{ result.message }}</p>
+                    <code v-if="result.outputPath && result.status !== 'error'" class="mt-2 block break-all text-xs text-gray-400">{{ result.outputPath }}</code>
+                    <details v-if="result.failedFrames?.length || result.audioErrors?.length" class="mt-2 text-xs text-gray-400">
+                      <summary class="cursor-pointer text-gray-300">{{ t('projectManager.trimFailureDetails') }}</summary>
+                      <ul class="mt-2 space-y-1 break-words">
+                        <li v-for="(frame, index) in result.failedFrames" :key="`frame-${index}`">{{ frame.filename }} — {{ frame.reason }}</li>
+                        <li v-for="(error, index) in result.audioErrors" :key="`audio-${index}`">{{ error }}</li>
+                      </ul>
+                    </details>
+                  </div>
+                </div>
+                <p v-if="failedTrimIds.length" class="mt-3 text-xs leading-5 text-gray-400">{{ t('projectManager.trimRetryHint') }}</p>
+
+                <div v-if="trimOutputDirectories.length" class="mt-5 space-y-2">
+                  <p class="text-sm text-gray-300">{{ t('projectManager.outputDirectory') }}</p>
                   <div
                     v-for="path in trimOutputDirectories"
                     :key="path"
@@ -691,16 +718,21 @@
                   </div>
                 </div>
 
-                <div class="mt-6 flex justify-end gap-3">
+                <p v-if="trimDirectoryError" class="mt-3 text-sm text-danger" role="alert">{{ trimDirectoryError }}</p>
+                <div class="mt-6 flex flex-wrap justify-end gap-3">
                   <Button
                     variant="secondary"
-                    @click="showTrimSuccessModal = false"
+                    @click="showTrimResultsModal = false"
                   >
                     {{ t('projectManager.close') }}
                   </Button>
-                  <Button @click="openTrimOutputDirectories">
+                  <Button v-if="trimOutputDirectories.length" variant="secondary" @click="openTrimOutputDirectories">
                     <FolderOpen class="mr-2 h-4 w-4" />
                     {{ t('projectManager.openOutputDirectory') }}
+                  </Button>
+                  <Button v-if="failedTrimIds.length" :loading="trimmingRole !== null" data-test="retry-failed-trim" @click="retryFailedTrim">
+                    <RefreshCw class="mr-2 h-4 w-4" />
+                    {{ t('projectManager.retryFailedTrim') }}
                   </Button>
                 </div>
               </DialogPanel>
@@ -918,8 +950,24 @@ const cardsPerPage = ref(16);
 const selectedProjectIds = ref<Set<string>>(new Set());
 const trimMode = ref<'global' | 'individual'>('global');
 const trimmingRole = ref<string | null>(null);
-const showTrimSuccessModal = ref(false);
+const showTrimResultsModal = ref(false);
+const trimResults = ref<BatchTrimResult[]>([]);
+const trimRequest = ref<{ role: string; projectIds: string[]; mode: 'global' | 'individual' } | null>(null);
+const trimGlobalCropBox = ref<BatchTrimResult['globalCropBox']>();
+const trimExecutionError = ref('');
+const trimDirectoryError = ref('');
 const trimOutputDirectories = ref<string[]>([]);
+const failedTrimIds = computed(() => trimResults.value.filter(result => result.status !== 'success').map(result => result.projectId));
+const trimSummary = computed(() => ({
+  success: trimResults.value.filter(result => result.status === 'success').length,
+  partial: trimResults.value.filter(result => result.status === 'partial').length,
+  failed: trimResults.value.filter(result => result.status === 'error').length,
+}));
+const trimResultTitle = computed(() => t(
+  !failedTrimIds.value.length ? 'projectManager.trimSuccessTitle'
+    : trimResults.value.some(result => result.status !== 'error') ? 'projectManager.trimPartialTitle'
+      : 'projectManager.trimFailedTitle'
+));
 const copiedOutputPath = ref('');
 const previewFrames = ref<Record<string, Frame[]>>({});
 const previewIndexes = ref<Record<string, number>>({});
@@ -1176,26 +1224,58 @@ async function executeSelectedTrim(group: { role: string; projects: Project[] })
     .filter(projectId => selectedProjectIds.value.has(projectId));
   if (projectIds.length === 0 || trimmingRole.value !== null) return;
 
-  trimmingRole.value = group.role;
+  trimRequest.value = { role: group.role, projectIds, mode: trimMode.value };
+  trimResults.value = [];
+  trimOutputDirectories.value = [];
+  trimGlobalCropBox.value = undefined;
+  copiedOutputPath.value = '';
+  await runTrim(projectIds);
+}
+
+async function retryFailedTrim() {
+  if (!failedTrimIds.value.length || trimmingRole.value !== null) return;
+  await runTrim([...failedTrimIds.value]);
+}
+
+async function runTrim(projectIds: string[]) {
+  const request = trimRequest.value;
+  if (!request || trimmingRole.value !== null) return;
+  trimmingRole.value = request.role;
+  trimExecutionError.value = '';
+  trimDirectoryError.value = '';
+  const failures = (message: string): BatchTrimResult[] => projectIds.map(projectId => ({
+    projectId,
+    projectName: projects.value.find(project => project.id === projectId)?.action || projectId,
+    status: 'error',
+    message,
+  }));
+  let replacements: BatchTrimResult[];
   try {
     const results: BatchTrimResult[] = await api.batchTrim.executeTrim({
       projectIds,
-      mode: trimMode.value,
+      mode: request.mode,
       outputDir: '',
+      ...(trimGlobalCropBox.value ? { globalCropBox: trimGlobalCropBox.value } : {}),
     });
-    trimOutputDirectories.value = Array.from(new Set(
-      results
-        .filter(result => result.status === 'success' && result.outputPath)
-        .map(result => getParentDirectory(result.outputPath as string))
-    ));
-    showTrimSuccessModal.value = results.length > 0
-      && results.every(result => result.status === 'success')
-      && trimOutputDirectories.value.length > 0;
+    replacements = failures(t('projectManager.trimMissingResult')).map(failure => results.find(result => result.projectId === failure.projectId) ?? failure);
+    trimGlobalCropBox.value ??= replacements.find(result => result.globalCropBox)?.globalCropBox;
+    for (const result of replacements) {
+      if (result.status !== 'error' && result.outputPath) {
+        const root = getParentDirectory(result.outputPath);
+        if (!trimOutputDirectories.value.includes(root)) trimOutputDirectories.value.push(root);
+      }
+    }
   } catch (error) {
-    console.error('执行裁剪导出失败:', error);
+    const detail = error instanceof Error ? error.message : typeof error === 'string' ? error : '';
+    trimExecutionError.value = t('projectManager.trimExecutionFailed', { detail });
+    replacements = failures(trimExecutionError.value);
   } finally {
     trimmingRole.value = null;
   }
+  const merged = new Map(trimResults.value.map(result => [result.projectId, result]));
+  for (const result of replacements) merged.set(result.projectId, result);
+  trimResults.value = request.projectIds.map(projectId => merged.get(projectId)!);
+  showTrimResultsModal.value = true;
 }
 
 function getParentDirectory(path: string) {
@@ -1203,7 +1283,11 @@ function getParentDirectory(path: string) {
 }
 
 async function openTrimOutputDirectories() {
-  await Promise.all(trimOutputDirectories.value.map(path => api.system.openProjectFolder(path)));
+  trimDirectoryError.value = '';
+  const opened = await Promise.allSettled(trimOutputDirectories.value.map(path => api.system.openProjectFolder(path)));
+  if (opened.some(result => result.status === 'rejected' || !result.value)) {
+    trimDirectoryError.value = t('projectManager.trimDirectoryFailed');
+  }
 }
 
 async function copyOutputPath(path: string) {

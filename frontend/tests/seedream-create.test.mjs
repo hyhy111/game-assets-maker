@@ -10,7 +10,7 @@ test('Seedream header keeps shared actions without the three page navigation lin
   const html = await renderSfc('components/seedream/SeedreamTopNav.vue', {
     route: '/image-generation/create',
   });
-  assert.match(html, /title="返回项目列表"/);
+  assert.match(html, /aria-label="返回主界面"/);
   assert.match(html, /lucide-home-icon/);
   assert.doesNotMatch(html, /<nav/);
   assert.doesNotMatch(html, /任务列表/);

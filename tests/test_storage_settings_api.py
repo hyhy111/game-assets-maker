@@ -209,6 +209,42 @@ def test_execute_commits_the_whole_draft_and_requires_restart(api, tmp_path: Pat
     assert (storage_env / "project" / "mage" / "walk" / "global_params.json").is_file()
 
 
+@pytest.mark.parametrize("separate_locations", [False, True])
+def test_migrated_subdirectory_roots_feed_fresh_ai_and_local_apis(
+    api, tmp_path: Path, storage_env: Path, separate_locations: bool
+):
+    from backend.main import API
+
+    project_root = tmp_path / "chosen-location" / "project"
+    cache_root = (tmp_path / "separate-location" if separate_locations else project_root.parent) / "cache"
+    saved = api.save_settings(_draft(project_dir=str(project_root), cache_dir=str(cache_root)))
+    assert saved["success"] is True
+    assert not project_root.exists()
+    assert not cache_root.exists()
+    assert api.execute_migration(saved["migration"]["token"])["success"] is True
+
+    # Recompose the real app APIs as a restart does, without submitting paid tasks.
+    runtime = API()
+    try:
+        created = runtime._project_api.create_project("new-role", "idle")
+        assert Path(created["path"]) == project_root / "new-role" / "idle"
+        assert (project_root / "new-role" / "idle" / "cache" / "global_params.json").is_file()
+        for consumer in (runtime._frame_api, runtime._audio_api, runtime._process_api, runtime._batch_trim_api):
+            assert consumer._projects_root == project_root
+        video = runtime._seedance_api._ensure_manager()
+        picture = runtime._seedream_api._ensure_manager()
+        assert video._repository.cache_root == cache_root / "ai-video-cache"
+        assert picture._repository.cache_root == cache_root / "ai-pic-cache"
+        assert (project_root / "mage" / "walk" / "global_params.json").is_file()
+        assert (cache_root / "ai-video-cache" / "tasks").is_dir()
+        assert (storage_env / "project" / "mage" / "walk" / "global_params.json").is_file()
+        assert (storage_env / "cache" / "ai-video-cache" / "tasks").is_dir()
+    finally:
+        runtime._process_api.shutdown()
+        runtime._seedance_api.shutdown()
+        runtime._seedream_api.shutdown()
+
+
 def test_execute_with_unknown_token_fails(api):
     result = api.execute_migration("no-such-token")
 

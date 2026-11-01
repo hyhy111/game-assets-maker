@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFile } from 'node:fs/promises';
+import vm from 'node:vm';
+import ts from 'typescript';
+import { storageRootForSelection } from '../src/storage-paths.ts';
 
 const viewUrl = new URL('../src/views/SeedanceSettings.vue', import.meta.url);
 const apiUrl = new URL('../src/api/index.ts', import.meta.url);
@@ -52,7 +55,7 @@ test('choosing a directory only updates the draft', async () => {
   const body = view.match(/async function selectStorageDirectory\(field: 'project_dir' \| 'cache_dir'\) \{[\s\S]*?\n\}/)?.[0] ?? '';
   assert.ok(body, 'selectStorageDirectory exists');
   assert.match(body, /api\.system\.selectDirectory\(\)/);
-  assert.match(body, /storageDraft\[field\] = path/);
+  assert.match(body, /storageRootForSelection/);
   assert.doesNotMatch(body, /saveSettings|saveConfig|executeMigration/);
   for (const field of ['project_dir', 'cache_dir']) {
     assert.ok(view.includes(`selectStorageDirectory('${field}')`), `chooser wired for ${field}`);
@@ -60,6 +63,58 @@ test('choosing a directory only updates the draft', async () => {
 
   // Draft edits feed the unsaved-changes snapshot.
   assert.match(view, /storage:\s*\{ \.\.\.storageDraft \}/);
+});
+
+test('folder selections resolve project and cache roots on Windows and macOS', () => {
+  const cases = [
+    ['D:\\usual', 'project', 'D:\\usual\\project'],
+    ['E:\\素材\\', 'cache', 'E:\\素材\\cache'],
+    ['D:\\', 'project', 'D:\\project'],
+    ['D:/usual/', 'cache', 'D:/usual/cache'],
+    ['\\\\server\\share\\', 'cache', '\\\\server\\share\\cache'],
+    ['/Volumes/assets', 'project', '/Volumes/assets/project'],
+    ['/', 'cache', '/cache'],
+    ['D:\\usual\\PROJECT\\', 'project', 'D:\\usual\\PROJECT'],
+    ['/Volumes/assets/cache/', 'cache', '/Volumes/assets/cache'],
+    ['/Volumes/assets/Cache', 'cache', '/Volumes/assets/Cache/cache'],
+  ];
+  for (const [selected, folder, expected] of cases) {
+    assert.equal(storageRootForSelection(selected, folder), expected);
+  }
+});
+
+test('reselecting an existing custom root preserves its original layout', () => {
+  assert.equal(storageRootForSelection('D:\\my-assets', 'project', 'd:\\my-assets\\'), 'D:\\my-assets');
+  assert.equal(storageRootForSelection('/Volumes/custom-cache', 'cache', '/Volumes/custom-cache'), '/Volumes/custom-cache');
+});
+
+test('directory chooser submits final roots independently and cancellation preserves the draft', async () => {
+  const { view } = await sources();
+  const handler = view.match(/async function selectStorageDirectory\([^\n]+\) \{[\s\S]*?\n\}/)?.[0];
+  assert.ok(handler);
+  let selected = 'D:\\usual';
+  const storageDraft = { project_dir: 'project', cache_dir: 'cache' };
+  const storageSettings = { value: { projects_root: 'C:\\old-projects', ai_cache_root: 'C:\\old-cache' } };
+  const choose = vm.runInNewContext(ts.transpileModule(`${handler}\nselectStorageDirectory`, {
+    compilerOptions: { target: ts.ScriptTarget.ES2022 },
+  }).outputText, {
+    api: { system: { selectDirectory: async () => selected } },
+    storageDraft,
+    storageSettings,
+    storageRootForSelection,
+  });
+
+  await choose('project_dir');
+  assert.deepEqual(storageDraft, { project_dir: 'D:\\usual\\project', cache_dir: 'cache' });
+  selected = 'E:\\素材';
+  await choose('cache_dir');
+  assert.deepEqual(storageDraft, { project_dir: 'D:\\usual\\project', cache_dir: 'E:\\素材\\cache' });
+  selected = null;
+  await choose('cache_dir');
+  assert.equal(storageDraft.cache_dir, 'E:\\素材\\cache');
+  selected = 'C:\\old-cache';
+  await choose('cache_dir');
+  assert.equal(storageDraft.cache_dir, 'C:\\old-cache');
 });
 
 test('save routes through a plain save or a single migration confirmation', async () => {

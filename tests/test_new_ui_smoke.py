@@ -9,7 +9,7 @@ import pytest
 from backend.api.project_paths import LEGACY_ROLE, UNKNOWN_ROLE
 from backend.api.video_api import VideoAPI
 from backend.core.smart_remove_background import check_model_available
-from tests.conftest import wait_for_task
+from tests.conftest import wait_for_model, wait_for_task
 
 
 def _video(test_assets: Path, role: str, action: str) -> str:
@@ -599,6 +599,7 @@ def test_full_rembg_pipeline(api, test_assets, asset_catalog):
     )
     assert wait_for_task(api, step1, timeout=20)["status"] == "completed"
 
+    wait_for_model(api)
     step2 = api.start_processing(
         project["id"],
         2,

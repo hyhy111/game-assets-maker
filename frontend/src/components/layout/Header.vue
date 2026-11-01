@@ -1,7 +1,7 @@
 <template>
   <header
     :class="[
-      'bg-dark-surface border-b border-dark-border',
+      'relative z-30 bg-dark-surface border-b border-dark-border',
       sticky ? 'sticky top-0 z-30' : '',
     ]"
   >
@@ -49,8 +49,8 @@
 
           <button
             type="button"
-            class="flex items-center gap-1.5 px-2 py-1 rounded-lg text-sm bg-primary/20 text-primary hover:bg-primary/30 transition-colors"
-            :title="subscribeTitle"
+            class="control-tooltip control-tooltip--below flex items-center gap-1.5 px-2 py-1 rounded-lg text-sm bg-primary/20 text-primary hover:bg-primary/30 transition-colors"
+            :aria-label="subscribeTitle"
             data-test="subscribe-button"
             @click="goSubscribe"
           >
@@ -66,10 +66,10 @@
 
           <span
             v-if="subscribeError"
-            class="text-xs text-red-400 max-w-40 truncate"
-            :title="subscribeError"
+            class="control-tooltip control-tooltip--below text-xs text-red-400 max-w-40"
+            :data-tooltip="subscribeError"
           >
-            {{ subscribeError }}
+            <span class="block truncate">{{ subscribeError }}</span>
           </span>
         </div>
 
@@ -86,8 +86,8 @@
         <button
           v-if="!isLoggedIn"
           type="button"
-          class="rounded-lg p-2 text-[#ffbd5c] transition-colors hover:bg-dark-border hover:text-[#ffd08a]"
-          :title="t('header.login')"
+          class="control-tooltip control-tooltip--below rounded-lg p-2 text-[#ffbd5c] transition-colors hover:bg-dark-border hover:text-[#ffd08a]"
+          :aria-label="t('header.login')"
           @click="goLogin"
         >
           <CircleUserRound class="h-5 w-5" />
@@ -100,8 +100,8 @@
         >
           <MenuButton
             type="button"
-            class="w-8 h-8 rounded-full bg-primary/20 text-primary flex items-center justify-center text-sm font-medium hover:bg-primary/30 transition-colors"
-            :title="userInfo?.email"
+            class="control-tooltip control-tooltip--below w-8 h-8 rounded-full bg-primary/20 text-primary flex items-center justify-center text-sm font-medium hover:bg-primary/30 transition-colors"
+            :aria-label="userInfo?.email"
           >
             {{ userInitial }}
           </MenuButton>
@@ -132,8 +132,8 @@
 
         <button
           type="button"
-          class="p-2 rounded-lg hover:bg-dark-border text-gray-400 hover:text-white transition-colors"
-          :title="locale === 'zh-CN' ? 'Switch to English' : '切换到中文'"
+          class="control-tooltip control-tooltip--below p-2 rounded-lg hover:bg-dark-border text-gray-400 hover:text-white transition-colors"
+          :aria-label="locale === 'zh-CN' ? 'Switch to English' : '切换到中文'"
           @click="toggleLocale"
         >
           <Globe class="w-5 h-5" />
@@ -143,12 +143,12 @@
           v-if="projectStore.currentProject"
           :disabled="isProcessing"
           :class="[
-            'p-2 rounded-lg transition-colors',
+            'control-tooltip control-tooltip--below p-2 rounded-lg transition-colors',
             isProcessing
               ? 'text-gray-600 cursor-not-allowed'
               : 'hover:bg-dark-border text-gray-400 hover:text-white'
           ]"
-          :title="isProcessing ? t('common.processing') : t('header.openFolder')"
+          :aria-label="isProcessing ? t('common.processing') : t('header.openFolder')"
           @click="openProjectFolder"
         >
           <FolderOpen class="w-5 h-5" />
@@ -157,12 +157,12 @@
         <button
           :disabled="isProcessing"
           :class="[
-            'p-2 rounded-lg transition-colors',
+            'control-tooltip control-tooltip--below p-2 rounded-lg transition-colors',
             isProcessing
               ? 'text-gray-600 cursor-not-allowed'
               : 'hover:bg-dark-border text-gray-400 hover:text-white'
           ]"
-          :title="isProcessing ? t('common.processing') : updateStore.hasUpdate ? t('updates.notification') : t('header.settings')"
+          :aria-label="isProcessing ? t('common.processing') : updateStore.hasUpdate ? t('updates.notification') : t('header.settings')"
           class="relative"
           @click="openSettings"
         >
@@ -179,12 +179,12 @@
         <button
           :disabled="isProcessing"
           :class="[
-            'p-2 rounded-lg transition-colors',
+            'control-tooltip control-tooltip--below control-tooltip--end p-2 rounded-lg transition-colors',
             isProcessing
               ? 'text-gray-600 cursor-not-allowed'
               : 'hover:bg-dark-border text-gray-400 hover:text-white'
           ]"
-          :title="isProcessing ? t('common.processing') : t('header.backToProjects')"
+          :aria-label="isProcessing ? t('common.processing') : t('header.backToProjects')"
           @click="goHome"
         >
           <Home class="w-5 h-5" />

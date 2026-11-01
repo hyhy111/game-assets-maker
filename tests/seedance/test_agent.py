@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import socket
 import subprocess
 import sys
 from pathlib import Path
@@ -46,9 +47,7 @@ def _seed_task(cache_root: Path, image_path: Path, *, secret: str = "") -> str:
     return task.local_id
 
 
-def test_seedance_summary_stdout_is_json_only_and_recursively_redacts_key(
-    isolated_workspace: Path, repo_root: Path
-):
+def test_seedance_summary_stdout_is_json_only_and_recursively_redacts_key(isolated_workspace: Path, repo_root: Path):
     secret = "agent-cli-secret"
     config = isolated_workspace / "runtime-config.json"
     os.environ["GAM_CONFIG"] = str(config)
@@ -71,27 +70,32 @@ def test_seedance_summary_stdout_is_json_only_and_recursively_redacts_key(
     assert result.stderr == ""
 
 
-def test_seedance_create_requires_running_permitted_application(
-    isolated_workspace: Path, repo_root: Path
-):
+def test_seedance_create_requires_running_permitted_application(isolated_workspace: Path, repo_root: Path, monkeypatch):
     config = isolated_workspace / "runtime-config.json"
     image_path = isolated_workspace / "first.png"
     Image.new("RGB", (300, 300), "white").save(image_path)
 
-    result = _run_agent_cli(
-        "seedance",
-        "create",
-        "--first-frame",
-        str(image_path),
-        cwd=isolated_workspace,
-        repo_root=repo_root,
-        config=config,
-    )
+    monkeypatch.setenv("GAM_DATA_ROOT", str(isolated_workspace))
+    endpoint = isolated_workspace / "cache" / "agent-control.json"
+    endpoint.parent.mkdir(parents=True, exist_ok=True)
+    # Reserve a non-listening port so the CLI cannot reach a running desktop app.
+    with socket.socket() as control_socket:
+        control_socket.bind(("127.0.0.1", 0))
+        endpoint.write_text(json.dumps({"port": control_socket.getsockname()[1]}), encoding="utf-8")
+        result = _run_agent_cli(
+            "seedance",
+            "create",
+            "--first-frame",
+            str(image_path),
+            cwd=isolated_workspace,
+            repo_root=repo_root,
+            config=config,
+        )
 
     assert result.returncode == 1
     payload = json.loads(result.stdout)
     assert payload["operation"] == "seedance.create"
-    assert payload["error"]["code"] in {"UI_NOT_RUNNING", "CONTROL_UNAVAILABLE", "CLI_GENERATION_DISABLED"}
+    assert payload["error"]["code"] in {"UI_NOT_RUNNING", "CONTROL_UNAVAILABLE"}
 
 
 def test_seedance_wait_timeout_is_non_success_and_never_cancels(tmp_path: Path):

@@ -38,7 +38,7 @@
       >
         <button
           type="button"
-          class="control-tooltip flex-1 flex items-center justify-center hover:bg-dark-border rounded-tr text-gray-400 hover:text-white transition-colors"
+          class="flex-1 flex items-center justify-center hover:bg-dark-border rounded-tr text-gray-400 hover:text-white transition-colors"
           :aria-label="t('common.increase', { label: ariaLabel || label || t('common.value') })"
           @mousedown.prevent
           @click="step(1)"
@@ -47,7 +47,7 @@
         </button>
         <button
           type="button"
-          class="control-tooltip flex-1 flex items-center justify-center hover:bg-dark-border rounded-br text-gray-400 hover:text-white transition-colors"
+          class="flex-1 flex items-center justify-center hover:bg-dark-border rounded-br text-gray-400 hover:text-white transition-colors"
           :aria-label="t('common.decrease', { label: ariaLabel || label || t('common.value') })"
           @mousedown.prevent
           @click="step(-1)"

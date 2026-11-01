@@ -6,7 +6,7 @@ from urllib.parse import parse_qs
 import pytest
 
 
-@pytest.mark.parametrize("version", ["1.0.1", "1.0.2"])
+@pytest.mark.parametrize("version", ["1.0.1", "1.0.2", "1.0.4"])
 def test_packaged_frontend_entry_uses_current_version_query(tmp_path, monkeypatch, version):
     from backend import main
 
@@ -33,13 +33,14 @@ def test_development_frontend_keeps_vite_url():
     assert app.get_url() == "http://localhost:5173"
 
 
-def test_same_version_rebuild_changes_entry_cache_key_without_changing_storage_path(tmp_path, monkeypatch):
+@pytest.mark.parametrize("version", ["1.0.2", "1.0.4"])
+def test_same_version_rebuild_changes_entry_cache_key_without_changing_storage_path(tmp_path, monkeypatch, version):
     from backend import main
 
     entry = tmp_path / "frontend" / "dist" / "index.html"
     entry.parent.mkdir(parents=True)
     monkeypatch.setattr(main.sys, "_MEIPASS", str(tmp_path), raising=False)
-    monkeypatch.setattr(main, "app_version", lambda: "1.0.2")
+    monkeypatch.setattr(main, "app_version", lambda: version)
     app = main.MainApp.__new__(main.MainApp)
     app.is_dev = False
     entry.write_text('<script src="assets/old.js"></script>')
@@ -51,9 +52,9 @@ def test_same_version_rebuild_changes_entry_cache_key_without_changing_storage_p
     old_path, _, old_query = before.partition("?")
     new_path, _, new_query = after.partition("?")
     assert old_path == new_path == str(entry)
-    assert parse_qs(old_query)["v"] == parse_qs(new_query)["v"] == ["1.0.2"]
+    assert parse_qs(old_query)["v"] == parse_qs(new_query)["v"] == [version]
     assert parse_qs(old_query)["ui"] != parse_qs(new_query)["ui"]
-    assert after != f"{entry}?v=1.0.2", "Older version-only cached HTML must not be reused"
+    assert after != f"{entry}?v={version}", "Older version-only cached HTML must not be reused"
 
 
 def test_non_frozen_frontend_build_also_gets_content_cache_key(tmp_path, monkeypatch):

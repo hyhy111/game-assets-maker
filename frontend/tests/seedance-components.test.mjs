@@ -47,14 +47,14 @@ test('shared Seedance header removes section navigation and retains global actio
   const html = await renderSfc('components/seedance/SeedanceTopNav.vue');
   assert.doesNotMatch(html, /创建任务|任务列表|结果预览/);
   assert.doesNotMatch(html, /href="\/video-generation\/(?:create|tasks|preview)"/);
-  assert.match(html, /title="设置"/);
-  assert.match(html, /title="返回项目列表"/);
+  assert.match(html, /aria-label="设置"/);
+  assert.match(html, /aria-label="返回主界面"/);
   assert.match(html, /lucide-globe/);
   assert.match(html, /lucide-settings/);
   assert.match(html, /lucide-home-icon/);
   assert.match(html, /sticky top-0 z-30/);
   assert.doesNotMatch(html, /<nav/);
-  assert.match(html, /<button type="button"[^>]*title="Switch to English"/);
+  assert.match(html, /<button type="button"[^>]*aria-label="Switch to English"/);
 });
 
 test('Seedance create screen uses one compact composer with collapsed parameters', async () => {
