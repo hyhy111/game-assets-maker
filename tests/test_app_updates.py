@@ -181,3 +181,15 @@ def test_bridge_exposes_shared_update_state(setup_updates):
     assert bridge.ignore_app_update("1.0.1") is True
     assert bridge.check_app_update()["status"] == "ignored"
     assert setup_updates.call_count == 1
+
+
+@pytest.mark.parametrize("outcome", [True, False, OSError("blocked"), update_api.webbrowser.Error("unavailable")])
+def test_repository_opens_without_release_check(setup_updates, monkeypatch, outcome):
+    browser = Mock(side_effect=outcome) if isinstance(outcome, Exception) else Mock(return_value=outcome)
+    monkeypatch.setattr(update_api.webbrowser, "open", browser)
+    from backend.main import API
+
+    bridge = API()
+    assert bridge.open_github_repository() is (outcome is True)
+    browser.assert_called_once_with("https://github.com/hyhy111/game-assets-maker")
+    setup_updates.assert_not_called()
