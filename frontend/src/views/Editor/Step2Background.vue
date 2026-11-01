@@ -39,7 +39,7 @@
     <!-- Alpha Matting toggle -->
     <div class="flex items-center justify-between">
       <label class="text-sm font-medium text-gray-300">{{ t('step2.alphaMatting') }}</label>
-      <Switch v-model="s2Params.alpha_matting" />
+      <Switch v-model="s2Params.alpha_matting" :aria-label="t('step2.alphaMatting')" />
     </div>
 
     <!-- Alpha Matting settings (conditional) -->
@@ -63,6 +63,7 @@
           <label class="block text-sm font-medium text-gray-400">{{ t('step2.erodeSize') }}</label>
           <Input
             v-model.number="s2Params.alpha_matting_erode_size"
+            :aria-label="t('step2.erodeSize')"
             type="number"
             min="0"
             max="20"
@@ -72,6 +73,7 @@
         </div>
         <input
           v-model.number="s2Params.alpha_matting_erode_size"
+          :aria-label="t('step2.erodeSize')"
           type="range"
           min="0"
           max="20"
@@ -89,6 +91,7 @@
           <label class="block text-sm font-medium text-gray-400">{{ t('step2.bgThreshold') }}</label>
           <Input
             v-model.number="s2Params.alpha_matting_background_threshold"
+            :aria-label="t('step2.bgThreshold')"
             type="number"
             min="0"
             max="255"
@@ -98,6 +101,7 @@
         </div>
         <input
           v-model.number="s2Params.alpha_matting_background_threshold"
+          :aria-label="t('step2.bgThreshold')"
           type="range"
           min="0"
           max="255"
@@ -115,6 +119,7 @@
           <label class="block text-sm font-medium text-gray-400">{{ t('step2.fgThreshold') }}</label>
           <Input
             v-model.number="s2Params.alpha_matting_foreground_threshold"
+            :aria-label="t('step2.fgThreshold')"
             type="number"
             min="100"
             max="250"
@@ -124,6 +129,7 @@
         </div>
         <input
           v-model.number="s2Params.alpha_matting_foreground_threshold"
+          :aria-label="t('step2.fgThreshold')"
           type="range"
           min="100"
           max="250"

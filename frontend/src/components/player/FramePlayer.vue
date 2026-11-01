@@ -28,27 +28,27 @@
       <span>{{ Math.round(zoom * 100) }}%</span>
     </div>
 
-    <!-- Zoom controls (floating) -->
-    <div class="absolute bottom-4 right-4 z-20 flex flex-col gap-2" @mousedown.stop @wheel.stop>
-      <Button v-if="retouchEnabled" :variant="activeTool === 'wand' ? 'primary' : 'ghost'" size="sm" :disabled="toolsDisabled"
-        :class="activeTool === 'wand' ? '' : 'bg-black/60'"
-        :title="`${t('magicWand.wand')} (W)`" :aria-label="t('magicWand.wand')" :aria-pressed="activeTool === 'wand'"
+    <!-- A shared dark surface keeps controls legible over every preview background. -->
+    <div class="absolute bottom-4 right-4 z-20 flex flex-col gap-2 rounded-xl border border-white/20 bg-black/80 p-1.5 shadow-lg backdrop-blur-sm" @mousedown.stop @wheel.stop>
+      <Button class="control-tooltip control-tooltip--left" v-if="retouchEnabled" :variant="activeTool === 'wand' ? 'primary' : 'ghost'" size="sm" :disabled="toolsDisabled"
+        :class="activeTool === 'wand' ? '' : 'text-white hover:bg-white/10 hover:text-white'"
+        :data-tooltip="`${t('magicWand.wand')} (W)`" :aria-label="t('magicWand.wand')" :aria-pressed="activeTool === 'wand'"
         data-test="frame-wand-tool" @click="emit('tool', 'wand')"><Wand2 class="h-5 w-5" /></Button>
-      <Button v-if="retouchEnabled" :variant="activeTool === 'brush' ? 'primary' : 'ghost'" size="sm" :disabled="toolsDisabled"
-        :class="activeTool === 'brush' ? '' : 'bg-black/60'"
-        :title="`${t('magicWand.eraser')} (E)`" :aria-label="t('magicWand.eraser')" :aria-pressed="activeTool === 'brush'"
+      <Button class="control-tooltip control-tooltip--left" v-if="retouchEnabled" :variant="activeTool === 'brush' ? 'primary' : 'ghost'" size="sm" :disabled="toolsDisabled"
+        :class="activeTool === 'brush' ? '' : 'text-white hover:bg-white/10 hover:text-white'"
+        :data-tooltip="`${t('magicWand.eraser')} (E)`" :aria-label="t('magicWand.eraser')" :aria-pressed="activeTool === 'brush'"
         data-test="frame-eraser-tool" @click="emit('tool', 'brush')"><Eraser class="h-5 w-5" /></Button>
-      <Button :variant="activeTool === 'browse' ? 'primary' : 'ghost'" size="sm" :disabled="toolsDisabled"
-        :class="activeTool === 'browse' ? '' : 'bg-black/60'"
-        :title="retouchEnabled ? `${t('magicWand.browse')} (V)` : t('magicWand.browse')" :aria-label="t('magicWand.browse')" :aria-pressed="activeTool === 'browse'"
+      <Button class="control-tooltip control-tooltip--left" :variant="activeTool === 'browse' ? 'primary' : 'ghost'" size="sm" :disabled="toolsDisabled"
+        :class="activeTool === 'browse' ? '' : 'text-white hover:bg-white/10 hover:text-white'"
+        :data-tooltip="retouchEnabled ? `${t('magicWand.browse')} (V)` : t('magicWand.browse')" :aria-label="t('magicWand.browse')" :aria-pressed="activeTool === 'browse'"
         data-test="frame-browse-tool" @click="emit('tool', 'browse')"><Move class="h-5 w-5" /></Button>
       <Button
         v-for="control in zoomControls"
         :key="control.action"
         variant="ghost"
         size="sm"
-        class="bg-black/60 hover:bg-black/80 backdrop-blur-sm"
-        :title="t(`magicWand.${control.action}`)"
+        class="control-tooltip control-tooltip--left text-white hover:bg-white/10 hover:text-white"
+        :data-tooltip="t(`magicWand.${control.action}`)"
         :aria-label="t(`magicWand.${control.action}`)"
         @click="control.handler"
       >
@@ -103,8 +103,24 @@ const canvasStyle = computed(() => ({
 const zoomControls = [
   { action: 'zoomIn', icon: ZoomIn, handler: () => playerStore.zoomIn() },
   { action: 'zoomOut', icon: ZoomOut, handler: () => playerStore.zoomOut() },
-  { action: 'reset', icon: Maximize, handler: () => playerStore.resetView() }
+  { action: 'reset', icon: Maximize, handler: resetCanvasView }
 ];
+
+function resetCanvasView() {
+  playerStore.resetView();
+  const container = containerRef.value;
+  const canvas = canvasRef.value;
+  if (!container || !canvas || !canvas.width || !canvas.height) return;
+  const { width, height } = container.getBoundingClientRect();
+  if (width <= 0 || height <= 0) return;
+  // Measure the actual player viewport, excluding the retouch toolbar and playback controls.
+  const padding = 32;
+  const fitZoom = Math.min(1,
+    Math.max(1, width - padding) / canvas.width,
+    Math.max(1, height - padding) / canvas.height
+  );
+  playerStore.setZoom(fitZoom);
+}
 
 function drawCachedImage(img: HTMLImageElement) {
   const canvas = canvasRef.value;
@@ -351,7 +367,7 @@ function handleKeydown(e: KeyboardEvent) {
     playerStore.zoomOut();
   } else if (e.key === '0' && (e.ctrlKey || e.metaKey)) {
     e.preventDefault();
-    playerStore.resetView();
+    resetCanvasView();
   }
 }
 

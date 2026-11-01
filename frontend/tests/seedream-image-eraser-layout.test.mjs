@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 import ts from 'typescript';
 import { computed, ref, watch } from 'vue';
-import { eraseBrushSegment } from '../src/utils/magic-wand.ts';
+import { deleteSelection, eraseBrushSegment, selectionBounds } from '../src/utils/magic-wand.ts';
 
 const source = await readFile(new URL('../src/components/seedream/SeedreamImageEraser.vue', import.meta.url), 'utf8');
 const script = source.match(/<script setup lang="ts">([\s\S]*?)<\/script>/)[1]
@@ -15,23 +15,24 @@ const javascript = ts.transpileModule(script, {
 function editor(generationLayout = null, height = 1000, options = {}) {
   const emitted = [];
   const setup = new Function(
-    'defineExpose', 'ref', 'computed', 'watch', 'onMounted', 'onBeforeUnmount', 'defineProps', 'withDefaults', 'defineEmits', 'useI18n', 'eraseBrushSegment',
+    'defineExpose', 'ref', 'computed', 'watch', 'onMounted', 'onBeforeUnmount', 'defineProps', 'withDefaults', 'defineEmits', 'useI18n', 'eraseBrushSegment', 'deleteSelection', 'selectionBounds',
     `${javascript}\nreturn {
       resizeTargetRatio, resizeBottomMarginRatio, imageHeight, sourceResizeTop, sourceResizeBottom,
       targetHeightPixels, bottomDistancePixels, canApplyResize, currentGenerationLayout,
       normalizeResizeRatios, updateResizeRatio, resetResizeGuides, applyResize, undo, redo, apply,
-      drawPoint, drawLine, finishStroke, brushSize, brushFeather, dirty, onKeydown, tool, wandTolerance,
+      drawPoint, drawLine, finishStroke, brushSize, brushFeather, dirty, onKeydown, tool, wandTolerance, wandFeather, selection, deleteWandSelection, restoreOriginal, markSaved,
+      initializeOriginal(image) { originalImageData = image; },
       initializeStroke(view, source, before, bounds) {
         canvasRef.value = view; editSourceCanvas = source; strokeBefore = before;
         strokeAfter = { ...before, data: new Uint8ClampedArray(before.data) };
         strokeBounds = bounds; drawing.value = true;
       },
-      initializeCanvas(canvas) { loading.value = false; canvasRef.value = canvas; editSourceCanvas = canvas; }
+      initializeCanvas(canvas, source = canvas) { loading.value = false; canvasRef.value = canvas; editSourceCanvas = source; }
     };`,
   );
   const state = setup(() => {}, ref, computed, watch, () => {}, () => {},
     () => ({ generationLayout, ...options }), (props) => props,
-    () => (...args) => emitted.push(args), () => ({ t: (key) => key }), eraseBrushSegment);
+    () => (...args) => emitted.push(args), () => ({ t: (key) => key }), eraseBrushSegment, deleteSelection, selectionBounds);
   state.imageHeight.value = height;
   state.resetResizeGuides();
   const context = { fillRect() {}, clearRect() {}, drawImage() {} };
@@ -139,7 +140,7 @@ test('pixel rounding on an odd canvas does not place the character outside the c
   assert.equal(state.currentGenerationLayout.value.target_height + state.currentGenerationLayout.value.bottom_distance, 101);
 });
 
-test('component soft eraser records the complete stroke and restores all feather pixels on undo and redo', () => {
+test('component eraser and outward wand edits restore all affected pixels on undo and redo', () => {
   const state = editor(null, 11, { magicWandEnabled: true });
   assert.equal(state.brushSize.value, 5);
   assert.equal(state.brushFeather.value, 0);
@@ -162,7 +163,7 @@ test('component soft eraser records the complete stroke and restores all feather
       }
     },
   };
-  const sourceCanvas = { getContext: () => context };
+  const sourceCanvas = { width:11, height:11, getContext: () => context };
   const viewCanvas = { width: 11, height: 11, getContext: () => ({ clearRect() {}, drawImage() {} }), hasPointerCapture: () => false };
   state.initializeStroke(viewCanvas, sourceCanvas, context.getImageData(0, 0, 11, 11), {left:0,top:0,right:11,bottom:11});
   state.drawPoint(context, {x:3.5,y:5.5}, 5);
@@ -177,6 +178,20 @@ test('component soft eraser records the complete stroke and restores all feather
   assert.equal(state.dirty.value, false);
   state.redo();
   assert.deepEqual(pixels, erased);
+  state.undo();
+  assert.deepEqual(pixels, original);
+  state.selection.value = new Uint8Array(121);
+  state.selection.value[5 * 11 + 5] = 1;
+  state.wandFeather.value = 2;
+  state.deleteWandSelection();
+  const wandErased = new Uint8ClampedArray(pixels);
+  assert.equal(pixels[(5 * 11 + 5) * 4 + 3],0);
+  assert.ok(pixels[(5 * 11 + 3) * 4 + 3]>0 && pixels[(5 * 11 + 3) * 4 + 3]<200);
+  assert.equal(pixels[(5 * 11 + 2) * 4 + 3],200);
+  state.undo();
+  assert.deepEqual(pixels,original,'undo includes the entire outward feather ring');
+  state.redo();
+  assert.deepEqual(pixels,wandErased,'redo includes the entire outward feather ring');
 });
 
 test('plus/minus changes only the active tool parameter, repeats, clamps and ignores text entry and modifiers', () => {
@@ -218,4 +233,27 @@ test('plus/minus changes only the active tool parameter, repeats, clamps and ign
     if (previous === undefined) delete globalThis.Element;
     else globalThis.Element = previous;
   }
+});
+
+test('initial frame restoration is an unsaved full-frame edit and can be undone after prior saves', () => {
+  const state = editor(null, 3, {magicWandEnabled:true,originalImageUrl:'initial-frame'});
+  let pixels = new Uint8ClampedArray([1,2,3,0, 4,5,6,50, 7,8,9,100]);
+  const saved = new Uint8ClampedArray(pixels);
+  const initial = {width:3,height:1,data:new Uint8ClampedArray([1,2,3,255,4,5,6,255,7,8,9,255])};
+  const context = {
+    getImageData(){return {width:3,height:1,data:new Uint8ClampedArray(pixels)};},
+    putImageData(image){pixels=new Uint8ClampedArray(image.data);},
+  };
+  const view = {width:3,height:1,getContext:()=>({clearRect(){},drawImage(){}})};
+  state.initializeCanvas(view,{width:3,height:1,getContext:()=>context});
+  state.initializeOriginal(initial);
+  state.markSaved();
+  state.restoreOriginal();
+  assert.deepEqual(pixels,initial.data);
+  assert.equal(state.dirty.value,true,'restoration requires an explicit save');
+  state.undo(); assert.deepEqual(pixels,saved);
+  state.redo(); assert.deepEqual(pixels,initial.data);
+  state.markSaved();
+  state.restoreOriginal();
+  assert.equal(state.dirty.value,false,'restoring an unchanged initial frame adds no empty history');
 });

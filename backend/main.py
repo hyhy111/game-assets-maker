@@ -741,7 +741,10 @@ class API:
     @_project_write(existing=True)
     def get_editable_frame(self, project_id: str, filename: str, step: int = 3) -> dict[str, Any]:
         """Return a revisioned PNG for local manual frame cleanup."""
-        return self._frame_api.get_editable_frame(project_id, filename, step)
+        with self._process_api._control_lock:
+            if self._process_api.has_active_writes():
+                raise ValueError("PROCESSING_ACTIVE")
+            return self._frame_api.get_editable_frame(project_id, filename, step)
 
     @_project_write(existing=True)
     def save_frame_edit(

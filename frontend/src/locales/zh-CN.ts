@@ -3,6 +3,9 @@ export default {
     title: 'Game Assets Maker',
   },
   common: {
+    value: '数值',
+    increase: '增加{label}',
+    decrease: '减少{label}',
     cancel: '取消',
     save: '保存',
     delete: '删除',
@@ -105,6 +108,8 @@ export default {
     ignore: '忽略当前版本',
     notification: '设置 · 有新版本可更新',
     manualInstall: '点击更新打开版本下载页。下载后退出应用，运行安装包或覆盖安装。',
+    showDetails: '查看更新详情',
+    hideDetails: '收起更新详情',
     ignoreFailed: '忽略版本保存失败，请重试。',
     openFailed: '无法打开下载页，请重试。',
     errors: {
@@ -181,6 +186,7 @@ export default {
       createdAt: '创建时间',
       elapsed: '总耗时',
       generating: '生成中',
+      completed: '已完成',
       loadMore: '加载更多',
       emptyImages: '暂无图片生成记录',
       emptyVideos: '暂无视频生成记录',
@@ -800,6 +806,10 @@ export default {
     },
   },
   magicWand: {
+    restoreRestartRequired: '请保存当前修改并重启应用，以启用恢复初始版本。',
+    restoreInitial: '恢复初始版本',
+    restoreInitialHint: '恢复步骤 3 处理完成、尚未人工修整的画面；点击保存后生效，可以撤销。',
+    initialUnavailable: '没有可确认的初始版本；重新处理步骤 3 后会建立新基准。',
     browse: '浏览 / 移动画布',
     zoomIn: '放大',
     zoomOut: '缩小',
@@ -834,6 +844,14 @@ export default {
     failed: '无法读取或保存此帧，请重新打开后再试。',
   },
   player: {
+    play: '播放',
+    pause: '暂停',
+    previousFrame: '上一帧',
+    nextFrame: '下一帧',
+    fps: '播放帧率（FPS）',
+    audioTrack: '音效轨',
+    mute: '静音',
+    unmute: '取消静音',
     frames: '帧列表',
   },
 }

@@ -33,14 +33,11 @@
         data-test="recent-video-poster"
       >
       <div v-else class="grid h-full place-items-center text-gray-600"><Video :size="32" aria-hidden="true" /></div>
-      <div class="absolute left-3 top-3 flex items-center gap-1.5">
-        <span class="rounded-full px-3 py-1 text-xs font-medium shadow-sm" :class="statusClass">
+      <div class="pointer-events-none absolute left-2 right-14 top-2 flex flex-wrap items-start gap-1">
+        <span class="media-overlay-badge media-overlay-status" :class="statusClass">
           {{ statusText }}
         </span>
-        <PlatformSourceBadge
-          :source="task.source"
-          class="!border-0 !bg-white/20 !px-3 !py-1 !text-xs !font-normal !text-black"
-        />
+        <PlatformSourceBadge :source="task.source" overlay />
       </div>
       <div v-if="$slots['top-right']" class="absolute right-3 top-3 z-[2]">
         <slot name="top-right" />
@@ -111,12 +108,16 @@ const createdAt = computed(() => {
   const date = new Date(props.task.created_at);
   return Number.isNaN(date.getTime()) ? props.task.created_at : date.toLocaleString(locale.value);
 });
-const statusText = computed(() => active.value ? t('aiCreation.recent.generating') : t(`seedance.status.${phase.value}`));
+const statusText = computed(() => {
+  if (active.value) return t('aiCreation.recent.generating');
+  if (phase.value === 'succeeded') return t('aiCreation.recent.completed');
+  return t(`seedance.status.${phase.value}`);
+});
 const statusClass = computed(() => {
-  if (active.value) return 'bg-primary/20 text-white';
-  if (phase.value === 'succeeded') return 'bg-success/20 text-black';
-  if (phase.value === 'failed') return 'bg-danger/20 text-danger';
-  return 'bg-gray-500/30 text-gray-200';
+  if (active.value) return 'media-overlay-status-active';
+  if (phase.value === 'succeeded') return 'media-overlay-status-success';
+  if (phase.value === 'failed') return 'media-overlay-status-danger';
+  return 'media-overlay-status-neutral';
 });
 
 function clearPreviewTimer() {

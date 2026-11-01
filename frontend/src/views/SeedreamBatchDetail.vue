@@ -1,9 +1,13 @@
 <template>
   <SeedreamShell>
     <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
-      <h1 class="flex items-center gap-2 text-xl font-semibold text-white">
+      <h1 class="flex flex-wrap items-center gap-3 text-xl font-semibold text-white">
         {{ t('aiCreation.imageDetailTitle') }}
-        <PlatformSourceBadge v-if="batch" :source="batch.request.source" />
+        <PlatformSourceBadge
+          v-if="batch"
+          :source="batch.request.source"
+          glass
+        />
       </h1>
       <button
         type="button"

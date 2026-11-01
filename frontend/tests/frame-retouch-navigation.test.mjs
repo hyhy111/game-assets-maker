@@ -27,7 +27,7 @@ function editor(step = 3, completed = true) {
   const state = setup(computed, nextTick, () => {}, () => {}, ref, () => {}, () => {},
     () => ({}), () => ({}), () => ({ isStepCompleted: () => completed }), () => process, () => player,
     () => ({ t: key => key }), () => ({ currentProject, currentStep, s1Params: ref({}) }), api, null, null, null);
-  state.frameEditor.value = { projectId: 'hero/idle', filename: '1.png', imageUrl: 'original', revision: 'r0', step };
+  state.frameEditor.value = { projectId: 'hero/idle', filename: '1.png', imageUrl: 'original', originalImageUrl: 'initial-frame', revision: 'r0', step };
   state.frameEditorTool.value = 'brush';
   state.frameEditorRef.value = { dirty: true, busy: false, markSaved() { this.dirty = false; }, getImageData: () => 'edited' };
   return { ...state, player, process, currentStep, saves, failSaving(value) { fail = value; } };
@@ -40,6 +40,7 @@ test('saving keeps the current frame and tool, resets the edit baseline, and use
   assert.equal(state.frameEditorTool.value, 'brush');
   assert.equal(state.frameEditorRef.value.dirty, false);
   assert.equal(state.frameEditor.value.revision, 'r1');
+  assert.equal(state.frameEditor.value.originalImageUrl, 'initial-frame');
   state.frameEditorRef.value.dirty = true;
   await state.saveCurrentFrameEdit('second');
   assert.deepEqual(state.saves.map(call => [call[2], call[3], call[4]]), [['first', 'r0', 3], ['second', 'r1', 3]]);

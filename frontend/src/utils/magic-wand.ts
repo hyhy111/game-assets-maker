@@ -107,23 +107,15 @@ export function deleteSelection(image: PixelBuffer, selected: Uint8Array, feathe
   if (selected.length !== width * height) throw new Error('Selection dimensions must match the image');
   const output = new Uint8ClampedArray(data);
   const radius = Math.min(12, Math.max(0, Math.round(feather)));
-  const bounds = selectionBounds(selected, width, height, 1);
+  const bounds = selectionBounds(selected, width, height, radius + 1);
   if (!bounds) return output;
-  if (!radius) {
-    for (let pixel = 0; pixel < selected.length; pixel++) {
-      if (selected[pixel]) output.fill(0, pixel * 4, pixel * 4 + 4);
-    }
-    return output;
-  }
   const { x, y, width: bw, height: bh } = bounds;
-  // Measure inward from unselected pixels. Image borders are also selection boundaries.
-  const distances = new Float32Array(bw * bh);
+  // Measure outward from the selected core and feather only its local neighborhood.
+  const distances = new Float32Array(bw * bh).fill(Infinity);
   for (let row = 0; row < bh; row++) {
     for (let col = 0; col < bw; col++) {
       const index = row * bw + col;
-      const px = x + col, py = y + row;
-      if (!selected[py * width + px]) continue;
-      distances[index] = Math.min(px + 1, width - px, py + 1, height - py);
+      if (selected[(y + row) * width + x + col]) distances[index] = 0;
       if (col) distances[index] = Math.min(distances[index], distances[index - 1] + 1);
       if (row) distances[index] = Math.min(distances[index], distances[index - bw] + 1);
       if (row && col) distances[index] = Math.min(distances[index], distances[index - bw - 1] + Math.SQRT2);
@@ -133,16 +125,16 @@ export function deleteSelection(image: PixelBuffer, selected: Uint8Array, feathe
   for (let row = bh - 1; row >= 0; row--) {
     for (let col = bw - 1; col >= 0; col--) {
       const index = row * bw + col;
-      const pixel = (y + row) * width + x + col;
-      if (!selected[pixel]) continue;
       if (col + 1 < bw) distances[index] = Math.min(distances[index], distances[index + 1] + 1);
       if (row + 1 < bh) distances[index] = Math.min(distances[index], distances[index + bw] + 1);
       if (row + 1 < bh && col + 1 < bw) distances[index] = Math.min(distances[index], distances[index + bw + 1] + Math.SQRT2);
       if (row + 1 < bh && col) distances[index] = Math.min(distances[index], distances[index + bw - 1] + Math.SQRT2);
+      const pixel = (y + row) * width + x + col;
       const offset = pixel * 4;
-      // The outermost selected 1px is partial; only the selected interior is fully erased.
-      const t = Math.min(1, distances[index] / (radius + 1));
-      const keep = 1 - t * t * (3 - 2 * t);
+      const distance = distances[index];
+      if (!data[offset + 3] || (distance > radius && !selected[pixel])) continue;
+      const t = selected[pixel] ? 0 : Math.min(1, distance / (radius + 1));
+      const keep = t * t * (3 - 2 * t);
       output[offset + 3] = Math.round(data[offset + 3] * keep);
       if (!output[offset + 3]) output.fill(0, offset, offset + 3);
     }

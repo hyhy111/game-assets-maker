@@ -4,7 +4,7 @@
       v-if="label || $slots.label"
       class="flex justify-between items-center"
     >
-      <label class="text-sm font-medium text-gray-300">
+      <label :for="inputId" class="text-sm font-medium text-gray-300">
         <slot name="label">{{ label }}</slot>
       </label>
       <span
@@ -13,6 +13,9 @@
       >{{ displayValue }}</span>
     </div>
     <input
+      :id="inputId"
+      :aria-label="ariaLabel || label"
+      :aria-valuetext="displayValue"
       :value="modelValue"
       :min="min"
       :max="max"
@@ -43,6 +46,7 @@ const props = withDefaults(defineProps<{
   max?: number;
   step?: number;
   label?: string;
+  ariaLabel?: string;
   showValue?: boolean;
   valueFormatter?: (value: number) => string;
   showTicks?: boolean;
@@ -60,6 +64,8 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{
   'update:modelValue': [value: number];
 }>();
+
+const inputId = `slider-${Math.random().toString(36).slice(2, 11)}`;
 
 const displayValue = computed(() => {
   if (props.valueFormatter) {

@@ -15,6 +15,7 @@
       <div class="flex items-center gap-2 justify-between">
         <Input
           v-model.number="s1Params.frame_interval"
+          :aria-label="t('step1.frameInterval')"
           type="number"
           min="1"
           :max="maxFrame"
@@ -44,6 +45,7 @@
           <div class="flex items-center gap-2">
             <Input
               v-model.number="s1Params.start_frame"
+              :aria-label="t('step1.startFrame')"
               type="number"
               :min="0"
               :max="Math.min(maxFrame, s1Params.end_frame)"
@@ -52,8 +54,8 @@
               @blur="clampStartFrame"
             />
             <button
-              class="p-2 rounded-lg bg-dark-surface border border-green-500/50 shadow-lg shadow-green-500/25 transition-all"
-              :title="t('step1.useCurrentFrame')"
+              class="control-tooltip p-2 rounded-lg bg-dark-surface border border-green-500/50 shadow-lg shadow-green-500/25 transition-all"
+              :aria-label="`${t('step1.startFrame')}: ${t('step1.useCurrentFrame')}`"
               @click="setStartToCurrent"
             >
               <Circle class="w-5 h-5 text-green-500 fill-green-500" />
@@ -67,6 +69,7 @@
           <div class="flex items-center gap-2">
             <Input
               v-model.number="s1Params.end_frame"
+              :aria-label="t('step1.endFrame')"
               type="number"
               :min="s1Params.start_frame"
               :max="maxFrame"
@@ -75,8 +78,8 @@
               @blur="clampEndFrame"
             />
             <button
-              class="p-2 rounded-lg bg-dark-surface border border-red-500/50 shadow-lg shadow-red-500/25 transition-all"
-              :title="t('step1.useCurrentFrame')"
+              class="control-tooltip p-2 rounded-lg bg-dark-surface border border-red-500/50 shadow-lg shadow-red-500/25 transition-all"
+              :aria-label="`${t('step1.endFrame')}: ${t('step1.useCurrentFrame')}`"
               @click="setEndToCurrent"
             >
               <Circle class="w-5 h-5 text-red-500 fill-red-500" />

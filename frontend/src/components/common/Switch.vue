@@ -6,6 +6,7 @@
     <input
       type="checkbox"
       :checked="modelValue"
+      :aria-label="ariaLabel || label"
       :disabled="disabled"
       class="sr-only peer"
       @change="onChange"
@@ -22,6 +23,7 @@
 const props = defineProps<{
   modelValue: boolean;
   label?: string;
+  ariaLabel?: string;
   disabled?: boolean;
 }>();
 

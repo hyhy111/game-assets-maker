@@ -13,6 +13,7 @@ from PIL import Image
 
 from backend.api.frame_visibility import get_hidden_frame_names, restore_hidden_frames, set_frame_hidden
 from backend.api.project_paths import media_url_for_path, resolve_project_path
+from backend.core.frame_edit_history import initial_frame, remember_backup_step, remember_frame_edit
 from src.utils.app_config import default_projects_root
 from src.utils.data_paths import data_root
 
@@ -158,7 +159,15 @@ class FrameAPI:
         payload = frame.read_bytes()
         with Image.open(io.BytesIO(payload)) as image:
             width, height = image.size
+        initial = initial_frame(frame, step, payload)
+        if initial is not None:
+            with Image.open(io.BytesIO(initial)) as image:
+                if image.size != (width, height):
+                    initial = None
         return {
+            "initial_image_data_url": (
+                "data:image/png;base64," + base64.b64encode(initial).decode("ascii") if initial is not None else None
+            ),
             "image_data_url": "data:image/png;base64," + base64.b64encode(payload).decode("ascii"),
             "revision": hashlib.sha256(payload).hexdigest(),
             "width": width,
@@ -191,14 +200,17 @@ class FrameAPI:
                     raise ValueError("FRAME_EDIT_SIZE_CHANGED")
         except (OSError, binascii.Error) as error:
             raise ValueError("FRAME_EDIT_INVALID_PNG") from error
+        initial = initial_frame(frame, step, current)
         project = resolve_project_path(self._projects_root, project_id).resolve()
         backups = project / "cache" / "frame_edits" / revision
         if not backups.resolve().is_relative_to(project):
             raise ValueError("FRAME_EDIT_INVALID_BACKUP")
         backups.mkdir(parents=True, exist_ok=True)
         backup = backups / filename
-        if not backup.exists():
+        created = not backup.exists()
+        if created:
             backup.write_bytes(current)
+        remember_backup_step(frame, step, revision, created)
         temporary_path = None
         try:
             with tempfile.NamedTemporaryFile(
@@ -206,6 +218,7 @@ class FrameAPI:
             ) as temporary:
                 temporary_path = Path(temporary.name)
                 edited.save(temporary, format="PNG")
+            remember_frame_edit(frame, step, temporary_path.read_bytes(), initial)
             os.replace(temporary_path, frame)
         finally:
             if temporary_path is not None:

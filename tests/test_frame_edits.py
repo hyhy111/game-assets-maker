@@ -205,3 +205,134 @@ def test_revision_from_step2_does_not_authorize_overwriting_step3(frames):
     with pytest.raises(ValueError, match="FRAME_EDIT_STALE"):
         api.save_frame_edit("hero/idle", frame.name, data_url(png()), opened["revision"], 3)
     assert frame.read_bytes() == original
+
+
+def test_initial_version_survives_multiple_saves_and_a_new_api_instance(frames):
+    api, _, frame = frames
+    original = frame.read_bytes()
+    opened = api.get_editable_frame("hero/idle", frame.name)
+    assert base64.b64decode(opened["initial_image_data_url"].split(",", 1)[1]) == original
+    for alpha in (100, 0):
+        api.save_frame_edit("hero/idle", frame.name, data_url(png(color=(10, 20, 30, alpha))), opened["revision"])
+        api = FrameAPI(projects_root=frame.parents[4])
+        opened = api.get_editable_frame("hero/idle", frame.name)
+        assert base64.b64decode(opened["initial_image_data_url"].split(",", 1)[1]) == original
+    # Reading an initial image does not change the output; restoration is committed through the normal save API.
+    assert Image.open(frame).getpixel((0, 0)) == (10, 20, 30, 0)
+    api.save_frame_edit("hero/idle", frame.name, opened["initial_image_data_url"], opened["revision"])
+    assert frame.read_bytes() == original
+
+
+def test_initial_versions_are_isolated_between_steps(frames):
+    api, project, frame = frames
+    step2 = project / "output/02_no_bg" / frame.name
+    step2.parent.mkdir()
+    step2.write_bytes(png(color=(10, 200, 30, 255)))
+    before = {2: step2.read_bytes(), 3: frame.read_bytes()}
+    for step, target in ((2, step2), (3, frame)):
+        opened = api.get_editable_frame("hero/idle", target.name, step)
+        api.save_frame_edit("hero/idle", target.name, data_url(png(color=(0, 0, 0, 0))), opened["revision"], step)
+    opened3 = api.get_editable_frame("hero/idle", frame.name, 3)
+    unchanged_step2 = step2.read_bytes()
+    api.save_frame_edit("hero/idle", frame.name, opened3["initial_image_data_url"], opened3["revision"], 3)
+    assert frame.read_bytes() == before[3]
+    assert step2.read_bytes() == unchanged_step2
+    assert (
+        base64.b64decode(api.get_editable_frame("hero/idle", step2.name, 2)["initial_image_data_url"].split(",", 1)[1])
+        == before[2]
+    )
+
+
+def test_unscoped_legacy_backup_is_not_guessed_to_be_the_step3_initial_frame(frames):
+    api, project, frame = frames
+    unknown = png(color=(40, 150, 60, 255))
+    backup = project / "cache/frame_edits" / hashlib.sha256(unknown).hexdigest() / frame.name
+    backup.parent.mkdir(parents=True)
+    backup.write_bytes(unknown)
+    opened = api.get_editable_frame("hero/idle", frame.name)
+    assert opened["initial_image_data_url"] is None
+    assert base64.b64decode(opened["image_data_url"].split(",", 1)[1]) == frame.read_bytes()
+    assert backup.read_bytes() == unknown
+
+
+def test_successful_reprocessing_establishes_a_new_initial_version_and_preserves_step2(frames):
+    from backend.api.process_api import ProcessAPI, Task
+
+    api, project, frame = frames
+    original = frame.read_bytes()
+    opened = api.get_editable_frame("hero/idle", frame.name)
+    api.save_frame_edit("hero/idle", frame.name, data_url(png(color=(0, 0, 0, 0))), opened["revision"])
+    source = project / "output/02_no_bg" / frame.name
+    source.parent.mkdir()
+    source.write_bytes(png(color=(50, 60, 200, 255)))
+    source_before = source.read_bytes()
+    process = ProcessAPI(projects_root=project.parents[1])
+    try:
+        task = Task("reprocess-initial", "hero/idle", 3, {"enabled": False, "align_enabled": False})
+        process._run_task(task)
+        assert task.status == "completed", task.error
+        opened = api.get_editable_frame("hero/idle", frame.name)
+        assert base64.b64decode(opened["initial_image_data_url"].split(",", 1)[1]) == source_before
+        assert source.read_bytes() == source_before
+        assert (
+            project / "cache/frame_edits" / hashlib.sha256(original).hexdigest() / frame.name
+        ).read_bytes() == original
+    finally:
+        process.shutdown()
+
+
+def test_missing_initial_snapshot_disables_restoration_without_replacing_the_frame(frames):
+    api, project, frame = frames
+    opened = api.get_editable_frame("hero/idle", frame.name)
+    api.save_frame_edit("hero/idle", frame.name, data_url(png(color=(0, 0, 0, 0))), opened["revision"])
+    for image in (project / "cache/frame_edits/initial").rglob("images/*.png"):
+        image.unlink()
+    current = frame.read_bytes()
+    assert api.get_editable_frame("hero/idle", frame.name)["initial_image_data_url"] is None
+    assert frame.read_bytes() == current
+
+
+def test_initial_history_symlinks_cannot_escape_the_project(frames, tmp_path):
+    api, project, frame = frames
+    outside = tmp_path / "outside-history"
+    outside.mkdir()
+    history = project / "cache/frame_edits"
+    history.mkdir()
+    (history / "initial").symlink_to(outside, target_is_directory=True)
+    with pytest.raises(ValueError, match="FRAME_EDIT_INVALID_BACKUP"):
+        api.get_editable_frame("hero/idle", frame.name)
+    assert not list(outside.iterdir())
+
+
+def test_failed_output_replace_does_not_advance_the_initial_version(frames, monkeypatch):
+    import os
+
+    api, _, frame = frames
+    original = frame.read_bytes()
+    opened = api.get_editable_frame("hero/idle", frame.name)
+    replace = os.replace
+
+    def fail_output(source, target):
+        if target == frame:
+            raise OSError("failed output replace")
+        return replace(source, target)
+
+    with monkeypatch.context() as patch:
+        patch.setattr("backend.api.frame_api.os.replace", fail_output)
+        with pytest.raises(OSError, match="failed output replace"):
+            api.save_frame_edit("hero/idle", frame.name, data_url(png(color=(0, 0, 0, 0))), opened["revision"])
+    assert frame.read_bytes() == original
+    reopened = api.get_editable_frame("hero/idle", frame.name)
+    assert reopened["revision"] == opened["revision"]
+    assert reopened["initial_image_data_url"] == opened["initial_image_data_url"]
+
+
+def test_external_replacement_is_not_misidentified_as_a_new_initial_frame(frames):
+    api, _, frame = frames
+    opened = api.get_editable_frame("hero/idle", frame.name)
+    api.save_frame_edit("hero/idle", frame.name, data_url(png(color=(0, 0, 0, 0))), opened["revision"])
+    external = png(color=(10, 90, 200, 255))
+    frame.write_bytes(external)
+    reopened = api.get_editable_frame("hero/idle", frame.name)
+    assert reopened["initial_image_data_url"] is None
+    assert base64.b64decode(reopened["image_data_url"].split(",", 1)[1]) == external

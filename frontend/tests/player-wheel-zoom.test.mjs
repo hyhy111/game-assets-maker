@@ -18,12 +18,12 @@ async function player(editing) {
   const store = usePlayerStore();
   const setup = new Function('ref','computed','watch','onMounted','onUnmounted','storeToRefs','usePlayerStore',
     'useI18n','defineProps','withDefaults','defineEmits','ZoomIn','ZoomOut','Maximize',
-    `${javascript}\nreturn {containerRef, handleWheel};`);
+    `${javascript}\nreturn {containerRef, canvasRef, handleWheel, handleKeydown, zoomControls};`);
   const bindings = setup(ref,computed,()=>{},()=>{},()=>{},storeToRefs,()=>store,()=>({t:k=>k}),
     ()=>({editing}), p=>p,()=>()=>{},null,null,null);
   bindings.containerRef.value = {getBoundingClientRect:()=>({left:100,top:50,width:800,height:600})};
   const wheel = (deltaY, clientX=700, clientY=200) => bindings.handleWheel({deltaY,clientX,clientY,preventDefault(){}});
-  return {store,wheel};
+  return {store,wheel,...bindings};
 }
 
 for (const editing of [false,true]) {
@@ -55,4 +55,51 @@ test('zoom clamps to actual store limits without anchor drift or zero-wheel moti
   const state=[store.zoom,store.panX,store.panY];
   wheel(0);
   assert.deepEqual([store.zoom,store.panX,store.panY],state);
+});
+
+for (const editing of [false, true]) {
+  test(`reset fits the actual shortened viewport and centers the whole frame in ${editing ? 'retouch' : 'browse'} mode`, async () => {
+    const state = await player(editing);
+    const {store,containerRef,canvasRef,zoomControls,handleKeydown} = state;
+    canvasRef.value = {width:1920,height:1080};
+    const canvas = canvasRef.value;
+    containerRef.value = {getBoundingClientRect:()=>({width:800,height:420})};
+    store.setZoom(2); store.setPan(250,-160);
+    zoomControls.find(control=>control.action==='reset').handler();
+    assert.ok(canvas.height * store.zoom <= 420, 'reset must fit below the retouch toolbar');
+    assert.ok(canvas.width * store.zoom <= 800);
+    assert.equal(store.panX,0); assert.equal(store.panY,0);
+    const buttonZoom = store.zoom;
+    store.setZoom(2); store.setPan(42,-37);
+    const previousElement = globalThis.Element;
+    globalThis.Element = class {};
+    try {
+      handleKeydown({key:'0',ctrlKey:true,target:null,preventDefault(){}});
+      assert.equal(store.zoom,buttonZoom, 'keyboard reset uses the same viewport fit');
+    } finally {
+      if (previousElement === undefined) delete globalThis.Element;
+      else globalThis.Element = previousElement;
+    }
+    containerRef.value = {getBoundingClientRect:()=>({width:800,height:300})};
+    zoomControls.find(control=>control.action==='reset').handler();
+    assert.ok(store.zoom<buttonZoom, 'reset recalculates after the available height shrinks');
+    assert.ok(canvas.height * store.zoom<=300);
+    assert.deepEqual({width:canvas.width,height:canvas.height},{width:1920,height:1080});
+  });
+}
+
+test('reset fits wide frames, keeps small frames at native size and tolerates an unloaded canvas', async () => {
+  const {store,canvasRef,containerRef,zoomControls} = await player(false);
+  const reset = zoomControls.find(control=>control.action==='reset').handler;
+  containerRef.value = {getBoundingClientRect:()=>({width:600,height:400})};
+  canvasRef.value = {width:3200,height:500};
+  reset();
+  assert.ok(3200 * store.zoom<=600);
+  assert.ok(500 * store.zoom<=400);
+  canvasRef.value = {width:64,height:64};
+  reset();
+  assert.equal(store.zoom,1);
+  canvasRef.value = undefined;
+  store.setPan(20,30); reset();
+  assert.equal(store.zoom,1); assert.equal(store.panX,0); assert.equal(store.panY,0);
 });

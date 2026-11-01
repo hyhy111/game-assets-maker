@@ -141,6 +141,50 @@
     @apply ring-2 ring-primary/70;
   }
 
+  /* Keep preview labels legible independently of the media underneath. */
+  .media-overlay-badge {
+    @apply inline-flex max-w-full items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium;
+    border-color: rgb(255 255 255 / 24%);
+    background: #20252b;
+    color: #f3f4f6;
+    line-height: 16px;
+    overflow-wrap: anywhere;
+    text-align: left;
+    box-shadow: 0 1px 4px rgb(0 0 0 / 32%);
+  }
+
+  .media-overlay-status::before {
+    content: '';
+    width: 5px;
+    height: 5px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    background: var(--media-status-dot, #d1d5db);
+  }
+
+  .media-overlay-status-success {
+    --media-status-dot: #2cc985;
+    color: #b3edd3;
+  }
+
+  .media-overlay-status-active {
+    --media-status-dot: #ffbd5c;
+  }
+
+  .media-overlay-status-warning {
+    --media-status-dot: #f39c12;
+    color: #fce3b3;
+  }
+
+  .media-overlay-status-danger {
+    --media-status-dot: #e74c3c;
+    color: #f7c5c0;
+  }
+
+  .media-overlay-status-neutral {
+    color: #e5e7eb;
+  }
+
   .recent-generation-card-active {
     position: relative;
   }
@@ -184,4 +228,51 @@
   .slider::-moz-range-thumb {
     @apply w-4 h-4 bg-primary rounded-full cursor-pointer border-0 hover:bg-primary-400 transition-colors;
   }
+}
+
+/* Icon labels appear only on hover or keyboard focus, without taking layout space. */
+.control-tooltip {
+  position: relative;
+}
+
+.control-tooltip::after {
+  content: attr(aria-label);
+  position: absolute;
+  z-index: 60;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: 260px;
+  padding: 5px 8px;
+  border: 1px solid #4b5563;
+  border-radius: 6px;
+  background: #111827;
+  color: #f3f4f6;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+  white-space: normal;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+}
+
+.control-tooltip:hover::after,
+.control-tooltip:focus-visible::after {
+  opacity: 1;
+  visibility: visible;
+}
+
+.control-tooltip[data-tooltip]::after {
+  content: attr(data-tooltip);
+}
+
+/* Preview tools sit against the right edge; keep their labels inside the canvas. */
+.control-tooltip--left::after {
+  top: 50%;
+  right: calc(100% + 10px);
+  bottom: auto;
+  left: auto;
+  transform: translateY(-50%);
 }

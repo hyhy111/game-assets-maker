@@ -33,7 +33,7 @@
     <!-- Hole Punch Settings Toggle -->
     <div class="flex items-center justify-between">
       <label class="text-sm font-medium text-gray-300">{{ t('step3.holePunch') }}</label>
-      <Switch v-model="s3Params.enabled" />
+      <Switch v-model="s3Params.enabled" :aria-label="t('step3.holePunch')" />
     </div>
 
     <!-- Hole Punch Settings (collapsible) -->
@@ -49,6 +49,7 @@
         </div>
         <input
           v-model.number="s3Params.green_intensity"
+          :aria-label="t('step3.greenIntensity')"
           type="range"
           min="1"
           max="5"
@@ -71,6 +72,7 @@
           <label class="block text-sm font-medium text-gray-400">{{ t('step3.featherRadius') }}</label>
           <Input
             v-model.number="s3Params.feather_radius"
+            :aria-label="t('step3.featherRadius')"
             type="number"
             min="0"
             max="10"
@@ -80,6 +82,7 @@
         </div>
         <input
           v-model.number="s3Params.feather_radius"
+          :aria-label="t('step3.featherRadius')"
           type="range"
           min="0"
           max="10"
@@ -102,6 +105,7 @@
           <label class="block text-sm font-medium text-gray-400">{{ t('step3.minHoleSize') }}</label>
           <Input
             v-model.number="s3Params.min_hole_size"
+            :aria-label="t('step3.minHoleSize')"
             type="number"
             min="0"
             max="500"
@@ -111,6 +115,7 @@
         </div>
         <input
           v-model.number="s3Params.min_hole_size"
+          :aria-label="t('step3.minHoleSize')"
           type="range"
           min="0"
           max="100"
@@ -131,7 +136,7 @@
     <!-- Alignment Settings Toggle -->
     <div class="flex items-center justify-between pt-2 border-t border-dark-border">
       <label class="text-sm font-medium text-gray-300">{{ t('step3.frameAlignment') }}</label>
-      <Switch v-model="s3Params.align_enabled" />
+      <Switch v-model="s3Params.align_enabled" :aria-label="t('step3.frameAlignment')" />
     </div>
 
     <!-- Alignment Settings (collapsible) -->
@@ -145,7 +150,7 @@
           <label class="text-sm font-medium text-gray-400">{{ t('step3.horizontalCenter') }}</label>
           <span class="text-xs text-gray-500">{{ t('step3.horizontalCenterDesc') }}</span>
         </div>
-        <Switch v-model="s3Params.align_h" />
+        <Switch v-model="s3Params.align_h" :aria-label="t('step3.horizontalCenter')" />
       </div>
 
       <!-- Vertical Bottom Alignment -->
@@ -154,7 +159,7 @@
           <label class="text-sm font-medium text-gray-400">{{ t('step3.bottomAlign') }}</label>
           <span class="text-xs text-gray-500">{{ t('step3.bottomAlignDesc') }}</span>
         </div>
-        <Switch v-model="s3Params.align_v" />
+        <Switch v-model="s3Params.align_v" :aria-label="t('step3.bottomAlign')" />
       </div>
     </div>
 

@@ -74,12 +74,22 @@
       <p class="text-xs text-gray-400">
         {{ t('updates.manualInstall') }}
       </p>
-      <p
+      <details
         v-if="updates.state?.release_notes"
-        class="mt-3 whitespace-pre-wrap break-words text-sm text-gray-300"
+        :key="updates.state.latest_version"
+        class="group mt-3"
+        data-test="app-update-details"
       >
-        {{ updates.state.release_notes }}
-      </p>
+        <summary
+          class="inline-flex cursor-pointer list-none items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-gray-200 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary [&::-webkit-details-marker]:hidden"
+          data-test="app-update-details-toggle"
+        >
+          <ChevronDown class="h-4 w-4 transition-transform group-open:rotate-180" aria-hidden="true" />
+          <span class="group-open:hidden">{{ t('updates.showDetails') }}</span>
+          <span class="hidden group-open:inline">{{ t('updates.hideDetails') }}</span>
+        </summary>
+        <div class="release-notes" data-test="app-update-release-notes" v-html="releaseNotesHtml" />
+      </details>
     </div>
     <p
       v-if="updates.actionError"
@@ -92,11 +102,52 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue';
+import { ChevronDown } from 'lucide-vue-next';
 import { useI18n } from 'vue-i18n';
+import { renderReleaseNotes } from '@/release-notes';
 import Button from '@/components/common/Button.vue';
 import SeedancePanel from '@/components/seedance/SeedancePanel.vue';
 import { useUpdateStore } from '@/stores/updates';
 
 const { t } = useI18n();
 const updates = useUpdateStore();
+const releaseNotesHtml = computed(() => renderReleaseNotes(updates.state?.release_notes ?? ''));
 </script>
+
+<style scoped>
+.release-notes {
+  @apply mt-3 overflow-x-auto break-words text-sm leading-6 text-gray-300;
+}
+.release-notes :deep(h1),
+.release-notes :deep(h2),
+.release-notes :deep(h3),
+.release-notes :deep(h4),
+.release-notes :deep(h5),
+.release-notes :deep(h6) {
+  @apply mb-2 mt-4 font-semibold text-white;
+}
+.release-notes :deep(h1) { @apply text-lg; }
+.release-notes :deep(h2) { @apply text-base; }
+.release-notes :deep(p),
+.release-notes :deep(ul),
+.release-notes :deep(ol),
+.release-notes :deep(pre),
+.release-notes :deep(blockquote),
+.release-notes :deep(table) {
+  @apply my-3;
+}
+.release-notes :deep(ul) { @apply list-disc pl-5; }
+.release-notes :deep(ol) { @apply list-decimal pl-5; }
+.release-notes :deep(li > ul),
+.release-notes :deep(li > ol) { @apply my-1; }
+.release-notes :deep(a) { @apply text-primary underline underline-offset-2; }
+.release-notes :deep(code) { @apply rounded bg-white/10 px-1 py-0.5 font-mono text-xs; }
+.release-notes :deep(pre) { @apply overflow-x-auto rounded-lg bg-black/30 p-3; }
+.release-notes :deep(pre code) { @apply bg-transparent p-0; }
+.release-notes :deep(blockquote) { @apply border-l-2 border-dark-border pl-3 text-gray-400; }
+.release-notes :deep(table) { @apply w-full border-collapse text-left; }
+.release-notes :deep(th),
+.release-notes :deep(td) { @apply border border-dark-border px-3 py-2; }
+.release-notes :deep(hr) { @apply my-4 border-dark-border; }
+</style>

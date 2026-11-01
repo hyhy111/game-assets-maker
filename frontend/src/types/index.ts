@@ -211,6 +211,7 @@ export interface Step2Params {
 
 export interface EditableFrame {
   image_data_url: string;
+  initial_image_data_url?: string | null;
   revision: string;
   width: number;
   height: number;

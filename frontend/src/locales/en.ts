@@ -3,6 +3,9 @@ export default {
     title: 'Game Assets Maker',
   },
   common: {
+    value: 'value',
+    increase: 'Increase {label}',
+    decrease: 'Decrease {label}',
     cancel: 'Cancel',
     save: 'Save',
     delete: 'Delete',
@@ -105,6 +108,8 @@ export default {
     ignore: 'Ignore this version',
     notification: 'Settings · An update is available',
     manualInstall: 'Open the release page to download. Quit the app before running the installer or replacing the app.',
+    showDetails: 'Show release details',
+    hideDetails: 'Hide release details',
     ignoreFailed: 'Could not save the ignored version. Please retry.',
     openFailed: 'Could not open the download page. Please retry.',
     errors: {
@@ -184,6 +189,7 @@ export default {
       createdAt: 'Created At',
       elapsed: 'Total Elapsed',
       generating: 'Generating',
+      completed: 'Completed',
       loadMore: 'Load More',
       emptyImages: 'No image generations yet',
       emptyVideos: 'No video generations yet',
@@ -803,6 +809,10 @@ export default {
     },
   },
   magicWand: {
+    restoreRestartRequired: 'Save your current changes and restart the app to enable initial-version restoration.',
+    restoreInitial: 'Restore Initial Version',
+    restoreInitialHint: 'Restore the frame produced by Step 3 before manual edits. Save to apply; this action can be undone.',
+    initialUnavailable: 'No verified initial version is available. Reprocess Step 3 to establish a new baseline.',
     browse: 'Browse / pan canvas',
     zoomIn: 'Zoom in',
     zoomOut: 'Zoom out',
@@ -837,6 +847,14 @@ export default {
     failed: 'Cannot read or save this frame. Reopen it and try again.',
   },
   player: {
+    play: 'Play',
+    pause: 'Pause',
+    previousFrame: 'Previous frame',
+    nextFrame: 'Next frame',
+    fps: 'Playback frame rate (FPS)',
+    audioTrack: 'Audio track',
+    mute: 'Mute',
+    unmute: 'Unmute',
     frames: 'Frame List',
   },
 }

@@ -36,31 +36,36 @@ test('zero-feather deletion only clears the selected pixels and leaves input unc
   assert.deepEqual(image.data, before);
 });
 
-test('feathering starts inside the outermost selected pixel and never changes unselected pixels', () => {
+test('feathering clears the whole selected core and softens only its outside neighborhood', () => {
   const image = pixels(7, Array.from({ length: 49 }, () => gray));
   const selected = new Uint8Array(49);
-  for (let y = 1; y < 6; y++) for (let x = 1; x < 6; x++) selected[y * 7 + x] = 1;
+  for (let y = 2; y < 5; y++) for (let x = 2; x < 5; x++) selected[y * 7 + x] = 1;
+  const before = new Uint8ClampedArray(image.data);
   const output = deleteSelection(image, selected, 1);
-  assert.equal(output[(1 * 7 + 3) * 4 + 3], 128, 'outer selected ring is partially retained');
-  assert.equal(output[(2 * 7 + 3) * 4 + 3], 0, 'interior is erased');
   for (let index = 0; index < selected.length; index++) {
-    if (!selected[index]) assert.deepEqual(output.slice(index * 4, index * 4 + 4), image.data.slice(index * 4, index * 4 + 4));
+    if (selected[index]) assert.deepEqual([...output.slice(index * 4, index * 4 + 4)], [0,0,0,0]);
   }
-  assert.deepEqual([...output.slice((1 * 7 + 3) * 4, (1 * 7 + 3) * 4 + 3)], gray.slice(0, 3));
-  assert.equal(image.data[(2 * 7 + 3) * 4 + 3], 255, 'input is unchanged');
+  assert.equal(output[(1 * 7 + 3) * 4 + 3], 128, 'the adjacent unselected pixel is feathered');
+  assert.deepEqual(output.slice(3 * 4, 3 * 4 + 4), image.data.slice(3 * 4, 3 * 4 + 4), 'pixels beyond the radius stay unchanged');
+  assert.deepEqual([...output.slice((1 * 7 + 3) * 4, (1 * 7 + 3) * 4 + 3)], gray.slice(0,3));
+  assert.deepEqual(image.data,before);
 });
 
-test('positive feather retains thin islands, respects existing alpha, and handles image borders and holes', () => {
-  const image = pixels(3, Array.from({ length: 9 }, () => [120, 120, 130, 100]));
+test('outward feather handles thin islands, existing alpha, borders and holes without double fading', () => {
+  const image = pixels(3, Array.from({ length: 9 }, () => [120,120,130,100]));
   const full = deleteSelection(image, new Uint8Array(9).fill(1), 1);
-  assert.equal(full[3], 50, 'image edge is a boundary');
-  assert.equal(full[4 * 4 + 3], 0, 'full-image selection has an erasable interior');
+  assert.ok(full.every(value=>value===0), 'a fully selected image is completely removed');
   const island = deleteSelection(image, new Uint8Array([0,0,0,0,1,0,0,0,0]), 12);
-  assert.ok(island[4 * 4 + 3] > 0 && island[4 * 4 + 3] < 100);
-  const ring = new Uint8Array(9).fill(1); ring[4] = 0;
-  const hole = deleteSelection(image, ring, 1);
-  assert.deepEqual(hole.slice(16, 20), image.data.slice(16, 20));
-  assert.equal(hole[1 * 4 + 3], 50, 'selected ring around a hole is feathered');
+  assert.equal(island[4 * 4 + 3],0, 'even a single selected pixel is fully removed');
+  assert.ok(island[1 * 4 + 3]>0 && island[1 * 4 + 3]<100);
+  const ring = new Uint8Array(9).fill(1); ring[4]=0;
+  assert.equal(deleteSelection(image,ring,1)[4 * 4 + 3],50, 'inner holes also receive outward feathering');
+  const border = deleteSelection(image,new Uint8Array([1,0,0,0,0,0,0,0,0]),1);
+  assert.equal(border[3],0);
+  assert.equal(border[1 * 4 + 3],50);
+  assert.equal(border[8 * 4 + 3],100);
+  const line = pixels(5,Array.from({length:5},()=>[120,120,130,100]));
+  assert.equal(deleteSelection(line,new Uint8Array([0,1,0,1,0]),1)[2 * 4 + 3],50);
 });
 
 test('eraser hard and soft strokes stay within the brush and soften inward', () => {
@@ -122,4 +127,26 @@ test('frame eraser exposes a 5px brush and a separate zero-default feather slide
   });
   assert.match(html, /data-test="seedream-eraser-size"[\s\S]*?value="5"/);
   assert.match(html, /data-test="seedream-eraser-feather"[\s\S]*?value="0"/);
+});
+
+test('frame editor exposes initial-version restore and disables it when no verified baseline exists', async () => {
+  for (const initial of ['', 'data:image/png;base64,fixture']) {
+    const html = await renderSfc('components/seedream/SeedreamImageEraser.vue', {
+      props:{imageUrl:'',saving:false,magicWandEnabled:true,originalImageUrl:initial},
+      configureSetup(bindings){bindings.loading.value=false;},
+    });
+    const button=html.match(/<button([^>]*data-test="image-editor-restore-original"[^>]*)>/);
+    assert.ok(button);
+    assert.match(html,/恢复初始版本/);
+    assert.equal(/\sdisabled(?:\s|=|$)/.test(button[1]),!initial);
+  }
+});
+
+
+test('an older running backend shows a restart hint rather than suggesting unsupported reprocessing', async () => {
+  const html = await renderSfc('components/seedream/SeedreamImageEraser.vue', {
+    props:{imageUrl:'',saving:false,magicWandEnabled:true,initialRestoreUnsupported:true},
+    configureSetup(bindings){bindings.loading.value=false;},
+  });
+  assert.match(html,/请保存当前修改并重启应用/);
 });

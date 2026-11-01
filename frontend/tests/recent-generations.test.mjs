@@ -250,6 +250,8 @@ test('video filter is independent from creation mode and renders video metadata'
 
   assert.match(html, /aria-pressed="true"[^>]*data-test="recent-filter-video"/);
   assert.match(html, /data-test="recent-video-task-1"/);
+  assert.match(html, />已完成<\/span>/);
+  assert.doesNotMatch(html, /下载完成/);
   assert.match(html, /720p/);
   assert.match(html, /16:9/);
   assert.match(html, />4s</);
@@ -294,10 +296,12 @@ test('recent generation cards right-align total elapsed metadata', async () => {
   assert.match(videoCard, /<div class="text-right">\s*<dt class="text-gray-500">\{\{ t\('aiCreation\.recent\.elapsed'\) \}\}/s);
 });
 
-test('active recent video cards use white status text over the preview', async () => {
-  const videoCard = await source('components/ai-creation/RecentVideoGenerationCard.vue');
-
-  assert.match(videoCard, /if \(active\.value\) return 'bg-primary\/20 text-white'/);
+test('active recent video cards retain their status label and overlay treatment', async () => {
+  const html = await renderSfc('components/ai-creation/RecentVideoGenerationCard.vue', {
+    props: { task: task(1, { remote_status: 'running', download_status: 'pending' }) },
+  });
+  assert.match(html, /<span class="[^"]*media-overlay-status-active[^"]*"/);
+  assert.match(html, /生成中/);
 });
 
 test('image task cards use one main preview with a selectable thumbnail strip', async () => {

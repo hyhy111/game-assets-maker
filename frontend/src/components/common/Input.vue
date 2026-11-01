@@ -9,8 +9,9 @@
     </label>
     <div class="relative">
       <input
-        :id="inputId"
         ref="inputRef"
+        :id="inputId"
+        :aria-label="ariaLabel"
         :type="type"
         :value="modelValue"
         :placeholder="placeholder"
@@ -37,15 +38,19 @@
       >
         <button
           type="button"
-          class="flex-1 flex items-center justify-center hover:bg-dark-border rounded-tr text-gray-400 hover:text-white transition-colors"
-          @mousedown.prevent="step(1)"
+          class="control-tooltip flex-1 flex items-center justify-center hover:bg-dark-border rounded-tr text-gray-400 hover:text-white transition-colors"
+          :aria-label="t('common.increase', { label: ariaLabel || label || t('common.value') })"
+          @mousedown.prevent
+          @click="step(1)"
         >
           <ChevronUp class="w-3 h-3" />
         </button>
         <button
           type="button"
-          class="flex-1 flex items-center justify-center hover:bg-dark-border rounded-br text-gray-400 hover:text-white transition-colors"
-          @mousedown.prevent="step(-1)"
+          class="control-tooltip flex-1 flex items-center justify-center hover:bg-dark-border rounded-br text-gray-400 hover:text-white transition-colors"
+          :aria-label="t('common.decrease', { label: ariaLabel || label || t('common.value') })"
+          @mousedown.prevent
+          @click="step(-1)"
         >
           <ChevronDown class="w-3 h-3" />
         </button>
@@ -75,11 +80,13 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { ChevronUp, ChevronDown } from 'lucide-vue-next';
+import { useI18n } from 'vue-i18n';
 
 const props = defineProps<{
   modelValue: string | number;
   type?: string;
   label?: string;
+  ariaLabel?: string;
   placeholder?: string;
   hint?: string;
   error?: string;
@@ -98,6 +105,7 @@ const emit = defineEmits<{
   focus: [event: Event];
 }>();
 
+const { t } = useI18n();
 const inputId = computed(() => `input-${Math.random().toString(36).substr(2, 9)}`);
 const inputRef = ref<HTMLInputElement | null>(null);
 

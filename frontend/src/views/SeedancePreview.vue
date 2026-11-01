@@ -1,9 +1,13 @@
 <template>
   <SeedanceShell>
     <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
-      <h1 class="flex items-center gap-2 text-xl font-semibold text-white">
+      <h1 class="flex flex-wrap items-center gap-3 text-xl font-semibold text-white">
         {{ t('aiCreation.videoDetailTitle') }}
-        <PlatformSourceBadge v-if="task" :source="task.source" />
+        <PlatformSourceBadge
+          v-if="task"
+          :source="task.source"
+          glass
+        />
       </h1>
       <button
         type="button"

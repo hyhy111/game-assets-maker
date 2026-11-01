@@ -34,7 +34,7 @@
               :tools-disabled="frameEditorLoading || frameEditorSaving || navigationPending || processStore.isProcessing"
               :active-tool="frameEditor ? frameEditorTool : 'browse'" @tool="selectFrameTool">
               <SeedreamImageEraser v-if="frameEditor" ref="frameEditorRef"
-                :image-url="frameEditor.imageUrl" :saving="frameEditorSaving" :magic-wand-enabled="true"
+                :image-url="frameEditor.imageUrl" :original-image-url="frameEditor.originalImageUrl" :initial-restore-unsupported="frameEditor.initialRestoreUnsupported" :saving="frameEditorSaving" :magic-wand-enabled="true"
                 :embedded="true" :toolbar-target="frameToolbar" :active-tool="frameEditorTool"
                 :view-zoom="playerStore.zoom" :view-pan-x="playerStore.panX" :view-pan-y="playerStore.panY"
                 :suspended="navigationPending || processStore.isProcessing" :error="frameEditorError"
@@ -159,7 +159,7 @@ const hiddenFrames = ref<string[]>([]);
 const timelineFrameCount = ref(0);
 const visibilityUpdating = ref(false);
 let frameLoadRequestId = 0;
-const frameEditor = ref<{ projectId: string; filename: string; imageUrl: string; revision: string; step: number } | null>(null);
+const frameEditor = ref<{ projectId: string; filename: string; imageUrl: string; originalImageUrl: string; initialRestoreUnsupported: boolean; revision: string; step: number } | null>(null);
 const frameEditorLoading = ref(false);
 const frameEditorSaving = ref(false);
 const frameEditorError = ref('');
@@ -256,7 +256,7 @@ async function openFrameEditor(tool: 'wand' | 'brush') {
     const editable = await api.frame.getEditableFrame(project.id, frame.filename, step);
     if (currentProject.value?.id !== project.id || currentStep.value !== step || playerStore.currentFrame?.filename !== frame.filename) return;
     frameEditorTool.value = tool;
-    frameEditor.value = { projectId: project.id, filename: frame.filename, imageUrl: editable.image_data_url, revision: editable.revision, step };
+    frameEditor.value = { projectId: project.id, filename: frame.filename, imageUrl: editable.image_data_url, originalImageUrl: editable.initial_image_data_url ?? '', initialRestoreUnsupported: editable.initial_image_data_url === undefined, revision: editable.revision, step };
   } catch (error) {
     frameEditorError.value = frameEditError(error);
   } finally {

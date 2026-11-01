@@ -39,14 +39,15 @@
         {{ t('common.cancel') }}
       </Button>
       <button
-        v-if="resizeEnabled"
+        v-if="resizeEnabled || magicWandEnabled"
         type="button"
         class="inline-flex h-8 items-center justify-center rounded-lg bg-success px-3 text-sm font-medium text-white transition-colors hover:bg-success/80 disabled:cursor-not-allowed disabled:opacity-50"
-        :disabled="saving || loading || (!dirty && !externalRestoreAvailable)"
+        :disabled="saving || loading || suspended || drawing || (magicWandEnabled ? !originalImageUrl : !dirty && !externalRestoreAvailable)"
+        :title="magicWandEnabled ? t(originalImageUrl ? 'magicWand.restoreInitialHint' : initialRestoreUnsupported ? 'magicWand.restoreRestartRequired' : 'magicWand.initialUnavailable') : undefined"
         data-test="image-editor-restore-original"
         @click="restoreOriginal"
       >
-        {{ t('seedream.detail.restoreOriginal') }}
+        {{ magicWandEnabled ? t('magicWand.restoreInitial') : t('seedream.detail.restoreOriginal') }}
       </button>
       <Button
         variant="primary"
@@ -335,6 +336,8 @@ const props = withDefaults(defineProps<{
   viewPanY?: number;
   suspended?: boolean;
   editSourceUrl?: string;
+  originalImageUrl?: string;
+  initialRestoreUnsupported?: boolean;
   saving: boolean;
   error?: string;
   title?: string;
@@ -351,6 +354,8 @@ const props = withDefaults(defineProps<{
   suspended: false,
   error: '',
   editSourceUrl: '',
+  originalImageUrl: '',
+  initialRestoreUnsupported: false,
   title: '',
   resizeEnabled: false,
   magicWandEnabled: false,
@@ -496,9 +501,10 @@ async function loadImage() {
   loading.value = true;
   loadError.value = '';
   try {
-    const [image, editSourceImage] = await Promise.all([
+    const [image, editSourceImage, initialImage] = await Promise.all([
       loadHtmlImage(props.imageUrl),
       loadHtmlImage(props.editSourceUrl || props.imageUrl),
+      props.magicWandEnabled && props.originalImageUrl ? loadHtmlImage(props.originalImageUrl) : null,
     ]);
     const canvas = canvasRef.value;
     if (!canvas) return;
@@ -519,7 +525,20 @@ async function loadImage() {
     const sourceContext = editSourceCanvas.getContext('2d', { willReadFrequently: true });
     if (!sourceContext) return;
     sourceContext.drawImage(editSourceImage, 0, 0);
-    originalImageData = sourceContext.getImageData(0, 0, canvas.width, canvas.height);
+    if (initialImage) {
+      if (initialImage.naturalWidth !== canvas.width || initialImage.naturalHeight !== canvas.height) {
+        throw new Error('Initial frame dimensions do not match the current frame');
+      }
+      const initialCanvas = document.createElement('canvas');
+      initialCanvas.width = canvas.width;
+      initialCanvas.height = canvas.height;
+      const initialContext = initialCanvas.getContext('2d', { willReadFrequently: true });
+      if (!initialContext) throw new Error('Initial frame canvas is unavailable');
+      initialContext.drawImage(initialImage, 0, 0);
+      originalImageData = initialContext.getImageData(0, 0, canvas.width, canvas.height);
+    } else {
+      originalImageData = sourceContext.getImageData(0, 0, canvas.width, canvas.height);
+    }
     backgroundColor.value = sampleCornerColor(sourceContext, canvas.width, canvas.height);
     zoom.value = 1;
     panX.value = 0;
@@ -743,6 +762,22 @@ function applyResize() {
 }
 
 function restoreOriginal() {
+  if (props.magicWandEnabled) {
+    if (props.saving || props.suspended || loading.value || drawing.value || !props.originalImageUrl) return;
+    const source = editSourceCanvas;
+    const context = source?.getContext('2d', { willReadFrequently: true });
+    const original = originalImageData;
+    if (!source || !context || !original) return;
+    const before = context.getImageData(0, 0, source.width, source.height);
+    if (before.data.every((value, index) => value === original.data[index])) return;
+    context.putImageData(original, 0, 0);
+    undoStack.value.push({ kind: 'erase', x: 0, y: 0, before, after: original });
+    if (undoStack.value.length > HISTORY_LIMIT) { undoStack.value.shift(); historyTruncated.value = true; }
+    redoStack.value = [];
+    clearWandSelection();
+    renderFromSource();
+    return;
+  }
   if (props.externalRestoreAvailable) {
     emit('restore');
     return;
@@ -1105,7 +1140,7 @@ function deleteWandSelection() {
   const context = source?.getContext('2d', { willReadFrequently: true });
   if (!source || !context || !selectedCount.value || props.saving) return;
   const before = context.getImageData(0, 0, source.width, source.height);
-  const bounds = selectionBounds(selection.value, source.width, source.height);
+  const bounds = selectionBounds(selection.value, source.width, source.height, wandFeather.value + 1);
   if (!bounds) return;
   const pixels = deleteSelection(before, selection.value, wandFeather.value);
   const after = context.createImageData(source.width, source.height);

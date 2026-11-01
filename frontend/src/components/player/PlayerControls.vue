@@ -1,9 +1,13 @@
 <template>
-  <div>
-    <div class="flex items-center gap-4 px-4 py-3 bg-dark-surface border-t border-dark-border">
+  <div
+    class="rounded-xl border border-dark-border bg-dark-surface"
+    data-test="player-controls"
+  >
+    <div class="flex items-center gap-4 rounded-xl px-4 py-3">
     <!-- Play/Pause button -->
     <button
-      class="p-2 rounded-lg bg-primary hover:bg-primary-600 text-dark-bg transition-colors"
+      class="control-tooltip p-2 rounded-lg bg-primary hover:bg-primary-600 text-dark-bg transition-colors"
+      :aria-label="isPlaying ? t('player.pause') : t('player.play')"
       @pointerdown="resumeAudioPlayback"
       @click="playerStore.togglePlay()"
     >
@@ -20,7 +24,8 @@
     <!-- Frame navigation -->
     <div class="flex items-center gap-2">
       <button
-        class="p-1.5 rounded hover:bg-dark-border text-gray-400 hover:text-white transition-colors"
+        class="control-tooltip p-1.5 rounded hover:bg-dark-border text-gray-400 hover:text-white transition-colors"
+        :aria-label="t('player.previousFrame')"
         :disabled="!canGoPrev"
         @click="playerStore.prevFrame()"
       >
@@ -32,7 +37,8 @@
       </span>
 
       <button
-        class="p-1.5 rounded hover:bg-dark-border text-gray-400 hover:text-white transition-colors"
+        class="control-tooltip p-1.5 rounded hover:bg-dark-border text-gray-400 hover:text-white transition-colors"
+        :aria-label="t('player.nextFrame')"
         :disabled="!canGoNext"
         @click="playerStore.nextFrame()"
       >
@@ -61,6 +67,7 @@
       <div class="relative">
         <input
           ref="fpsInputRef"
+          :aria-label="t('player.fps')"
           :value="playbackFps"
           type="number"
           min="1"
@@ -73,15 +80,19 @@
         <div class="absolute inset-y-1 right-1 w-4 flex flex-col border-l border-dark-border">
           <button
             type="button"
-            class="flex-1 flex items-center justify-center hover:bg-dark-border rounded-tr text-gray-400 hover:text-white transition-colors"
-            @mousedown.prevent="stepFps(1)"
+            class="control-tooltip flex-1 flex items-center justify-center hover:bg-dark-border rounded-tr text-gray-400 hover:text-white transition-colors"
+            :aria-label="t('common.increase', { label: t('player.fps') })"
+            @mousedown.prevent
+            @click="stepFps(1)"
           >
             <ChevronUp class="w-3 h-3" />
           </button>
           <button
             type="button"
-            class="flex-1 flex items-center justify-center hover:bg-dark-border rounded-br text-gray-400 hover:text-white transition-colors"
-            @mousedown.prevent="stepFps(-1)"
+            class="control-tooltip flex-1 flex items-center justify-center hover:bg-dark-border rounded-br text-gray-400 hover:text-white transition-colors"
+            :aria-label="t('common.decrease', { label: t('player.fps') })"
+            @mousedown.prevent
+            @click="stepFps(-1)"
           >
             <ChevronDown class="w-3 h-3" />
           </button>
@@ -112,7 +123,7 @@
           <span />
           <span />
         </span>
-        <span>音效轨</span>
+        <span>{{ t('player.audioTrack') }}</span>
         <ChevronDown
           class="h-3.5 w-3.5 transition-transform duration-200"
           :class="showAudioTimeline ? 'rotate-180' : ''"
@@ -122,11 +133,10 @@
       <button
         type="button"
         data-test="audio-mute-toggle"
-        :aria-label="audioPlaybackEnabled ? '静音' : '取消静音'"
-        :title="audioPlaybackEnabled ? '静音' : '取消静音'"
+        :aria-label="audioPlaybackEnabled ? t('player.mute') : t('player.unmute')"
         :aria-pressed="!audioPlaybackEnabled"
         :class="[
-          'grid h-9 w-9 place-items-center rounded-lg border transition-colors',
+          'control-tooltip grid h-9 w-9 place-items-center rounded-lg border transition-colors',
           audioPlaybackEnabled
             ? 'border-dark-border text-gray-400 hover:border-gray-500 hover:text-white'
             : 'border-primary bg-primary/15 text-primary'
@@ -168,6 +178,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
+import { useI18n } from 'vue-i18n';
 import { Play, Pause, SkipBack, SkipForward, ChevronUp, ChevronDown, Volume2, VolumeX } from 'lucide-vue-next';
 import { usePlayerStore } from '@/stores/player';
 import { useProcessStore } from '@/stores/process';
@@ -192,6 +203,7 @@ const props = withDefaults(defineProps<{
   timelineFrameCount: 0,
 });
 
+const { t } = useI18n();
 const playerStore = usePlayerStore();
 const processStore = useProcessStore();
 const audioStore = useAudioTimelineStore();

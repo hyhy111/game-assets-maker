@@ -20,6 +20,7 @@ from filelock import FileLock
 
 from backend.api.project_paths import resolve_project_path
 from backend.core.background_color import batch_punch_holes_color, validate_color_params
+from backend.core.frame_edit_history import start_frame_edit_generation
 from backend.core.model_preloader import ModelLoader, ModelPreloader, ModelStatus, RembgModelLoader
 from backend.core.smart_remove_background import batch_remove_background
 
@@ -327,6 +328,7 @@ class ProcessAPI:
             self._save_background_color(task.project_id, result["background_color"])
 
         # Save params
+        start_frame_edit_generation(project_path, 2)
         self.save_step_params(task.project_id, 2, task.params)
 
     def _run_step3(self, task: Task):
@@ -426,6 +428,7 @@ class ProcessAPI:
                     progress_callback(50 + int((i + 1) / total * 50), 100)
 
         # Save params
+        start_frame_edit_generation(project_path, 3)
         self.save_step_params(task.project_id, 3, task.params)
 
     def _get_background_color(self, project_id: str) -> tuple | None:

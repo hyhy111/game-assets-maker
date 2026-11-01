@@ -289,7 +289,6 @@
                 <Switch v-model="form.generate_audio" :label="t('seedance.create.generateAudio')" />
                 <div>
                   <Switch v-model="form.return_last_frame" :disabled="platformGenerationSelected" :label="t('seedance.create.returnLastFrame')" />
-                  <p v-if="platformGenerationSelected" class="mt-1 text-xs text-gray-500">{{ t('aiCreation.platformLimited') }}</p>
                 </div>
               </div>
 

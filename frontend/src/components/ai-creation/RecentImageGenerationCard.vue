@@ -22,11 +22,11 @@
           draggable="false"
         >
         <span v-else class="grid h-full place-items-center text-sm text-gray-500">{{ statusText }}</span>
-        <div class="absolute left-3 top-3 flex items-center gap-1.5">
-          <span class="rounded-full px-3 py-1 text-xs font-medium shadow-sm" :class="statusClass">
+        <div class="pointer-events-none absolute left-2 right-14 top-2 flex flex-wrap items-start gap-1">
+          <span class="media-overlay-badge media-overlay-status" :class="statusClass">
             {{ statusText }}
           </span>
-          <PlatformSourceBadge :source="batch.request.source" />
+          <PlatformSourceBadge :source="batch.request.source" overlay />
         </div>
       </button>
       <div v-if="$slots['top-right']" class="absolute right-3 top-3 z-[2]">
@@ -124,11 +124,11 @@ const totalElapsed = computed(() => {
 const statusText = computed(() => t(statusLabelKey(status.value)));
 const statusClass = computed(() => {
   switch (status.value) {
-    case 'completed': return 'bg-success/20 text-black';
-    case 'generating': return 'bg-primary/20 text-primary';
-    case 'partially_complete': return 'bg-warning/20 text-warning';
-    case 'failed': return 'bg-danger/20 text-danger';
-    default: return 'bg-warning/20 text-warning';
+    case 'completed': return 'media-overlay-status-success';
+    case 'generating': return 'media-overlay-status-active';
+    case 'partially_complete': return 'media-overlay-status-warning';
+    case 'failed': return 'media-overlay-status-danger';
+    default: return 'media-overlay-status-warning';
   }
 });
 
