@@ -78,7 +78,7 @@
               @blur="clampEndFrame"
             />
             <button
-              class="control-tooltip p-2 rounded-lg bg-dark-surface border border-red-500/50 shadow-lg shadow-red-500/25 transition-all"
+              class="control-tooltip control-tooltip--end p-2 rounded-lg bg-dark-surface border border-red-500/50 shadow-lg shadow-red-500/25 transition-all"
               :aria-label="`${t('step1.endFrame')}: ${t('step1.useCurrentFrame')}`"
               @click="setEndToCurrent"
             >

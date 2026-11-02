@@ -399,6 +399,81 @@ def test_early_manual_save_rejects_stale_source_without_creating_final_output(ma
     assert not (project / "output/03_hole_punched").exists()
 
 
+def test_first_manual_save_preserves_existing_non_frame_files(manual_frames):
+    api, project, source, originals = manual_frames
+    output = project / "output/03_hole_punched"
+    (output / "notes").mkdir(parents=True)
+    extras = {".DS_Store": b"synthetic Finder metadata", "notes/keep.txt": b"keep this file"}
+    for filename, payload in extras.items():
+        (output / filename).write_bytes(payload)
+    name = next(iter(originals))
+    opened = api.get_editable_frame("hero/idle", name)
+
+    saved = api.save_frame_edit("hero/idle", name, data_url(png(color=(0, 0, 0, 0))), opened["revision"])
+
+    assert saved["path"] == str(output / name)
+    assert set(path.name for path in output.glob("*.png")) == set(originals)
+    for filename, payload in extras.items():
+        assert (output / filename).read_bytes() == payload
+    for filename, payload in originals.items():
+        assert (source / filename).read_bytes() == payload
+    assert not list(output.parent.glob(".manual-step3-*"))
+
+
+def test_failed_first_manual_save_restores_existing_non_frame_files(manual_frames, monkeypatch):
+    import os
+
+    api, project, _, originals = manual_frames
+    output = project / "output/03_hole_punched"
+    output.mkdir()
+    metadata = b"synthetic Finder metadata"
+    (output / ".DS_Store").write_bytes(metadata)
+    name = next(iter(originals))
+    opened = api.get_editable_frame("hero/idle", name)
+    replace = os.replace
+
+    def fail_publication(staged, target):
+        if target == output and staged.name == "03_hole_punched":
+            raise OSError("failed sequence publication")
+        return replace(staged, target)
+
+    monkeypatch.setattr("backend.api.frame_api.os.replace", fail_publication)
+    with pytest.raises(OSError, match="failed sequence publication"):
+        api.save_frame_edit("hero/idle", name, data_url(png()), opened["revision"])
+
+    assert (output / ".DS_Store").read_bytes() == metadata
+    assert not list(output.glob("*.png"))
+    assert not list(output.parent.glob(".manual-step3-*"))
+
+
+def test_failed_first_manual_rollback_keeps_recovery_directory(manual_frames, monkeypatch):
+    import os
+
+    api, project, source, originals = manual_frames
+    output = project / "output/03_hole_punched"
+    output.mkdir()
+    metadata = b"synthetic Finder metadata"
+    (output / ".DS_Store").write_bytes(metadata)
+    name = next(iter(originals))
+    opened = api.get_editable_frame("hero/idle", name)
+    replace = os.replace
+
+    def fail_publication_and_rollback(staged, target):
+        if target == output:
+            raise OSError("output unavailable")
+        return replace(staged, target)
+
+    monkeypatch.setattr("backend.api.frame_api.os.replace", fail_publication_and_rollback)
+    with pytest.raises(OSError, match="output unavailable"):
+        api.save_frame_edit("hero/idle", name, data_url(png()), opened["revision"])
+
+    backups = list(output.parent.glob(".manual-step3-backup-*"))
+    assert len(backups) == 1
+    assert (backups[0] / ".DS_Store").read_bytes() == metadata
+    for filename, payload in originals.items():
+        assert (source / filename).read_bytes() == payload
+
+
 def test_failed_first_manual_publication_keeps_step2_and_does_not_publish_partial_sequence(manual_frames, monkeypatch):
     import os
 

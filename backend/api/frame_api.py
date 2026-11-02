@@ -9,6 +9,7 @@ import shutil
 import tempfile
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 from PIL import Image
 
@@ -22,6 +23,7 @@ from backend.core.frame_edit_history import (
 )
 from src.utils.app_config import default_projects_root
 from src.utils.data_paths import data_root
+from src.utils.file_operations import rename_path
 
 
 class FrameAPI:
@@ -242,9 +244,13 @@ class FrameAPI:
         project = source.parents[2]
         output = project / "output" / "03_hole_punched"
         target = output / source.name
+        previous_output = output.with_name(f".manual-step3-backup-{uuid4().hex}")
         with tempfile.TemporaryDirectory(dir=output.parent, prefix=".manual-step3-") as staging:
             staged_output = Path(staging) / "03_hole_punched"
             staged_output.mkdir()
+            if output.exists():
+                # Preserve Finder metadata and other non-frame files in the new sequence.
+                shutil.copytree(output, staged_output, dirs_exist_ok=True, symlinks=True)
             for frame in source.parent.glob("*.png"):
                 if frame.is_symlink() or not frame.is_file():
                     raise ValueError("FRAME_EDIT_NOT_FOUND")
@@ -256,8 +262,16 @@ class FrameAPI:
             remember_frame_edit(target, 3, initial, initial)
             remember_frame_edit(target, 3, payload, initial)
             if output.exists():
-                output.rmdir()
-            os.replace(staged_output, output)
+                rename_path(output, previous_output)
+            try:
+                rename_path(staged_output, output, replace=True)
+            except OSError:
+                # Keep the backup outside staging so a failed rollback cannot delete it.
+                if previous_output.exists():
+                    rename_path(previous_output, output, replace=True)
+                raise
+            if previous_output.exists():
+                shutil.rmtree(previous_output)
         return {"success": True, "path": str(target), "revision": hashlib.sha256(payload).hexdigest()}
 
     def get_frame_image(self, frame_path: str) -> str:
