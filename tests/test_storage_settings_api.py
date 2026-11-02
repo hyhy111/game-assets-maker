@@ -198,7 +198,7 @@ def test_execute_commits_the_whole_draft_and_requires_restart(api, tmp_path: Pat
 
     result = api.execute_migration(token)
 
-    assert result["success"] is True
+    assert result["success"] is True, result
     assert result["restart_required"] is True
     committed = load_app_config()
     assert committed["project_dir"] == str(target)

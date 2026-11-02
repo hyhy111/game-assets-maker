@@ -12,12 +12,20 @@ const source = await readFile(new URL('../src/views/Editor/EditorLayout.vue', im
 const script = source.match(/<script setup lang="ts">([\s\S]*?)<\/script>/)[1].replace(/^import .*;$/gm, '');
 const javascript = ts.transpileModule(script, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
 
-function editor(step = 3, completed = true) {
-  const currentProject = ref({ id: 'hero/idle', steps: { 2: { completed: true }, 3: { completed: true } } });
+function editor(step = 3, completed = true, backgroundCompleted = true) {
+  const currentProject = ref({ id: 'hero/idle', steps: { 2: { completed: backgroundCompleted }, 3: { completed } } });
   const currentStep = ref(step);
   const player = { setNavigationGuard() {}, replaceFrameImage() {}, pause() {} };
   const process = { setNavigationGuard() {}, isProcessing: false };
   const saves = [];
+  const refreshes = [];
+  const project = {
+    isStepCompleted: step => currentProject.value.steps[step]?.completed ?? false,
+    async loadProject(id) {
+      refreshes.push(id);
+      currentProject.value = { ...currentProject.value, steps: { ...currentProject.value.steps, 3: { completed: true } } };
+    },
+  };
   let fail = false;
   const api = { frame: { async saveFrameEdit(...args) { saves.push(args); if (fail) throw Error('save failed'); return { revision: `r${saves.length}` }; } } };
   const names = ['computed', 'nextTick', 'onBeforeUnmount', 'onMounted', 'ref', 'watch', 'onBeforeRouteLeave',
@@ -25,12 +33,12 @@ function editor(step = 3, completed = true) {
     'api', 'Step1Extract', 'Step2Background', 'Step3PostProcess'];
   const setup = new Function(...names, `${javascript}\nreturn { frameEditor, frameEditorRef, frameEditorTool, frameEditorError, frameEditorLoading, frameEditorSaving, navigationPending, beforeFrameNavigation, resolveFrameNavigation, saveCurrentFrameEdit, selectFrameTool, frameRetouchEnabled, frameVisibilityEnabled, onToolShortcut };`);
   const state = setup(computed, nextTick, () => {}, () => {}, ref, () => {}, () => {},
-    () => ({}), () => ({}), () => ({ isStepCompleted: () => completed }), () => process, () => player,
+    () => ({}), () => ({}), () => project, () => process, () => player,
     () => ({ t: key => key }), () => ({ currentProject, currentStep, s1Params: ref({}) }), api, null, null, null);
   state.frameEditor.value = { projectId: 'hero/idle', filename: '1.png', imageUrl: 'original', originalImageUrl: 'initial-frame', revision: 'r0', step };
   state.frameEditorTool.value = 'brush';
   state.frameEditorRef.value = { dirty: true, busy: false, markSaved() { this.dirty = false; }, getImageData: () => 'edited' };
-  return { ...state, player, process, currentStep, saves, failSaving(value) { fail = value; } };
+  return { ...state, player, process, currentProject, currentStep, saves, refreshes, failSaving(value) { fail = value; } };
 }
 
 test('saving keeps the current frame and tool, resets the edit baseline, and uses the returned revision on the next save', async () => {
@@ -103,7 +111,7 @@ test('frame save shortcuts suppress browser saving but do not submit clean, busy
   assert.equal(state.saves.length, 1);
 });
 
-test('save shortcuts stay scoped to completed step 3 retouch tools and preserve failed edits', async () => {
+test('save shortcuts stay scoped to step 3 retouch tools and preserve failed edits', async () => {
   for (const configure of [
     state => { state.currentStep.value = 2; },
     state => { state.frameEditorTool.value = 'browse'; },
@@ -121,8 +129,8 @@ test('save shortcuts stay scoped to completed step 3 retouch tools and preserve 
     await state.onToolShortcut({ key: 's', ctrlKey: true, ...options, preventDefault() { throw Error('shortcut must be ignored'); } });
     assert.equal(state.saves.length, 0);
   }
-  const incomplete = editor(3, false);
-  await incomplete.onToolShortcut({ key: 's', metaKey: true, preventDefault() { throw Error('step 3 must be completed'); } });
+  const incomplete = editor(3, false, false);
+  await incomplete.onToolShortcut({ key: 's', metaKey: true, preventDefault() { throw Error('step 2 must be completed'); } });
   assert.equal(incomplete.saves.length, 0);
   const state = editor();
   state.failSaving(true);
@@ -197,13 +205,32 @@ test('player buttons, timeline seeking, playback and step navigation all honor t
   assert.equal(process.currentStep, 3);
 });
 
-test('retouch tools require completed step 3 while frame hiding remains available in step 2', () => {
+test('step 3 retouch tools are available after step 2 without running step 3', () => {
   for (const step of [1, 2, 3]) {
     const state = editor(step);
     assert.equal(state.frameRetouchEnabled.value, step === 3);
     assert.equal(state.frameVisibilityEnabled.value, step === 2 || step === 3);
   }
-  assert.equal(editor(3, false).frameRetouchEnabled.value, false);
+  assert.equal(editor(3, false).frameRetouchEnabled.value, true);
+  assert.equal(editor(3, false, false).frameRetouchEnabled.value, false);
+  assert.equal(editor(3, true, false).frameRetouchEnabled.value, true, 'legacy final-only projects remain editable');
+});
+
+test('saving either retouch tool before step 3 processing refreshes the completed project status', async () => {
+  for (const tool of ['wand', 'brush']) {
+    const state = editor(3, false);
+    state.frameEditorTool.value = tool;
+    assert.equal(state.currentProject.value.steps[3].completed, false);
+    assert.equal(await state.saveCurrentFrameEdit('edited'), true);
+    assert.deepEqual(state.refreshes, ['hero/idle']);
+    assert.equal(state.currentProject.value.steps[3].completed, true);
+    assert.equal(state.frameEditorTool.value, tool);
+  }
+  const failed = editor(3, false);
+  failed.failSaving(true);
+  assert.equal(await failed.saveCurrentFrameEdit('edited'), false);
+  assert.deepEqual(failed.refreshes, []);
+  assert.equal(failed.currentProject.value.steps[3].completed, false);
 });
 
 test('W/E/V switch frame tools and ignore text entry, modifiers, other steps and pending navigation', () => {

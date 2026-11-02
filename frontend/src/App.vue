@@ -23,7 +23,7 @@
     v-if="showDebugPanel"
     to="body"
   >
-    <DebugLogPanel />
+    <DebugLogPanel @close="showDebugPanel = false" />
   </Teleport>
 </template>
 

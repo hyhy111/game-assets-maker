@@ -3,6 +3,7 @@
 import errno
 import json
 import socket
+from types import SimpleNamespace
 
 import pytest
 
@@ -42,7 +43,7 @@ def test_explicit_occupied_port_still_raises():
         server = AgentControlServer(None, port=occupied.getsockname()[1])
         with pytest.raises(OSError) as error:
             server.start()
-        assert error.value.errno == errno.EADDRINUSE
+        assert error.value.errno == errno.EADDRINUSE or getattr(error.value, "winerror", None) in {10013, 10048}
         server.stop()
 
 
@@ -86,6 +87,31 @@ def test_default_server_does_not_hide_other_bind_errors(tmp_path, monkeypatch):
     with pytest.raises(OSError) as error:
         AgentControlServer(None).start()
     assert error.value.errno == errno.EACCES
+
+
+def test_windows_exclusive_port_error_falls_back_only_for_automatic_port(tmp_path, monkeypatch):
+    monkeypatch.setenv("GAM_DATA_ROOT", str(tmp_path))
+    monkeypatch.setattr(server_module, "sys", SimpleNamespace(platform="win32"))
+    calls = []
+    bound = SimpleNamespace(server_address=("127.0.0.1", 12345), serve_forever=lambda: None)
+    error = PermissionError(errno.EACCES, "synthetic exclusive port")
+    error.winerror = 10013
+
+    def bind(address, handler):
+        calls.append(address)
+        if address[1] != 0:
+            raise error
+        return bound
+
+    monkeypatch.setattr(server_module, "ReusableTCPServer", bind)
+    server = AgentControlServer(None)
+    server.start()
+    server.thread.join()
+    assert calls == [("127.0.0.1", server_module.DEFAULT_CONTROL_PORT), ("127.0.0.1", 0)]
+    assert server.port == 12345
+    with pytest.raises(PermissionError) as caught:
+        AgentControlServer(None, port=8765).start()
+    assert caught.value is error
 
 
 def test_discovery_write_failure_closes_server(tmp_path, monkeypatch):

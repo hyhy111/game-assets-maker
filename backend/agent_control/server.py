@@ -2,6 +2,7 @@
 
 import errno
 import json
+import sys
 import tempfile
 import threading
 from http.server import BaseHTTPRequestHandler
@@ -127,7 +128,11 @@ class AgentControlServer:
         try:
             self.httpd = ReusableTCPServer((self.host, self.port), handler)
         except OSError as error:
-            if not self._auto_port or error.errno != errno.EADDRINUSE:
+            # Windows can report an exclusive or reserved port as WSAEACCES.
+            unavailable = error.errno == errno.EADDRINUSE or (
+                sys.platform == "win32" and getattr(error, "winerror", None) == 10013
+            )
+            if not self._auto_port or not unavailable:
                 raise
             self.httpd = ReusableTCPServer((self.host, 0), handler)
         self.port = self.httpd.server_address[1]

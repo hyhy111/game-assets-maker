@@ -116,7 +116,9 @@ class BatchRepository:
             self._delete_unlocked(local_id)
 
     def batch_lock(self, local_id: str) -> FileLock:
-        return FileLock(str(self._existing_batch_dir(local_id) / ".batch.lock"))
+        batch_dir = self._existing_batch_dir(local_id)
+        # Keep the acquired lock outside the directory deleted under that lock.
+        return FileLock(str(self.batches_root / ".locks" / f"{batch_dir.name}.lock"))
 
     def resolve_asset(self, local_id: str, relative_path: str) -> Path:
         asset_path = Path(relative_path)

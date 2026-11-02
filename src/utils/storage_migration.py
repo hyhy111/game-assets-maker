@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import Any
 
 from src.utils.ai_cache_paths import AI_PIC_CACHE_DIRNAME, AI_VIDEO_CACHE_DIRNAME
+from src.utils.file_operations import rename_path
 from src.utils.storage_locations import normalize_storage_path
 
 PROJECT_LOCATION = "project"
@@ -441,7 +442,7 @@ class StorageMigrationCoordinator:
             raise MigrationError("publish", "target changed since the confirmed precheck")
         if not target.exists():
             try:
-                os.rename(staging, target)
+                rename_path(staging, target)
             except OSError as error:
                 raise MigrationError("publish", f"failed to publish {target}: {error}") from error
             return _PublishedMigration(migration, True, ())
@@ -452,7 +453,7 @@ class StorageMigrationCoordinator:
                 destination = target / entry.name
                 if destination.exists() or destination.is_symlink():
                     raise MigrationError("publish", f"target contains conflicting path: {entry.name}")
-                os.rename(entry, destination)
+                rename_path(entry, destination)
                 moved.append(destination)
             staging.rmdir()
         except MigrationError:

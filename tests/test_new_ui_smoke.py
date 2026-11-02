@@ -106,7 +106,12 @@ def test_project_role_action_lifecycle(api, test_assets, asset_catalog):
     assert listed[created[0]["id"]]["steps"]["1"]["count"] > 0
 
     project = api.get_project(f"{first_role['role']}/{first_role['actions'][0]}")
-    assert project["output_path"].endswith(f"project/{first_role['role']}/{first_role['actions'][0]}/output")
+    assert Path(project["output_path"]).parts[-4:] == (
+        "project",
+        first_role["role"],
+        first_role["actions"][0],
+        "output",
+    )
     assert project["steps"]["1"]["data_ready"] is True
 
     updated = api.update_project(
@@ -636,7 +641,7 @@ def test_frontend_build(repo_root):
         pytest.skip("frontend/node_modules is missing; skipping build without installing dependencies")
 
     result = subprocess.run(
-        ["npm", "run", "build"],
+        [shutil.which("npm") or "npm", "run", "build"],
         cwd=frontend_dir,
         text=True,
         capture_output=True,

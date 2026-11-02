@@ -11,6 +11,7 @@ from PIL import Image
 
 from backend.api.project_api import ProjectAPI
 from backend.api.project_paths import LEGACY_ROLE
+from src.utils import file_operations
 
 
 @pytest.fixture
@@ -25,6 +26,42 @@ def populate(projects, role="hero", action="idle"):
     (path / "cache/hidden_frames.json").write_text('["frame_000002.png"]')
     (path / "cache/audio_timeline.json").write_text('{"clips": [], "source_wav": "cache/01_audio/source.wav"}')
     return path
+
+
+def test_rollback_retries_transient_windows_directory_lock(projects, monkeypatch):
+    source = populate(projects)
+    original = {path.relative_to(source): path.read_bytes() for path in source.rglob("*") if path.is_file()}
+    writer = projects._write_rename_metadata
+    rename = file_operations.os.rename
+    writes = 0
+    blocked = False
+
+    def fail_once(path, content):
+        nonlocal writes
+        writes += 1
+        if writes == 1:
+            raise OSError("synthetic metadata failure")
+        writer(path, content)
+
+    def lock_rollback_once(old, new):
+        nonlocal blocked
+        if old.name == "knight" and new.name == "hero" and not blocked:
+            blocked = True
+            error = PermissionError("synthetic rollback lock")
+            error.winerror = 5
+            raise error
+        return rename(old, new)
+
+    monkeypatch.setattr(projects, "_write_rename_metadata", fail_once)
+    monkeypatch.setattr(file_operations, "sys", SimpleNamespace(platform="win32"))
+    monkeypatch.setattr(file_operations.os, "rename", lock_rollback_once)
+    monkeypatch.setattr(file_operations.time, "sleep", lambda delay: None)
+
+    with pytest.raises(RuntimeError, match="RENAME_FAILED"):
+        projects.rename_role("hero", "knight")
+
+    assert blocked
+    assert original == {path.relative_to(source): path.read_bytes() for path in source.rglob("*") if path.is_file()}
 
 
 def test_role_rename_preserves_all_animations_and_metadata(projects):
@@ -204,7 +241,7 @@ def test_role_failure_rolls_back_directory_and_already_written_metadata(projects
 
 def test_directory_move_failure_keeps_original(projects, monkeypatch):
     populate(projects)
-    monkeypatch.setattr(Path, "rename", lambda *_: (_ for _ in ()).throw(PermissionError("locked")))
+    monkeypatch.setattr(file_operations.os, "rename", lambda *_: (_ for _ in ()).throw(PermissionError("locked")))
     with pytest.raises(RuntimeError, match="RENAME_FAILED"):
         projects.rename_project("hero/idle", "other")
     assert projects.get_project("hero/idle") is not None

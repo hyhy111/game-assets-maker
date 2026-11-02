@@ -166,7 +166,7 @@ test('Seedream eraser provides background fill, adjustable brush, and local undo
 test('restoring the original refreshes the open image editor instead of closing it', async () => {
   const source = await import('node:fs/promises').then(({ readFile }) =>
     readFile(new URL('../src/views/SeedreamBatchDetail.vue', import.meta.url), 'utf8'));
-  const restoreHandler = source.match(/async function restoreOriginalFromEditor[\s\S]*?\n}\n\nfunction attemptLoadingMessage/)?.[0] ?? '';
+  const restoreHandler = source.match(/async function restoreOriginalFromEditor[\s\S]*?\r?\n}\r?\n\r?\nfunction attemptLoadingMessage/)?.[0] ?? '';
   assert.match(restoreHandler, /generation_layout = null/);
   assert.match(restoreHandler, /imageRevisions\.value\[attemptIndex\] = Date\.now\(\)/);
   assert.doesNotMatch(restoreHandler, /imageEditorAttemptIndex\.value = null/);
@@ -175,7 +175,7 @@ test('restoring the original refreshes the open image editor instead of closing 
 test('saving an edited image keeps its layout available for the next editor open', async () => {
   const source = await import('node:fs/promises').then(({ readFile }) =>
     readFile(new URL('../src/views/SeedreamBatchDetail.vue', import.meta.url), 'utf8'));
-  const applyHandler = source.match(/async function applyImageEditor[\s\S]*?\n}\n\nasync function restoreOriginalFromEditor/)?.[0] ?? '';
+  const applyHandler = source.match(/async function applyImageEditor[\s\S]*?\r?\n}\r?\n\r?\nasync function restoreOriginalFromEditor/)?.[0] ?? '';
   assert.match(applyHandler, /const result = await store\.applyEraser/);
   assert.match(applyHandler, /currentImageEditorAttempt\.value\.generation_layout = result\.generation_layout/);
   assert.match(applyHandler, /imageEditorAttemptIndex\.value = null/);

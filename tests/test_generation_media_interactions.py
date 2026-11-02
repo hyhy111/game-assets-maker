@@ -149,7 +149,12 @@ def test_large_drop_is_rejected_before_persistence(local_config, monkeypatch):
 def test_file_manager_receives_literal_path_argument(local_config, monkeypatch):
     from src.utils import system_paths
 
-    directory = local_config / 'directory with "quotes" $(not-a-command)'
+    name = (
+        "directory with 'quotes' $(not-a-command)"
+        if system_paths.sys.platform == "win32"
+        else 'directory with "quotes" $(not-a-command)'
+    )
+    directory = local_config / name
     directory.mkdir()
     calls = []
     monkeypatch.setattr(system_paths.sys, "platform", "darwin")

@@ -828,7 +828,7 @@ export default {
   magicWand: {
     restoreRestartRequired: '请保存当前修改并重启应用，以启用恢复初始版本。',
     restoreInitial: '恢复初始版本',
-    restoreInitialHint: '恢复步骤 3 处理完成、尚未人工修整的画面；点击保存后生效，可以撤销。',
+    restoreInitialHint: '恢复本轮人工修整前的画面；点击保存后生效，可以撤销。',
     initialUnavailable: '没有可确认的初始版本；重新处理步骤 3 后会建立新基准。',
     browse: '浏览 / 移动画布',
     zoomIn: '放大',
@@ -847,7 +847,7 @@ export default {
     title: '逐帧修整 · {filename}',
     wand: '魔棒',
     eraser: '橡皮擦',
-    hint: '点击选择色块，Shift 点击追加选区，Delete 删除。滚轮缩放，中键拖动。只修改当前步骤的这一帧；重新运行本步骤会覆盖修整。步骤 02 修整后，重新运行步骤 03 才会更新其结果。',
+    hint: '点击选择色块，Shift 点击追加选区，Delete 删除。滚轮缩放，中键拖动。步骤 02 完成后即可在步骤 03 页面修整，保存后标记为已完成处理。只修改当前帧，重新运行步骤 03 会覆盖修整。',
     tolerance: '颜色容差',
     feather: '删除边缘羽化',
     contiguous: '仅相连区域',

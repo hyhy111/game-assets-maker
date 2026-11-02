@@ -84,6 +84,7 @@ def test_identity_guard_allows_history_and_explicit_legacy_migration(tmp_path):
     migration = tmp_path / "src" / "core" / "rembg_model.py"
     migration.parent.mkdir(parents=True)
     migration.write_text('legacy = root / "VideoToSheet" / "models"\n', encoding="utf-8")
+    (tmp_path / "MODELS.md").write_text("从 VideoToSheet 中复制有效的旧模型，保留源文件。\n", encoding="utf-8")
 
     result = run_identity_check(tmp_path)
 

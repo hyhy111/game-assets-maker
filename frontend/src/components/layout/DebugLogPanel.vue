@@ -10,6 +10,7 @@
 import { computed, ref } from 'vue';
 import { clearRequestLog, requestLogEntries, type LogLevel } from '@/debug/request-log';
 
+const emit = defineEmits<{ close: [] }>();
 const open = ref(true);
 const entries = computed(() => requestLogEntries.value);
 
@@ -49,6 +50,15 @@ defineExpose({ open });
         @click="open = !open"
       >
         {{ open ? '收起' : '展开' }}
+      </button>
+      <button
+        type="button"
+        class="rounded px-2 py-0.5 text-xs text-gray-400 hover:bg-dark-border hover:text-white"
+        aria-label="关闭调试日志面板"
+        data-test="debug-log-close"
+        @click="emit('close')"
+      >
+        关闭
       </button>
     </div>
 

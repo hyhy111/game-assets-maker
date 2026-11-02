@@ -40,12 +40,14 @@ def custom_roots(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> CustomRoots
 
 
 def test_locations_from_config_read_both_storage_values(tmp_path: Path):
-    config = {"project_dir": "/chosen/projects", "seedance": {"cache_dir": "/chosen/cache"}}
+    projects = tmp_path / "chosen" / "projects"
+    cache = tmp_path / "chosen" / "cache"
+    config = {"project_dir": str(projects), "seedance": {"cache_dir": str(cache)}}
 
     locations = storage_locations_from_config(config, data_root=tmp_path)
 
-    assert locations.projects_root == Path("/chosen/projects")
-    assert locations.ai_cache_root == Path("/chosen/cache")
+    assert locations.projects_root == projects
+    assert locations.ai_cache_root == cache
 
 
 def test_locations_from_config_fall_back_to_defaults(tmp_path: Path):

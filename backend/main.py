@@ -760,7 +760,10 @@ class API:
         with self._process_api._control_lock:
             if self._process_api.has_active_writes():
                 raise ValueError("PROCESSING_ACTIVE")
-            return self._frame_api.save_frame_edit(project_id, filename, image_data_url, revision, step)
+            saved = self._frame_api.save_frame_edit(project_id, filename, image_data_url, revision, step)
+            if step == 3:
+                self._process_api.save_step_params(project_id, 3, {"processed": True})
+            return saved
 
     # ==================== Process API ====================
 

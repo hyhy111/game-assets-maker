@@ -275,21 +275,17 @@ def test_conflict_prevents_the_entire_double_location_transaction(
 
 
 def test_unwritable_target_parent_is_rejected(
-    coordinator: StorageMigrationCoordinator, source_project: Path, tmp_path: Path
+    coordinator: StorageMigrationCoordinator, source_project: Path, tmp_path: Path, monkeypatch
 ):
-    if hasattr(os, "geteuid") and os.geteuid() == 0:
-        pytest.skip("root ignores permission bits")
     locked = tmp_path / "locked"
     locked.mkdir()
-    locked.chmod(0o555)
-    try:
-        with pytest.raises(MigrationError, match="writable"):
-            coordinator.precheck(
-                [LocationMigration(PROJECT_LOCATION, source_project, locked / "project")],
-                {"project_dir": str(locked / "project")},
-            )
-    finally:
-        locked.chmod(0o755)
+    access = os.access
+    monkeypatch.setattr(os, "access", lambda path, mode: False if Path(path) == locked else access(path, mode))
+    with pytest.raises(MigrationError, match="writable"):
+        coordinator.precheck(
+            [LocationMigration(PROJECT_LOCATION, source_project, locked / "project")],
+            {"project_dir": str(locked / "project")},
+        )
 
     assert not (locked / "project").exists()
 

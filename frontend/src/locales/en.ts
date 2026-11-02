@@ -831,7 +831,7 @@ export default {
   magicWand: {
     restoreRestartRequired: 'Save your current changes and restart the app to enable initial-version restoration.',
     restoreInitial: 'Restore Initial Version',
-    restoreInitialHint: 'Restore the frame produced by Step 3 before manual edits. Save to apply; this action can be undone.',
+    restoreInitialHint: 'Restore the frame before manual edits in this run. Save to apply; this action can be undone.',
     initialUnavailable: 'No verified initial version is available. Reprocess Step 3 to establish a new baseline.',
     browse: 'Browse / pan canvas',
     zoomIn: 'Zoom in',
@@ -850,7 +850,7 @@ export default {
     title: 'Retouch frame · {filename}',
     wand: 'Magic wand',
     eraser: 'Eraser',
-    hint: 'Click a color region; Shift-click to add. Delete removes the selection. Scroll to zoom; middle-drag to pan. Only this frame in the current step changes. Re-running this step replaces manual edits. After editing Step 02, re-run Step 03 to update its results.',
+    hint: 'Click a color region; Shift-click to add. Delete removes the selection. Scroll to zoom; middle-drag to pan. After Step 02, retouch in the Step 03 page and save to mark processing complete. Only this frame changes. Re-running Step 03 replaces manual edits.',
     tolerance: 'Color tolerance',
     feather: 'Deletion edge feather',
     contiguous: 'Contiguous only',

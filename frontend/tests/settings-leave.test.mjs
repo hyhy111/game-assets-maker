@@ -5,7 +5,7 @@ import ts from 'typescript';
 import { computed, nextTick, reactive, ref } from 'vue';
 
 const source = await readFile(new URL('../src/views/SeedanceSettings.vue', import.meta.url), 'utf8');
-const script = source.match(/<script setup lang="ts">([\s\S]*?)<\/script>/)[1].replace(/^import[\s\S]*?;\n/gm, '');
+const script = source.match(/<script setup lang="ts">([\s\S]*?)<\/script>/)[1].replace(/^import[\s\S]*?;\r?\n/gm, '');
 const javascript = ts.transpileModule(script, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
 
 function settings() {

@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from src.utils.data_paths import DATA_DIR_NAME, DATA_ROOT_ENV_VAR, INSTALLED_MODE, data_mode, data_root
+from src.utils.file_operations import rename_path
 from src.utils.storage_locations import DEFAULT_PROJECT_DIR, StorageLocations, storage_locations_from_config
 
 CONFIG_ENV_VAR = "GAM_CONFIG"
@@ -260,6 +261,6 @@ def _write_config(path: Path, config: dict[str, Any]) -> None:
         os.fsync(file.fileno())
         temporary_path = Path(file.name)
     try:
-        os.replace(temporary_path, path)
+        rename_path(temporary_path, path, replace=True)
     finally:
         temporary_path.unlink(missing_ok=True)

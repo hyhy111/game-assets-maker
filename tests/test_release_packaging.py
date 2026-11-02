@@ -99,7 +99,7 @@ def test_dmg_filename_and_checksum_use_package_name(tmp_path, monkeypatch, packa
     else:
         output = build.create_macos_dmg(tmp_path, package_name)
     assert output.name == f"{package_name}-1.2.3-macos-arm64.dmg"
-    assert output.with_suffix(".dmg.sha256").read_text() == (
+    assert output.with_suffix(".dmg.sha256").read_text(encoding="utf-8") == (
         f"{hashlib.sha256(b'installer').hexdigest()}  {output.name}\n"
     )
 

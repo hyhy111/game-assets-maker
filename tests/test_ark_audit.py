@@ -232,7 +232,17 @@ def test_audit_intent_survives_hard_exit(tmp_path):
     result = subprocess.run([sys.executable, "-c", script, str(path)], check=False, capture_output=True)
     assert result.returncode == 0
     assert _events(path)[0]["phase"] == "intent"
-    assert os.stat(path).st_mode & 0o777 == 0o600
+    if os.name != "nt":
+        assert os.stat(path).st_mode & 0o777 == 0o600
+
+
+def test_audit_write_without_posix_file_permissions(tmp_path, monkeypatch):
+    monkeypatch.delattr(os, "fchmod", raising=False)
+    path = tmp_path / "ark.jsonl"
+
+    ArkAudit(path).begin("image.create", payload={"model": "test"}, paid=True)
+
+    assert _events(path)[0]["phase"] == "intent"
 
 
 def test_audit_rotation_is_bounded(tmp_path, monkeypatch):

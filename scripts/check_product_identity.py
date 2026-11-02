@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
@@ -56,6 +57,7 @@ LEGACY_MARKERS = (
     "historical",
     "旧版",
     "旧的",
+    "旧模型",
     "旧 ",
 )
 
@@ -83,12 +85,21 @@ def _is_allowed(relative_path: str, line: str) -> bool:
 
 
 def iter_text_files(root: Path) -> Iterable[Path]:
+    repository = subprocess.run(
+        ["git", "-C", str(root), "rev-parse", "--show-toplevel"],
+        capture_output=True,
+        check=False,
+    )
     tracked = subprocess.run(
         ["git", "-C", str(root), "ls-files", "-z"],
         capture_output=True,
         check=False,
     )
-    if tracked.returncode == 0:
+    if (
+        tracked.returncode == 0
+        and repository.returncode == 0
+        and Path(os.fsdecode(repository.stdout).strip()).resolve() == root.resolve()
+    ):
         candidates = (root / item for item in tracked.stdout.decode("utf-8").split("\0") if item)
     else:
         candidates = root.rglob("*")

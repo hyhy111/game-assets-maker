@@ -294,6 +294,7 @@ async function saveCurrentFrameEdit(imageDataUrl: string) {
     editing.imageUrl = imageDataUrl;
     frameEditorRef.value?.markSaved();
     playerStore.replaceFrameImage(editing.filename, imageDataUrl);
+    await projectStore.loadProject(editing.projectId);
     return true;
   } catch (error) {
     frameEditorError.value = frameEditError(error);
@@ -319,7 +320,8 @@ const frameVisibilityEnabled = computed(() => (
   && projectStore.isStepCompleted(currentStep.value)
 ));
 
-const frameRetouchEnabled = computed(() => currentStep.value === 3 && frameVisibilityEnabled.value);
+const frameRetouchEnabled = computed(() => currentStep.value === 3
+  && (projectStore.isStepCompleted(2) || projectStore.isStepCompleted(3)));
 
 // Load frames when step changes or project data changes
 watch([currentStep, currentProject], async ([step]) => {

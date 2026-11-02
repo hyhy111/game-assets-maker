@@ -79,6 +79,7 @@ def test_tilde_in_configured_directory_expands_to_home(
 ):
     home = tmp_path / "home"
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
 
     assert resolve_storage_root("~/gam-projects", default="project", data_root=data_root) == home / "gam-projects"
 

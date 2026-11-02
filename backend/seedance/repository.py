@@ -81,7 +81,9 @@ class TaskRepository:
             self._delete_unlocked(local_id)
 
     def task_lock(self, local_id: str) -> FileLock:
-        return FileLock(str(self._existing_task_dir(local_id) / ".task.lock"))
+        task_dir = self._existing_task_dir(local_id)
+        # Keep the acquired lock outside the directory deleted under that lock.
+        return FileLock(str(self.tasks_root / ".locks" / f"{task_dir.name}.lock"))
 
     def resolve_asset(self, local_id: str, relative_path: str) -> Path:
         asset_path = Path(relative_path)

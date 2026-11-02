@@ -697,7 +697,7 @@ try {
     result = subprocess.run(
         [node, "-e", probe],
         cwd=tmp_path,
-        env={**os.environ, "NODE_OPTIONS": f'--require="{guard}"'},
+        env={**os.environ, "NODE_OPTIONS": f'--require="{guard.as_posix()}"'},
         text=True,
         capture_output=True,
         check=False,

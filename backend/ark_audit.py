@@ -227,7 +227,9 @@ class ArkAudit:
                 self._rotate(path, len(payload))
                 fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
                 try:
-                    os.fchmod(fd, 0o600)
+                    # Windows inherits directory ACLs and has no POSIX fchmod.
+                    if hasattr(os, "fchmod"):
+                        os.fchmod(fd, 0o600)
                     view = memoryview(payload)
                     while view:
                         view = view[os.write(fd, view) :]

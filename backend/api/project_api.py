@@ -1,7 +1,6 @@
 """Project API - Project management endpoints"""
 
 import json
-import os
 import re
 import shutil
 import tempfile
@@ -22,6 +21,7 @@ from backend.api.project_paths import (
     split_project_id,
 )
 from src.utils.app_config import default_projects_root
+from src.utils.file_operations import rename_path
 
 
 class ProjectAPI:
@@ -520,7 +520,7 @@ class ProjectAPI:
         temporary = path.with_name(f".{path.name}.{uuid4().hex}.tmp")
         try:
             temporary.write_bytes(content)
-            os.replace(temporary, path)
+            rename_path(temporary, path, replace=True)
         finally:
             temporary.unlink(missing_ok=True)
 
@@ -599,9 +599,9 @@ class ProjectAPI:
         try:
             if source.name.casefold() == name.casefold():
                 temporary = source.with_name(f".rename-{uuid4().hex}")
-                source.rename(temporary)
+                rename_path(source, temporary)
                 current = temporary
-            current.rename(target)
+            rename_path(current, target)
             current = target
             for relative, original, content in snapshots:
                 written.append((relative, original))
@@ -623,7 +623,7 @@ class ProjectAPI:
                     recovery_errors.append(str(recovery_error))
             if current != source:
                 try:
-                    current.rename(source)
+                    rename_path(current, source)
                     current = source
                 except OSError as recovery_error:
                     recovery_errors.append(str(recovery_error))

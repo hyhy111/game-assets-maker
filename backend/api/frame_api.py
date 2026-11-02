@@ -5,6 +5,7 @@ import binascii
 import hashlib
 import io
 import os
+import shutil
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -13,7 +14,12 @@ from PIL import Image
 
 from backend.api.frame_visibility import get_hidden_frame_names, restore_hidden_frames, set_frame_hidden
 from backend.api.project_paths import media_url_for_path, resolve_project_path
-from backend.core.frame_edit_history import initial_frame, remember_backup_step, remember_frame_edit
+from backend.core.frame_edit_history import (
+    initial_frame,
+    remember_backup_step,
+    remember_frame_edit,
+    start_frame_edit_generation,
+)
 from src.utils.app_config import default_projects_root
 from src.utils.data_paths import data_root
 
@@ -148,6 +154,10 @@ class FrameAPI:
         if not project.is_relative_to(self._projects_root.resolve()) or project == self._projects_root.resolve():
             raise ValueError("FRAME_EDIT_INVALID_PROJECT")
         directory = project / "output" / {2: "02_no_bg", 3: "03_hole_punched"}[step]
+        if directory.resolve() != directory:
+            raise ValueError("FRAME_EDIT_NOT_FOUND")
+        if step == 3 and not any(directory.glob("*.png")):
+            directory = project / "output" / "02_no_bg"
         frame = directory / filename
         if directory.resolve() != directory or frame.is_symlink() or not frame.is_file():
             raise ValueError("FRAME_EDIT_NOT_FOUND")
@@ -159,7 +169,7 @@ class FrameAPI:
         payload = frame.read_bytes()
         with Image.open(io.BytesIO(payload)) as image:
             width, height = image.size
-        initial = initial_frame(frame, step, payload)
+        initial = payload if step == 3 and frame.parent.name == "02_no_bg" else initial_frame(frame, step, payload)
         if initial is not None:
             with Image.open(io.BytesIO(initial)) as image:
                 if image.size != (width, height):
@@ -200,6 +210,8 @@ class FrameAPI:
                     raise ValueError("FRAME_EDIT_SIZE_CHANGED")
         except (OSError, binascii.Error) as error:
             raise ValueError("FRAME_EDIT_INVALID_PNG") from error
+        if step == 3 and frame.parent.name == "02_no_bg":
+            return self._save_first_manual_result(frame, edited, current)
         initial = initial_frame(frame, step, current)
         project = resolve_project_path(self._projects_root, project_id).resolve()
         backups = project / "cache" / "frame_edits" / revision
@@ -224,6 +236,29 @@ class FrameAPI:
             if temporary_path is not None:
                 temporary_path.unlink(missing_ok=True)
         return {"success": True, "path": str(frame), "revision": hashlib.sha256(frame.read_bytes()).hexdigest()}
+
+    def _save_first_manual_result(self, source: Path, edited: Image.Image, initial: bytes) -> dict[str, Any]:
+        """Publish a complete Step 3 sequence without modifying Step 2 output."""
+        project = source.parents[2]
+        output = project / "output" / "03_hole_punched"
+        target = output / source.name
+        with tempfile.TemporaryDirectory(dir=output.parent, prefix=".manual-step3-") as staging:
+            staged_output = Path(staging) / "03_hole_punched"
+            staged_output.mkdir()
+            for frame in source.parent.glob("*.png"):
+                if frame.is_symlink() or not frame.is_file():
+                    raise ValueError("FRAME_EDIT_NOT_FOUND")
+                shutil.copy2(frame, staged_output / frame.name)
+            edited.save(staged_output / source.name, format="PNG")
+            payload = (staged_output / source.name).read_bytes()
+            # A new final sequence establishes its own restoration baseline.
+            start_frame_edit_generation(project, 3)
+            remember_frame_edit(target, 3, initial, initial)
+            remember_frame_edit(target, 3, payload, initial)
+            if output.exists():
+                output.rmdir()
+            os.replace(staged_output, output)
+        return {"success": True, "path": str(target), "revision": hashlib.sha256(payload).hexdigest()}
 
     def get_frame_image(self, frame_path: str) -> str:
         """Get frame image as base64 encoded string"""

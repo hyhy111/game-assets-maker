@@ -18,6 +18,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
 
+from src.utils.file_operations import rename_path
+
 
 @dataclass(frozen=True, slots=True)
 class Stage:
@@ -209,7 +211,7 @@ def _isolated_environment(repo_root: Path, workspace: Path) -> dict[str, str]:
             "GAM_CONFIG": str(workspace / "runtime-config.json"),
             "GAM_ZERO_COST": "1",
             "NODE_OPTIONS": " ".join(
-                part for part in (f'--require="{node_guard}"', existing_node_options) if part
+                part for part in (f'--require="{node_guard.as_posix()}"', existing_node_options) if part
             ),
         }
     )
@@ -247,7 +249,7 @@ def _write_json_report(report_path: Path, report: dict[str, Any], secrets: tuple
     report_path.parent.mkdir(parents=True, exist_ok=True)
     temporary_path = report_path.with_suffix(report_path.suffix + ".tmp")
     temporary_path.write_text(content + "\n", encoding="utf-8")
-    temporary_path.replace(report_path)
+    rename_path(temporary_path, report_path, replace=True)
 
 
 def _workspace_ready(workspace: Path) -> bool:

@@ -122,7 +122,7 @@ def test_atomic_replace_failure_keeps_source_and_cleans_temporary(frames, monkey
     assert not list(frame.parent.glob(".frame-edit-*"))
 
 
-@pytest.mark.parametrize("step, directory", [(2, "02_no_bg"), (3, "03_hole_punched")])
+@pytest.mark.parametrize("step, directory", [(2, "02_no_bg"), (3, "03_hole_punched"), (3, "02_no_bg")])
 def test_public_bridge_blocks_manual_save_while_processing(tmp_path, monkeypatch, step, directory):
     from backend.main import API
 
@@ -148,8 +148,15 @@ def test_public_bridge_blocks_manual_save_while_processing(tmp_path, monkeypatch
         saved = api.save_frame_edit(
             "hero/idle", frame.name, data_url(png(color=(0, 0, 0, 0))), opened["revision"], step
         )
-        assert saved["path"] == str(frame)
-        assert Image.open(frame).getpixel((0, 0)) == (0, 0, 0, 0)
+        target = project / "output/03_hole_punched" / frame.name if step == 3 else frame
+        assert saved["path"] == str(target)
+        assert Image.open(target).getpixel((0, 0)) == (0, 0, 0, 0)
+        if step == 3:
+            config = json.loads((project / "cache/steps_config.json").read_text(encoding="utf-8"))
+            assert config["step3"]["processed"] is True
+            assert api._project_api.get_project("hero/idle")["steps"]["3"]["completed"] is True
+        if directory == "02_no_bg" and step == 3:
+            assert frame.read_bytes() == original
     finally:
         api._process_api.shutdown()
 
@@ -336,3 +343,80 @@ def test_external_replacement_is_not_misidentified_as_a_new_initial_frame(frames
     reopened = api.get_editable_frame("hero/idle", frame.name)
     assert reopened["initial_image_data_url"] is None
     assert base64.b64decode(reopened["image_data_url"].split(",", 1)[1]) == external
+
+
+@pytest.fixture
+def manual_frames(tmp_path):
+    project = tmp_path / "hero/idle"
+    source = project / "output/02_no_bg"
+    source.mkdir(parents=True)
+    originals = {f"frame_{index:06d}.png": png(color=(index * 50, 100, 200, 255)) for index in range(3)}
+    for name, payload in originals.items():
+        (source / name).write_bytes(payload)
+    return FrameAPI(projects_root=tmp_path), project, source, originals
+
+
+@pytest.mark.parametrize("empty_output", [False, True])
+def test_manual_cleanup_before_step3_publishes_complete_sequence_and_preserves_step2(manual_frames, empty_output):
+    from backend.api.project_api import ProjectAPI
+
+    api, project, source, originals = manual_frames
+    output = project / "output/03_hole_punched"
+    if empty_output:
+        output.mkdir()
+    name = "frame_000001.png"
+    opened = api.get_editable_frame("hero/idle", name)
+    assert opened["image_data_url"] == data_url(originals[name])
+    assert opened["initial_image_data_url"] == data_url(originals[name])
+    assert not list(output.glob("*.png")), "opening a tool must not mark the sequence complete"
+    saved = api.save_frame_edit("hero/idle", name, data_url(png(color=(0, 0, 0, 0))), opened["revision"])
+    assert saved["path"] == str(output / name)
+    assert set(path.name for path in output.glob("*.png")) == set(originals)
+    assert Image.open(output / name).getpixel((0, 0)) == (0, 0, 0, 0)
+    for filename, payload in originals.items():
+        assert (source / filename).read_bytes() == payload
+        if filename != name:
+            assert (output / filename).read_bytes() == payload
+    status = ProjectAPI(projects_root=project.parents[1])._get_step_status(project)
+    assert status["3"]["completed"] is True
+    assert status["3"]["count"] == len(originals)
+    reopened = FrameAPI(projects_root=project.parents[1]).get_editable_frame("hero/idle", name)
+    assert reopened["revision"] == saved["revision"]
+    assert reopened["initial_image_data_url"] == data_url(originals[name])
+    api.save_frame_edit("hero/idle", name, reopened["initial_image_data_url"], reopened["revision"])
+    assert (output / name).read_bytes() == originals[name]
+
+
+def test_early_manual_save_rejects_stale_source_without_creating_final_output(manual_frames):
+    api, project, source, originals = manual_frames
+    name = next(iter(originals))
+    opened = api.get_editable_frame("hero/idle", name)
+    changed = png(color=(10, 20, 30, 255))
+    (source / name).write_bytes(changed)
+    with pytest.raises(ValueError, match="FRAME_EDIT_STALE"):
+        api.save_frame_edit("hero/idle", name, data_url(png()), opened["revision"])
+    assert (source / name).read_bytes() == changed
+    assert not (project / "output/03_hole_punched").exists()
+
+
+def test_failed_first_manual_publication_keeps_step2_and_does_not_publish_partial_sequence(manual_frames, monkeypatch):
+    import os
+
+    api, project, source, originals = manual_frames
+    name = next(iter(originals))
+    output = project / "output/03_hole_punched"
+    opened = api.get_editable_frame("hero/idle", name)
+    replace = os.replace
+
+    def fail_publication(staged, target):
+        if target == output:
+            raise OSError("failed sequence publication")
+        return replace(staged, target)
+
+    monkeypatch.setattr("backend.api.frame_api.os.replace", fail_publication)
+    with pytest.raises(OSError, match="failed sequence publication"):
+        api.save_frame_edit("hero/idle", name, data_url(png()), opened["revision"])
+    assert not list(output.glob("*.png"))
+    assert not list(output.parent.glob(".manual-step3-*"))
+    for filename, payload in originals.items():
+        assert (source / filename).read_bytes() == payload

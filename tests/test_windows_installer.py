@@ -66,7 +66,7 @@ def test_installer_filename_and_checksum_match_compiler_output(tmp_path, monkeyp
         defines = dict(argument[2:].split("=", 1) for argument in command[1:-1])
         assert defines["PackageName"] == package_name
         assert kwargs["check"] is True
-        template = Path(command[-1]).read_text()
+        template = Path(command[-1]).read_text(encoding="utf-8")
         filename = next(
             line.split("=", 1)[1] for line in template.splitlines() if line.startswith("OutputBaseFilename=")
         )
@@ -80,6 +80,6 @@ def test_installer_filename_and_checksum_match_compiler_output(tmp_path, monkeyp
     else:
         output = build.create_windows_installer(tmp_path, paths[-2], paths[-1], package_name)
     assert output.name == f"{package_name}-1.2.3-windows-x64-Setup.exe"
-    assert output.with_suffix(".exe.sha256").read_text() == (
+    assert output.with_suffix(".exe.sha256").read_text(encoding="utf-8") == (
         f"{hashlib.sha256(b'installer').hexdigest()}  {output.name}\n"
     )

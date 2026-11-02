@@ -88,11 +88,31 @@ def test_malformed_navigation_never_runs_browser_code():
     assert not server.window.scripts
 
 
-def test_disconnected_navigation_has_application_not_running_code():
+def test_disconnected_navigation_has_application_not_running_code(monkeypatch):
+    import urllib.error
+
+    def refused(*args):
+        raise urllib.error.URLError(ConnectionRefusedError("synthetic refused connection"))
+
+    monkeypatch.setattr(AgentUIClient, "_request_json", refused)
     response = AgentUIClient(port=9).operation(
         {"request_id": "offline", "operation": "ui.navigate", "payload": {"target": "settings"}}
     )
     assert response["error"]["code"] == "UI_NOT_RUNNING"
+
+
+def test_navigation_timeout_keeps_uncertain_receipt_status(monkeypatch):
+    import urllib.error
+
+    def timed_out(*args):
+        raise urllib.error.URLError(TimeoutError("synthetic timeout"))
+
+    monkeypatch.setattr(AgentUIClient, "_request_json", timed_out)
+    response = AgentUIClient(port=9).operation(
+        {"request_id": "uncertain", "operation": "ui.navigate", "payload": {"target": "settings"}}
+    )
+    assert response["error"]["code"] == "CONTROL_UNAVAILABLE"
+    assert response["error"]["details"]["request_id"] == "uncertain"
 
 
 def test_browser_origin_cannot_submit_control_requests():
