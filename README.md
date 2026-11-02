@@ -41,12 +41,12 @@ Game Assets Maker（GAM）是一款开源桌面工具，面向独立游戏开发
 
 普通用户下载安装包即可，**不需要安装 Python、Node.js 或克隆源码**。
 
-当前安装包：**v1.0.2**。后续版本请查看 [最新 Release](https://github.com/hyhy111/game-assets-maker/releases/latest)。
+前往 [最新 Release](https://github.com/hyhy111/game-assets-maker/releases/latest)，在 Assets 中选择对应系统的安装包；此入口会随正式版本更新。
 
 | 系统 | 下载 | 安装方式 |
 | --- | --- | --- |
-| Windows x64 | [EXE 安装包](https://github.com/hyhy111/game-assets-maker/releases/download/v1.0.2/GameAssetsMaker-1.0.2-windows-x64-Setup.exe) | 运行安装器；缺少 WebView2 时按提示联网安装。 |
-| macOS Apple Silicon（ARM64） | [DMG 安装包](https://github.com/hyhy111/game-assets-maker/releases/download/v1.0.2/GameAssetsMaker-1.0.2-macos-arm64.dmg) | 打开 DMG，将应用拖入 Applications。 |
+| Windows x64 | [最新版 EXE 安装包](https://github.com/hyhy111/game-assets-maker/releases/latest) | 在 Assets 中下载 `windows-x64-Setup.exe` 结尾的文件并运行；缺少 WebView2 时按提示联网安装。 |
+| macOS Apple Silicon（ARM64） | [最新版 DMG 安装包](https://github.com/hyhy111/game-assets-maker/releases/latest) | 在 Assets 中下载 `macos-arm64.dmg` 结尾的文件，打开后将应用拖入 Applications。 |
 
 目前未提供 Intel Mac 或 Linux 安装包。macOS 包尚未签名或公证；若系统阻止打开，请按包内安装说明，在“系统设置 → 隐私与安全性”中选择“仍要打开”。校验文件 `.sha256` 见 [Release 附件](https://github.com/hyhy111/game-assets-maker/releases/latest)。
 
@@ -70,7 +70,7 @@ Game Assets Maker（GAM）是一款开源桌面工具，面向独立游戏开发
 
 每步完成后先播放检查。步骤 02 / 03 可隐藏异常帧，也可恢复；重新抽帧会使下游旧处理结果失效。模型就绪后，本地处理可以离线进行。
 
-步骤 02 完成后，切换到步骤 03 页面即可点击 **预览右下角的魔棒或橡皮擦**，自动暂停并在当前预览中修整，无需先运行步骤 03；顶部显示工具参数，预览窗内显示简要操作提示。魔棒点击选区、Shift 点击追加、Delete 删除；橡皮擦用左键拖动擦除。滚轮缩放、中键拖动画布，空格仍控制播放。保留当前预览背景、缩放和平移，背景仍可切换。点击“保存当前帧”后标记为已完成处理，动画卡片的第三个状态图标变绿，并保持工具选中，撤销记录以此次保存为起点；切回浏览工具保留未保存修改。播放、切帧、切步骤或离开页面前，未保存修改会提示保存、放弃或留在当前帧。取消丢弃本次未保存修改。修整只修改步骤 03 的这一帧，重新运行步骤 03 会覆盖修整。W / E / V 分别切换魔棒、橡皮擦和移动工具；+ / - 调整当前工具的颜色容差或橡皮擦大小。橡皮擦默认大小 5px、羽化 0px；魔棒删除会完全清除选区，并向选区外侧羽化；羽化为 0 时仅清除选区。工具栏的“恢复初始版本”会恢复本轮人工修整前的当前帧（未运行步骤 03 时以步骤 02 结果为基准），跨保存和重启保留；恢复可撤销，点击保存才写入结果。旧备份没有步骤标记、无法确认初始版本时，恢复按钮会禁用并提示重新处理步骤 03。
+步骤 02 完成后，切换到步骤 03 页面即可点击 **预览右下角的魔棒或橡皮擦**，自动暂停并在当前预览中修整，无需先运行步骤 03；顶部显示工具参数，预览窗内显示简要操作提示。魔棒点击选区、Shift 点击追加、Delete 删除；橡皮擦用左键拖动擦除。滚轮缩放、中键拖动画布，空格仍控制播放。保留当前预览背景、缩放和平移，背景仍可切换。点击“保存当前帧”后标记为已完成处理，动画卡片的第三个状态图标变绿，并保持工具选中，撤销记录以此次保存为起点；切回浏览工具保留未保存修改。播放、切帧、切步骤或离开页面前，未保存修改会提示保存、放弃或留在当前帧。取消丢弃本次未保存修改。修整只修改步骤 03 的这一帧，重新运行步骤 03 会覆盖修整。W / E / V 分别切换魔棒、橡皮擦和移动工具；选中魔棒或橡皮擦时，⌘S / Ctrl+S 保存当前帧；+ / - 调整当前工具的颜色容差或橡皮擦大小。橡皮擦默认大小 5px、羽化 0px；魔棒删除会完全清除选区，并向选区外侧羽化；羽化为 0 时仅清除选区。工具栏的“恢复初始版本”会恢复本轮人工修整前的当前帧（未运行步骤 03 时以步骤 02 结果为基准），跨保存和重启保留；恢复可撤销，点击保存才写入结果。旧备份没有步骤标记、无法确认初始版本时，恢复按钮会禁用并提示重新处理步骤 03。
 
 #### 3. 裁剪与导出
 
@@ -157,12 +157,12 @@ Game Assets Maker (GAM) is an open-source desktop tool for indie game developers
 
 Install the desktop app. **No Python, Node.js, or source checkout is needed for normal use.**
 
-Current installers: **v1.0.2**. Check the [latest release](https://github.com/hyhy111/game-assets-maker/releases/latest) for updates.
+Open the [latest release](https://github.com/hyhy111/game-assets-maker/releases/latest) and choose the installer for your platform under Assets. This link follows new stable releases.
 
 | Platform | Download | Installation |
 | --- | --- | --- |
-| Windows x64 | [EXE installer](https://github.com/hyhy111/game-assets-maker/releases/download/v1.0.2/GameAssetsMaker-1.0.2-windows-x64-Setup.exe) | Run Setup; install WebView2 online if prompted. |
-| macOS Apple Silicon (ARM64) | [DMG installer](https://github.com/hyhy111/game-assets-maker/releases/download/v1.0.2/GameAssetsMaker-1.0.2-macos-arm64.dmg) | Open the DMG and drag the app into Applications. |
+| Windows x64 | [Latest EXE installer](https://github.com/hyhy111/game-assets-maker/releases/latest) | Under Assets, download the file ending in `windows-x64-Setup.exe` and run it; install WebView2 online if prompted. |
+| macOS Apple Silicon (ARM64) | [Latest DMG installer](https://github.com/hyhy111/game-assets-maker/releases/latest) | Under Assets, download the file ending in `macos-arm64.dmg`, open it and drag the app into Applications. |
 
 Intel Mac and Linux installers are not currently provided. The macOS package is unsigned and not notarized; if blocked, follow the included instructions in System Settings → Privacy & Security → Open Anyway. SHA-256 checksum files are available in the [release assets](https://github.com/hyhy111/game-assets-maker/releases/latest).
 
@@ -186,7 +186,7 @@ If you need source material, create a character in Image Generation, then use th
 
 Play the result after each step. You can hide and restore unwanted frames in steps 02 / 03. Re-extracting frames invalidates older downstream results. Once the model is ready, local processing works offline.
 
-After Step 02, switch to the Step 03 page and choose the **magic wand or eraser at the preview’s bottom right** to pause and retouch the current frame in place, without first running Step 03. Tool settings appear at the top, with brief instructions inside the preview. Click to select, Shift-click to add, and Delete to remove; left-drag to erase. Scroll to zoom, middle-drag to pan, and use Space for playback. The preview keeps its background, zoom and pan; background switching remains available. Saving marks processing complete, turns the animation card’s third status icon green, keeps the tool selected and starts a new undo history. Browse mode keeps unsaved edits. Before playback, frame/step navigation or leaving the page, choose to save, discard or stay. Cancel discards unsaved changes. Edits affect only this frame in Step 03. Re-running Step 03 replaces manual edits. W / E / V select the wand, eraser and pan tools; + / - adjust the active tool’s color tolerance or eraser size. The eraser defaults to 5px with 0px feathering. Wand deletion fully clears the selection and feathers outward into neighboring pixels; with feathering set to 0, only selected pixels are cleared. Restore Initial Version restores the current frame’s appearance before manual edits in this run (using Step 02 output when Step 03 has not been run), across saves and restarts. Restoration can be undone and requires Save to update the output. If older backups do not identify their processing step, restoration stays disabled until Step 03 is reprocessed to establish a verified baseline.
+After Step 02, switch to the Step 03 page and choose the **magic wand or eraser at the preview’s bottom right** to pause and retouch the current frame in place, without first running Step 03. Tool settings appear at the top, with brief instructions inside the preview. Click to select, Shift-click to add, and Delete to remove; left-drag to erase. Scroll to zoom, middle-drag to pan, and use Space for playback. The preview keeps its background, zoom and pan; background switching remains available. Saving marks processing complete, turns the animation card’s third status icon green, keeps the tool selected and starts a new undo history. Browse mode keeps unsaved edits. Before playback, frame/step navigation or leaving the page, choose to save, discard or stay. Cancel discards unsaved changes. Edits affect only this frame in Step 03. Re-running Step 03 replaces manual edits. W / E / V select the wand, eraser and pan tools; Cmd+S / Ctrl+S save the current frame while the wand or eraser is selected; + / - adjust the active tool’s color tolerance or eraser size. The eraser defaults to 5px with 0px feathering. Wand deletion fully clears the selection and feathers outward into neighboring pixels; with feathering set to 0, only selected pixels are cleared. Restore Initial Version restores the current frame’s appearance before manual edits in this run (using Step 02 output when Step 03 has not been run), across saves and restarts. Restoration can be undone and requires Save to update the output. If older backups do not identify their processing step, restoration stays disabled until Step 03 is reprocessed to establish a verified baseline.
 
 #### 3. Trim and export
 
