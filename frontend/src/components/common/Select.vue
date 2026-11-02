@@ -1,5 +1,5 @@
 <template>
-  <Listbox v-model="selectedValue">
+  <Listbox v-model="selectedValue" :disabled="disabled">
     <div class="relative">
       <!--
         Consumers wrap this select in a <label>. A label forwards clicks on
@@ -10,7 +10,7 @@
         activation behavior while Headless UI's own listeners still run.
       -->
       <ListboxButton
-        class="flex h-[42px] w-full items-center justify-between rounded-lg border border-dark-border bg-dark-bg px-3 text-sm text-white cursor-pointer focus:outline-none focus:border-primary"
+        class="flex h-[42px] w-full items-center justify-between rounded-lg border border-dark-border bg-dark-bg px-3 text-sm text-white cursor-pointer focus:outline-none focus:border-primary disabled:cursor-not-allowed disabled:opacity-50"
         :aria-label="ariaLabel"
         :data-test="dataTest"
         @click.prevent
@@ -70,6 +70,7 @@ const props = defineProps<{
   placeholder?: string;
   ariaLabel?: string;
   dataTest?: string;
+  disabled?: boolean;
 }>();
 
 const emit = defineEmits<{

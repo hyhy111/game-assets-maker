@@ -14,16 +14,24 @@
           {{ t('projectManager.heroSubtitle') }}
         </p>
 
-        <div class="mt-8 flex justify-center lg:justify-start">
+        <div class="mt-8 flex flex-col items-center gap-3 lg:items-start">
           <Button
             size="lg"
-            class="w-full gap-2 rounded-xl px-7 py-3.5 shadow-xl shadow-primary/20 sm:w-auto"
+            class="hero-start-button w-full gap-2 rounded-xl px-7 py-3.5 shadow-xl shadow-primary/20 sm:w-auto"
             data-test="project-manager-hero-start"
             @click="emit('start-ai-creation')"
           >
             <Sparkles class="h-5 w-5" />
             {{ t('projectManager.heroStart') }}
           </Button>
+          <RouterLink
+            to="/ai-creation/settings#gam-skills"
+            class="inline-flex items-center gap-2 rounded-lg px-1 py-1 text-base text-gray-400 transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            data-test="project-manager-install-skills"
+          >
+            <Download class="h-4 w-4" aria-hidden="true" />
+            {{ t('projectManager.heroInstallSkills') }}
+          </RouterLink>
         </div>
 
         <div class="mt-10 flex flex-wrap items-center justify-center gap-x-6 gap-y-3 text-base text-gray-500 lg:justify-start">
@@ -280,8 +288,9 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
-import { Sparkles } from 'lucide-vue-next';
+import { Download, Sparkles } from 'lucide-vue-next';
 import { useI18n } from 'vue-i18n';
+import { RouterLink } from 'vue-router';
 import Button from '@/components/common/Button.vue';
 
 const emit = defineEmits<{
@@ -325,8 +334,14 @@ function advanceFlow() {
 
 <style scoped>
 .project-manager-hero {
+  --hero-scale: 0.8;
   background: #171717;
-  zoom: 0.8;
+  zoom: var(--hero-scale);
+}
+
+.hero-start-button {
+  /* Match the library's text-sm size after the hero's zoom is applied. */
+  font-size: calc(0.875rem / var(--hero-scale));
 }
 
 .creation-flow {

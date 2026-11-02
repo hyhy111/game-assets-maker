@@ -206,7 +206,18 @@ function beforeUnload(event: BeforeUnloadEvent) {
 }
 
 function onToolShortcut(event: KeyboardEvent) {
-  if (event.defaultPrevented || event.repeat || event.ctrlKey || event.metaKey || event.altKey
+  if (event.defaultPrevented) return;
+  if (frameRetouchEnabled.value && frameEditor.value && frameEditorTool.value !== 'browse'
+    && (event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && !event.isComposing
+    && event.key.toLowerCase() === 's') {
+    event.preventDefault();
+    if (event.repeat || frameEditorLoading.value || frameEditorSaving.value || navigationPending.value
+      || processStore.isProcessing || frameEditorRef.value?.busy || !frameEditorRef.value?.dirty) return;
+    const imageData = frameEditorRef.value.getImageData();
+    if (imageData) return saveCurrentFrameEdit(imageData);
+    return;
+  }
+  if (event.repeat || event.ctrlKey || event.metaKey || event.altKey
     || !frameRetouchEnabled.value || processStore.isProcessing
     || frameEditorRef.value?.busy) return;
   if (event.target instanceof Element

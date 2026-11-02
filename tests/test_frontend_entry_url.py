@@ -6,7 +6,7 @@ from urllib.parse import parse_qs
 import pytest
 
 
-@pytest.mark.parametrize("version", ["1.0.1", "1.0.2", "1.0.4"])
+@pytest.mark.parametrize("version", ["1.0.1", "1.0.2", "1.0.3"])
 def test_packaged_frontend_entry_uses_current_version_query(tmp_path, monkeypatch, version):
     from backend import main
 
@@ -33,7 +33,7 @@ def test_development_frontend_keeps_vite_url():
     assert app.get_url() == "http://localhost:5173"
 
 
-@pytest.mark.parametrize("version", ["1.0.2", "1.0.4"])
+@pytest.mark.parametrize("version", ["1.0.2", "1.0.3"])
 def test_same_version_rebuild_changes_entry_cache_key_without_changing_storage_path(tmp_path, monkeypatch, version):
     from backend import main
 

@@ -29,11 +29,14 @@
             {{ t('seedance.handoff.usedActions', { count: selectedRole?.projectCount ?? 0 }) }}
           </span>
         </span>
-        <select v-model="role" class="seedance-control mt-2" :disabled="disabled">
-          <option v-for="item in roles" :key="item.name" :value="item.name">
-            {{ item.name }}
-          </option>
-        </select>
+        <Select
+          v-model="role"
+          class="mt-2"
+          :options="roleOptions"
+          :disabled="disabled"
+          :aria-label="t('seedance.ui.role')"
+          data-test="handoff-role-select"
+        />
       </label>
 
       <div v-else-if="mode === 'existing'" class="rounded-lg border border-[var(--seedance-border)] p-4 text-sm">
@@ -79,6 +82,7 @@
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import type { RoleSummary } from '@/types';
+import Select from '@/components/common/Select.vue';
 import SeedancePanel from './SeedancePanel.vue';
 
 const props = withDefaults(defineProps<{
@@ -95,6 +99,7 @@ const { t } = useI18n();
 const mode = ref<'existing' | 'new'>('existing');
 const role = ref(props.roles[0]?.name ?? '');
 const action = ref('');
+const roleOptions = computed(() => props.roles.map(item => ({ value: item.name, label: item.name })));
 const selectedRole = computed(() => props.roles.find((item) => item.name === role.value));
 const canSubmit = computed(() => Boolean(role.value.trim() && action.value.trim()));
 

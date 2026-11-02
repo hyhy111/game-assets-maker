@@ -140,6 +140,20 @@ test('解密失败时 loadCredentials 返回 null、不抛错，并清除残留�
   assert.equal(storage.get('gam:auth:credentials'), undefined, '残留密文应被清除');
 });
 
+test('unreadable credential response clears ciphertext and allows saving credentials again', async () => {
+  createScriptedPyWebViewBridge({
+    decrypt_credential: [{ resolve: '' }, { resolve: JSON.stringify(CREDENTIALS) }],
+    encrypt_credential: [{ resolve: CIPHERTEXT }],
+  });
+  storage.set('gam:auth:credentials', CIPHERTEXT);
+  const { loadCredentials, saveCredentials, hasStoredCredentials } = await vault();
+
+  assert.equal(await loadCredentials(), null);
+  assert.equal(hasStoredCredentials(), false);
+  assert.equal(await saveCredentials(CREDENTIALS.email, CREDENTIALS.password), true);
+  assert.deepEqual(await loadCredentials(), CREDENTIALS);
+});
+
 // ---------------------------------------------------------------------------
 // 3. 登出语义
 // ---------------------------------------------------------------------------

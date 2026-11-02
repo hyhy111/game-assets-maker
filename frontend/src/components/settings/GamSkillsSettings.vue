@@ -1,5 +1,6 @@
 <template>
   <SeedancePanel
+    id="gam-skills"
     class="mb-5"
     :title="t('skillsInstall.title')"
     :description="t('skillsInstall.description')"

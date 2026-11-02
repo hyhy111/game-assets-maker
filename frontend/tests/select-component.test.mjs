@@ -39,3 +39,11 @@ test('shared Select supports strings, numbers, placeholders, and accessible list
   assert.match(source, /modelValue: string \| number/);
   assert.match(source, /emit\('update:modelValue', value\)/);
 });
+
+test('shared Select disables its listbox button when the containing operation is unavailable', async () => {
+  const html = await renderSfc('components/common/Select.vue', {
+    props: { modelValue: 'hero', options: [{ value: 'hero', label: '英雄' }], disabled: true },
+  });
+  assert.match(html, /<button[^>]*disabled/);
+  assert.match(html, />英雄</);
+});

@@ -619,8 +619,14 @@ class API:
         return self._credential_crypto().encrypt(plaintext)
 
     def decrypt_credential(self, ciphertext: str) -> str:
-        """Decrypt a credential string previously produced by encrypt_credential."""
-        return self._credential_crypto().decrypt(ciphertext)
+        """Decrypt a credential, returning empty text for an invalid Fernet token."""
+        from cryptography.fernet import InvalidToken
+
+        try:
+            return self._credential_crypto().decrypt(ciphertext)
+        except InvalidToken:
+            # The vault clears unreadable credentials and asks for a fresh login.
+            return ""
 
     # ==================== Project API ====================
 

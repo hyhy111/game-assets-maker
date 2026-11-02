@@ -46,7 +46,10 @@ const routes = [
 
 const router = createRouter({
   history: createWebHashHistory(),
-  routes
+  routes,
+  scrollBehavior(to) {
+    if (to.hash === '#gam-skills') return { el: to.hash, top: 96 }
+  }
 })
 
 const pinia = createPinia()

@@ -23,7 +23,7 @@ function editor(step = 3, completed = true) {
   const names = ['computed', 'nextTick', 'onBeforeUnmount', 'onMounted', 'ref', 'watch', 'onBeforeRouteLeave',
     'useRouter', 'useRoute', 'useProjectStore', 'useProcessStore', 'usePlayerStore', 'useI18n', 'storeToRefs',
     'api', 'Step1Extract', 'Step2Background', 'Step3PostProcess'];
-  const setup = new Function(...names, `${javascript}\nreturn { frameEditor, frameEditorRef, frameEditorTool, frameEditorError, navigationPending, beforeFrameNavigation, resolveFrameNavigation, saveCurrentFrameEdit, selectFrameTool, frameRetouchEnabled, frameVisibilityEnabled, onToolShortcut };`);
+  const setup = new Function(...names, `${javascript}\nreturn { frameEditor, frameEditorRef, frameEditorTool, frameEditorError, frameEditorLoading, frameEditorSaving, navigationPending, beforeFrameNavigation, resolveFrameNavigation, saveCurrentFrameEdit, selectFrameTool, frameRetouchEnabled, frameVisibilityEnabled, onToolShortcut };`);
   const state = setup(computed, nextTick, () => {}, () => {}, ref, () => {}, () => {},
     () => ({}), () => ({}), () => ({ isStepCompleted: () => completed }), () => process, () => player,
     () => ({ t: key => key }), () => ({ currentProject, currentStep, s1Params: ref({}) }), api, null, null, null);
@@ -60,6 +60,76 @@ test('browse keeps the edit session and unsaved state; staying cancels only the 
   assert.equal(state.frameEditor.value.filename, '1.png');
   assert.equal(state.frameEditorRef.value.dirty, true);
   assert.equal(state.saves.length, 0);
+});
+
+test('Cmd/Ctrl+S saves the selected wand or eraser frame without leaving the tool', async () => {
+  for (const tool of ['wand', 'brush']) {
+    for (const modifier of ['metaKey', 'ctrlKey']) {
+      const state = editor();
+      state.frameEditorTool.value = tool;
+      const event = { key: 's', [modifier]: true, preventDefault() { this.defaultPrevented = true; } };
+      assert.equal(await state.onToolShortcut(event), true);
+      assert.equal(event.defaultPrevented, true);
+      assert.deepEqual(state.saves, [['hero/idle', '1.png', 'edited', 'r0', 3]]);
+      assert.equal(state.frameEditorRef.value.dirty, false);
+      assert.equal(state.frameEditor.value.revision, 'r1');
+      assert.equal(state.frameEditorTool.value, tool);
+    }
+  }
+});
+
+test('frame save shortcuts suppress browser saving but do not submit clean, busy or suspended edits twice', async () => {
+  for (const configure of [
+    state => { state.frameEditorRef.value.dirty = false; },
+    state => { state.frameEditorRef.value.busy = true; },
+    state => { state.frameEditorLoading.value = true; },
+    state => { state.frameEditorSaving.value = true; },
+    state => { state.navigationPending.value = true; },
+    state => { state.process.isProcessing = true; },
+  ]) {
+    const state = editor();
+    configure(state);
+    const event = { key: 's', ctrlKey: true, preventDefault() { this.defaultPrevented = true; } };
+    await state.onToolShortcut(event);
+    assert.equal(event.defaultPrevented, true);
+    assert.equal(state.saves.length, 0);
+  }
+  const state = editor();
+  const event = () => ({ key: 'S', metaKey: true, preventDefault() { this.defaultPrevented = true; } });
+  const saving = state.onToolShortcut(event());
+  await state.onToolShortcut(event());
+  await state.onToolShortcut({ ...event(), repeat: true });
+  await saving;
+  assert.equal(state.saves.length, 1);
+});
+
+test('save shortcuts stay scoped to completed step 3 retouch tools and preserve failed edits', async () => {
+  for (const configure of [
+    state => { state.currentStep.value = 2; },
+    state => { state.frameEditorTool.value = 'browse'; },
+    state => { state.frameEditor.value = null; },
+  ]) {
+    const state = editor();
+    configure(state);
+    const event = { key: 's', ctrlKey: true, preventDefault() { this.defaultPrevented = true; } };
+    await state.onToolShortcut(event);
+    assert.equal(event.defaultPrevented, undefined);
+    assert.equal(state.saves.length, 0);
+  }
+  for (const options of [{ altKey: true }, { shiftKey: true }, { isComposing: true }, { defaultPrevented: true }]) {
+    const state = editor();
+    await state.onToolShortcut({ key: 's', ctrlKey: true, ...options, preventDefault() { throw Error('shortcut must be ignored'); } });
+    assert.equal(state.saves.length, 0);
+  }
+  const incomplete = editor(3, false);
+  await incomplete.onToolShortcut({ key: 's', metaKey: true, preventDefault() { throw Error('step 3 must be completed'); } });
+  assert.equal(incomplete.saves.length, 0);
+  const state = editor();
+  state.failSaving(true);
+  assert.equal(await state.onToolShortcut({ key: 's', metaKey: true, preventDefault() {} }), false);
+  assert.equal(state.frameEditorRef.value.dirty, true);
+  assert.equal(state.frameEditorError.value, 'magicWand.failed');
+  assert.equal(state.frameEditorTool.value, 'brush');
 });
 
 test('a failed save holds navigation and edits; retry saves before permitting the original action', async () => {

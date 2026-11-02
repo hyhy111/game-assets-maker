@@ -249,7 +249,9 @@ test('Seedance preview provides existing-role and new-role handoff modes', async
       roles: [{ name: 'hero', projectCount: 2 }],
     },
   });
-  assert.match(html, /送入逐帧动画流水线/);
+  assert.match(html, /<h2[^>]*>创建逐帧动画<\/h2>/);
+  assert.doesNotMatch(html, /送入逐帧动画流水线|<select\b/);
+  assert.match(html, /<button[^>]*aria-haspopup="listbox"[^>]*data-test="handoff-role-select"|<button[^>]*data-test="handoff-role-select"[^>]*aria-haspopup="listbox"/);
   assert.match(html, /已有角色/);
   assert.match(html, /新建角色/);
   assert.match(html, /hero/);
@@ -261,6 +263,10 @@ test('Seedance preview provides existing-role and new-role handoff modes', async
     props: { task: seedanceTaskFixture(), disabled: true, roles: [] },
   });
   assert.match(disabled, /<button[^>]+disabled[^>]*>[^<]*创建逐帧动画/s);
+  const disabledRole = await renderSfc('components/seedance/SeedanceHandoffPanel.vue', {
+    props: { disabled: true, roles: [{ name: 'hero', projectCount: 2 }] },
+  });
+  assert.match(disabledRole, /<button[^>]*(?:disabled[^>]*data-test="handoff-role-select"|data-test="handoff-role-select"[^>]*disabled)/);
 });
 
 test('Seedance image picker renders the generated preview instead of its local path', async () => {

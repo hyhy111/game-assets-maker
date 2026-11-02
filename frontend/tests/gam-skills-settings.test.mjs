@@ -66,8 +66,17 @@ test('settings show the installer immediately below the update card', async () =
   const html = await renderSfc('views/SeedanceSettings.vue', { route: '/ai-creation/settings' });
   assert.ok(html.indexOf('data-test="app-update-settings"') < html.indexOf('data-test="gam-skills-settings"'));
   assert.match(html, /data-test="gam-skills-agent"/);
+  assert.match(html, /id="gam-skills"/);
   assert.match(html, /npx skills add hyhy111\/gam-skills -g -a codex --skill &quot;\*&quot;/);
   assert.match(html, /Node\.js/);
+});
+
+test('home hero links below AI creation directly to the GAM Skills installation section', async () => {
+  const html = await renderSfc('components/project-manager/ProjectManagerHero.vue');
+  assert.match(html, /<a[^>]*href="\/ai-creation\/settings#gam-skills"[^>]*data-test="project-manager-install-skills"/);
+  assert.match(html, /安装 GAM Skills/);
+  assert.ok(html.indexOf('data-test="project-manager-hero-start"') < html.indexOf('data-test="project-manager-install-skills"'));
+  assert.ok(html.indexOf('data-test="project-manager-install-skills"') < html.indexOf('文生图'));
 });
 
 test('settings offer common model defaults without separate ForFuner AI controls', async () => {
