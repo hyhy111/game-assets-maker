@@ -56,8 +56,8 @@ export async function fetchSubscriptionPageUrl(): Promise<string> {
 
 /** 积分账户（需登录）。http 层返回完整 AjaxResult，取 .data 解包 */
 export async function fetchCreditAccount(): Promise<CreditAccount> {
-  const res = await httpGet<{ data: CreditAccount }>('/app/credit/account');
-  return res.data;
+  const res = await httpGet<{ data: { totalAvailable: number; buckets: { bucket: CreditBucket }[] } }>('/app/credit/v2/account');
+  return { totalAvailable: res.data.totalAvailable, buckets: res.data.buckets.map(row => row.bucket) };
 }
 
 /** 当前生效并发（需登录）。同上，取 .data 解包 */

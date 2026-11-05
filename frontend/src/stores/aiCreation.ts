@@ -330,6 +330,8 @@ export const useAICreationStore = defineStore('ai-creation', () => {
     generationSource,
     imageDraft,
     videoDraft,
+    imageInitialized,
+    videoInitialized,
     videoPreviewUrls,
     imagePreviewUrls,
     currentGeneration,

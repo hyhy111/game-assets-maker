@@ -212,7 +212,7 @@
                       type="button"
                       class="rounded-lg px-2 py-2 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-30"
                       :class="form.resolution === resolution ? 'bg-primary/20 text-primary-200 shadow-sm' : 'text-gray-400 hover:bg-white/[0.05] hover:text-gray-200'"
-                      :disabled="!supportedResolutions.includes(resolution)"
+                      :disabled="!supportedResolutions.includes(resolution) || (platformGenerationSelected && !creditUsage.canPay('video', form.model, resolution))"
                       :aria-pressed="form.resolution === resolution"
                       :data-value="resolution"
                       @click="form.resolution = resolution"
@@ -259,6 +259,7 @@
                             v-slot="{ active, selected }"
                             as="template"
                             :value="duration"
+                            :disabled="platformGenerationSelected && !creditUsage.canPay('video', form.model, form.resolution, duration)"
                           >
                             <li
                               class="flex cursor-pointer items-center justify-between gap-4 rounded-lg px-3 py-2 text-sm whitespace-nowrap"
@@ -268,7 +269,7 @@
                                   ? 'bg-[#303030] text-white'
                                   : 'text-gray-400'"
                             >
-                              <span>{{ duration }}s</span>
+                              <span>{{ duration }}s <small v-if="platformGenerationSelected && !creditUsage.canPay('video', form.model, form.resolution, duration)" class="text-gray-500">{{ t('creditUsage.optionUnavailable') }}</small></span>
                               <Check
                                 v-if="selected"
                                 :size="14"
@@ -308,6 +309,7 @@
             <div v-if="showCreditEstimate" class="text-right" data-test="generation-credits" aria-live="polite">
               <p v-if="quoteLoading" class="text-sm text-gray-500">{{ t('aiCreation.platformQuoteLoading') }}</p>
               <p v-else-if="quoteValue !== null" class="text-sm text-gray-300">{{ t('aiCreation.estimatedCredits', { credits: quoteValue }) }}</p>
+              <p v-else-if="creditUsage.error" class="max-w-[16rem] text-xs leading-5 text-warning">{{ t('creditUsage.unavailable') }} <button type="button" class="underline" @click="creditUsage.refresh()">{{ t('creditUsage.refresh') }}</button></p>
               <p v-else-if="quoteError" class="max-w-[16rem] text-xs leading-5 text-warning">{{ t('aiCreation.platformQuoteFailed', { message: quoteError }) }}</p>
               <p v-else class="text-sm text-gray-500">{{ t('aiCreation.creditsUnavailable') }}</p>
             </div>
@@ -322,7 +324,7 @@
             <button
               type="submit"
               class="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#ffbd5c] text-[#242424] transition hover:bg-[#ffc975] disabled:cursor-not-allowed disabled:bg-[#4a4a4a] disabled:text-[#777]"
-              :disabled="submitting || capabilitiesBlocked || draftLoadFailed || !form.first_frame || !form.prompt.trim()"
+              :disabled="submitting || platformConfirmBlocked || capabilitiesBlocked || draftLoadFailed || !form.first_frame || !form.prompt.trim()"
               :aria-label="t('seedance.create.createTask')"
               :title="t('seedance.create.createTask')"
               data-test="seedance-submit"
@@ -427,6 +429,7 @@ import { useRoute, useRouter } from 'vue-router';
 import DraftClearConfirmation from '@/components/ai-creation/DraftClearConfirmation.vue';
 import GenerationAccessDialog from '@/components/ai-creation/GenerationAccessDialog.vue';
 import CreationModelSelect from '@/components/ai-creation/CreationModelSelect.vue';
+import { useCreditUsageStore } from '@/stores/creditUsage';
 import Button from '@/components/common/Button.vue';
 import { api } from '@/api';
 import Switch from '@/components/common/Switch.vue';
@@ -478,6 +481,7 @@ const store = useSeedanceStore();
 const configStore = useConfigStore();
 const authStore = useAuthStore();
 const workspace = useAICreationStore();
+const creditUsage = useCreditUsageStore();
 // 平台能力清单的加载时机：登录后 / 切到平台源 / 登出清空。
 const { reload: reloadCapabilities } = usePlatformCapabilities();
 const errors = ref<Record<string, SeedanceValidationIssue>>({});
@@ -514,7 +518,7 @@ const localVideoModelOptions = (): ModelOption[] => [
 ];
 const modelOptions = computed<ModelOption[]>(() => (
   platformGenerationSelected.value
-    ? platformModelOptions(platformVideoModels.value)
+    ? platformModelOptions(platformVideoModels.value).map(option => ({ ...option, disabled: !creditUsage.canPay('video', option.value), reason: creditUsage.canPay('video', option.value) ? '' : t(creditUsage.ready ? 'creditUsage.optionUnavailable' : 'creditUsage.loading') }))
     : localVideoModelOptions()
 ));
 const form: CreateForm = workspace.videoDraft;
@@ -537,7 +541,7 @@ const showCreditEstimate = computed(() => (
 ));
 const quoteReady = computed(() => (
   platformGenerationSelected.value && authStore.isLoggedIn && modelDefaultsReady.value
-  && !capabilitiesBlocked.value && !workspace.capabilitiesLoading
+  && !capabilitiesBlocked.value && !workspace.capabilitiesLoading && creditUsage.ready
 ));
 // 平台源报价（quote-preview）：编辑页参数一变就刷新，弹窗确认前必须有值。
 const quoteLoading = ref(false);
@@ -569,7 +573,12 @@ async function refreshPlatformQuote() {
   const signature = quoteSignature();
   quoteLoading.value = true;
   quoteError.value = '';
-  const data = await store.quoteVideo(createRequest(form));
+  let data: { quote: number } | null = null;
+  let paymentError = '';
+  try {
+    const result = await creditUsage.quote('video', { model: form.model, resolution: form.resolution, duration: form.duration, ratio: form.ratio, generate_audio: form.generate_audio, content: [{ type: 'text', text: 'quote' }] });
+    if (result.canSubmit) data = result; else paymentError = result.message;
+  } catch (error) { paymentError = error instanceof Error ? error.message : t('creditUsage.unavailable'); }
   // 只接受最后一次请求的结果，避免快速切参数时旧响应覆盖新报价。
   if (requestId !== quoteRequestId) return;
   quoteLoading.value = false;
@@ -579,7 +588,7 @@ async function refreshPlatformQuote() {
     return;
   }
   quoteValue.value = null;
-  quoteError.value = store.error?.message ?? t('aiCreation.creditsUnavailable');
+  quoteError.value = paymentError || t('aiCreation.creditsUnavailable');
 }
 
 function scheduleQuoteRefresh() {
@@ -635,6 +644,30 @@ async function copyPrompt() {
   }
 }
 
+// Only an untouched initial draft may receive an automatic payable default.
+const initialSelectionPending = ref(!workspace.videoInitialized && !form.prompt && !form.first_frame && !form.last_frame && !route.query.regenerate && !route.query.continue && !route.query.handoff);
+let initialDraftSignature = '';
+watch(
+  () => [modelDefaultsReady.value, creditUsage.ready, creditUsage.data?.asOf, platformGenerationSelected.value, platformVideoModels.value],
+  () => {
+    if (!initialSelectionPending.value || !initialDraftSignature || !modelDefaultsReady.value || !platformGenerationSelected.value || !creditUsage.ready || !platformVideoModels.value.length) return;
+    initialSelectionPending.value = false;
+    const original = JSON.parse(initialDraftSignature);
+    const automaticModel = form.model === original.model || form.model === store.settings?.default_model_id || form.model === store.settings?.default_model;
+    if (!automaticModel || Object.keys(original).some(key => key !== 'model' && (form as unknown as Record<string, unknown>)[key] !== original[key])) return;
+    const current = creditUsage.canPay('video', form.model, form.resolution, form.duration);
+    if (current) return;
+    const next = creditUsage.data?.combinations.find(row => row.context.mediaType === 'video'
+      && platformVideoModels.value.some(model => model.model === row.context.model)
+      && creditUsage.canPay('video', row.context.model, row.context.resolution ?? undefined, row.context.durationSec ?? undefined));
+    if (!next) return;
+    form.model = next.context.model as typeof form.model;
+    form.resolution = next.context.resolution as typeof form.resolution;
+    form.duration = next.context.durationSec as typeof form.duration;
+  },
+  { flush: 'post' },
+);
+
 onMounted(async () => {
   await store.loadSettings();
   const settings = store.settings;
@@ -654,8 +687,8 @@ onMounted(async () => {
   modelDefaultsReady.value = true;
   if (platformGenerationSelected.value) {
     form.return_last_frame = false;
-    clampToPlatformModel();
   }
+  initialDraftSignature = JSON.stringify(form);
 
   const regenerateId = typeof route.query.regenerate === 'string' ? route.query.regenerate : '';
   const continuationId = typeof route.query.continue === 'string' ? route.query.continue : '';
@@ -683,14 +716,13 @@ onMounted(async () => {
   form.last_frame = request.last_frame ?? null;
   form.prompt = request.prompt ?? '';
   form.model = request.model ?? form.model;
-  form.resolution = correctResolution(form.model, request.resolution ?? form.resolution);
+  form.resolution = platformGenerationSelected.value ? (request.resolution ?? form.resolution) : correctResolution(form.model, request.resolution ?? form.resolution);
   form.ratio = request.ratio ?? form.ratio;
   form.duration = correctDuration(request.duration ?? form.duration);
   form.generate_audio = request.generate_audio ?? form.generate_audio;
   form.return_last_frame = request.return_last_frame ?? form.return_last_frame;
   previewUrls.first_frame = source.preview_urls.first_frame ?? '';
   previewUrls.last_frame = source.preview_urls.last_frame ?? '';
-  if (platformGenerationSelected.value) clampToPlatformModel();
 });
 
 function clearDraft() {
@@ -762,6 +794,7 @@ function clampToPlatformModel() {
 }
 
 function selectModel(model: string) {
+  initialSelectionPending.value = false;
   form.model = model as SeedanceModel;
   if (platformGenerationSelected.value) clampToPlatformModel();
   else fixResolution();
@@ -769,20 +802,12 @@ function selectModel(model: string) {
 
 // 切模型/分辨率/时长/比例/音频都刷新平台报价（仅平台源）。
 watch(
-  () => [quoteReady.value, quoteSignature()].join('#'),
+  () => [quoteReady.value, creditUsage.data?.asOf, quoteSignature()].join('#'),
   () => scheduleQuoteRefresh(),
   { immediate: true },
 );
 
-// 清单是异步到达的：到了之后把表单收敛一次（也覆盖"清单被刷新导致档位变少"）。
-watch(platformVideoModels, () => {
-  if (platformGenerationSelected.value) clampToPlatformModel();
-});
-
-// 换分辨率后，原时长可能在该分辨率下没有定价 → 收敛回该分辨率的第一个可售时长
-watch(() => form.resolution, () => {
-  if (platformGenerationSelected.value) clampToPlatformModel();
-});
+// Capability refreshes preserve the draft. Invalid combinations are explained by the quote and scope notice.
 
 async function selectFrame(field: 'first_frame' | 'last_frame') {
   const selection = await store.selectImageFile();

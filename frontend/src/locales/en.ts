@@ -1,4 +1,18 @@
 export default {
+  creditUsage: {
+    availableModels: 'Available models: ',
+    viewModels: 'View all eligible models and specifications',
+    bonusScope: 'Bonus credits · {scope}',
+    loading: 'Updating credit availability…',
+    unavailable: 'Credit availability could not be loaded. Refresh to retry.',
+    refresh: 'Refresh credits',
+    balance: 'General credits {general} · Bonus credits {bonus}',
+    insufficient: 'Insufficient eligible credits. You need {amount} more.',
+    invalidSelection: 'This model or specification is unavailable. Choose another combination.',
+    priority: 'Eligible bonus credits are used first, ordered by expiry. General credits cover the rest. This estimate is checked again on submission.',
+    scope: 'View credit usage rules',
+    optionUnavailable: 'Insufficient eligible credits or bonus not applicable',
+  },
   app: {
     title: 'Game Assets Maker',
   },
@@ -31,9 +45,11 @@ export default {
     sessionExpired: 'Session expired',
   },
   billing: {
+    expiresAt: 'Expires {date}',
     title: 'My Credits',
     fallbackName: 'Credits',
     acquired: 'Acquired {date}',
+    remainingOfTotal: 'Remaining {remain} / {total}',
     usedOfTotal: 'Used {used} / {total}',
     remainingExpires: '{remain} left · expires {date}',
     usedUp: 'Used up',

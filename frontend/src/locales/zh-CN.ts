@@ -1,4 +1,18 @@
 export default {
+  creditUsage: {
+    availableModels: '可用模型：',
+    viewModels: '查看完整可用模型及规格',
+    bonusScope: '赠送积分 · {scope}',
+    loading: '正在更新积分使用范围…',
+    unavailable: '暂时无法获取积分使用范围，请刷新后重试。',
+    refresh: '刷新积分',
+    balance: '通用积分 {general} · 赠送积分 {bonus}',
+    insufficient: '当前组合可用积分不足，还差 {amount} 积分。',
+    invalidSelection: '当前模型或规格已不可用，请手动选择其他组合。',
+    priority: '符合范围的赠送积分优先按到期时间使用，不足由通用积分补足。分摊为估算，提交时重新校验。',
+    scope: '查看积分使用范围',
+    optionUnavailable: '当前组合可用积分不足或赠送不适用',
+  },
   app: {
     title: 'Game Assets Maker',
   },
@@ -31,9 +45,11 @@ export default {
     sessionExpired: '登录已过期',
   },
   billing: {
+    expiresAt: '{date} 到期',
     title: '我的积分',
     fallbackName: '积分',
     acquired: '{date} 获得',
+    remainingOfTotal: '剩余 {remain} / 共 {total}',
     usedOfTotal: '已用 {used} / 共 {total}',
     remainingExpires: '剩 {remain} · {date} 到期',
     usedUp: '已用完',

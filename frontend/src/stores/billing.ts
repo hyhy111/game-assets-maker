@@ -35,22 +35,8 @@ export const useBillingStore = defineStore('billing', () => {
   /** 可用总积分；未加载/失败为 null */
   const totalAvailable = computed(() => account.value?.totalAvailable ?? null);
 
-  /** 桶是否生效中（待生效桶 = 续费排队，进度条置灰展示） */
-  function isBucketActive(b: CreditBucket): boolean {
-    const eff = new Date(String(b.effectiveFrom || '').replace(' ', 'T'));
-    return !isNaN(eff.getTime()) && eff.getTime() <= Date.now();
-  }
-
-  /**
-   * 有效桶明细（含待生效）：生效中按到期升序在前，待生效按生效日升序在后
-   */
-  const buckets = computed<CreditBucket[]>(() => {
-    const list = account.value?.buckets ?? [];
-    const t = (s?: string | null) => new Date(String(s || '').replace(' ', 'T')).getTime() || 0;
-    const active = list.filter(isBucketActive).sort((a, b) => t(a.expireTime) - t(b.expireTime));
-    const pending = list.filter((b) => !isBucketActive(b)).sort((a, b) => t(a.effectiveFrom) - t(b.effectiveFrom));
-    return [...active, ...pending];
-  });
+  // Preserve the V2 server order: usable bonus, general, pending, then exhausted.
+  const buckets = computed<CreditBucket[]>(() => account.value?.buckets ?? []);
 
   let accountInflight: Promise<void> | null = null;
   let statusInflight: Promise<void> | null = null;
@@ -126,7 +112,6 @@ export const useBillingStore = defineStore('billing', () => {
     subscriptionStatus,
     totalAvailable,
     buckets,
-    isBucketActive,
     refreshAccount,
     refreshSubscriptionStatus,
     refreshAll,

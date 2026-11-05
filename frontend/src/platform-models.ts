@@ -13,6 +13,8 @@ import type { PlatformModelCapability } from '@/types';
 export interface ModelOption {
   value: string;
   label: string;
+  disabled?: boolean;
+  reason?: string;
 }
 
 /**
