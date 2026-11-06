@@ -44,6 +44,14 @@ These instructions apply to the entire repository.
 - Do not store API keys, credentials, tokens, personal project data, generated media, or downloaded models in the repository.
 - Add dependencies through `pyproject.toml` and `uv.lock`; do not extend legacy `requirements.txt` for new dependencies.
 
+## Windows and macOS Compatibility
+
+- Treat Windows and macOS as supported targets for every change. Review platform-sensitive behavior even when developing on macOS.
+- Use existing path helpers and portable filesystem APIs. Account for Windows drive letters, separators, case-insensitive names, reserved filenames, and paths containing spaces or Chinese characters; convert filesystem paths to URLs with the appropriate API.
+- Invoke subprocesses with argument lists and resolve platform-specific executables through existing helpers. Keep OS-specific commands behind explicit platform branches, and close file handles before replacing or deleting files so operations also work with Windows file locking.
+- For desktop UI, dependency, or packaging changes, consider Windows WebView2 behavior, Ctrl-based shortcuts, and Windows build/runtime support alongside macOS behavior.
+- Add focused regression coverage when fixing platform-specific bugs. For affected behavior, use Windows CI or an actual Windows installed build when available, and report Windows checks that were not run; macOS tests or mocked platform branches alone do not establish Windows compatibility.
+
 ## Upgrade Compatibility
 
 - Preserve older saved projects, configuration, and PyWebView bridge calls. Give new fields safe defaults and keep existing argument defaults and persisted names compatible; test legacy data when changing these contracts.
