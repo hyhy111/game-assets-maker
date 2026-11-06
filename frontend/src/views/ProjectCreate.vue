@@ -169,7 +169,7 @@
         <!-- Role name -->
         <div class="space-y-2 mt-6">
           <label class="block text-sm font-medium text-gray-300">{{ t('projectCreate.roleName') }}</label>
-          <div class="relative">
+          <div ref="roleMenuContainer" class="relative">
             <input
               v-model="form.role"
               type="text"
@@ -177,6 +177,7 @@
               class="w-full px-3 py-2 pr-10 bg-dark-surface border border-dark-border rounded-lg text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
               @input="projectStore.clearError()"
               @focus="roleMenuOpen = true"
+              @keydown.enter="roleMenuOpen = false"
             >
             <button
               type="button"
@@ -237,7 +238,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, reactive, onMounted } from 'vue';
+import { ref, computed, reactive, onMounted, onBeforeUnmount } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { Dialog, DialogPanel, DialogTitle, TransitionChild, TransitionRoot } from '@headlessui/vue';
@@ -265,15 +266,27 @@ const videoInfo = ref<VideoInfo>({ success: false });
 const validation = ref<VideoValidation>({ success: false });
 const creating = ref(false);
 const roleMenuOpen = ref(false);
+const roleMenuContainer = ref<HTMLElement | null>(null);
 const showResolutionWarningModal = ref(false);
 
 onMounted(async () => {
+  document.addEventListener('pointerdown', closeRoleMenuOnOutsidePointerDown);
   const roleQuery = route.query.role;
   if (typeof roleQuery === 'string') {
     form.role = roleQuery;
   }
   await projectStore.loadProjects();
 });
+
+onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', closeRoleMenuOnOutsidePointerDown);
+});
+
+function closeRoleMenuOnOutsidePointerDown(event: PointerEvent) {
+  if (!roleMenuContainer.value?.contains(event.target as Node)) {
+    roleMenuOpen.value = false;
+  }
+}
 
 const canCreate = computed(() => {
   return form.action.trim() &&

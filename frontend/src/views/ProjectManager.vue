@@ -1659,7 +1659,25 @@ function formatDate(dateStr: string): string {
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
-  scrollbar-color: #3a3a3a transparent;
+  scrollbar-color: rgb(255 189 92 / 28%) transparent;
+}
+
+.role-nav::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.role-nav::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.role-nav::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgb(255 189 92 / 28%);
+}
+
+.role-nav::-webkit-scrollbar-thumb:hover {
+  background: rgb(255 189 92 / 45%);
 }
 
 .role-nav-item {

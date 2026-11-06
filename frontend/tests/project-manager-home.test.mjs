@@ -69,6 +69,10 @@ test('project manager limits the role dock and paginates animation cards to four
   const manager = await readFile(new URL('../src/views/ProjectManager.vue', import.meta.url), 'utf8');
 
   assert.match(manager, /\.role-nav\s*\{[^}]*max-height:\s*28\.95rem;[^}]*overflow-y:\s*auto;/s);
+  assert.match(manager, /\.role-nav\s*\{[^}]*scrollbar-width:\s*thin;[^}]*scrollbar-color:\s*rgb\(255 189 92 \/ 28%\) transparent;/s);
+  assert.match(manager, /\.role-nav::-webkit-scrollbar\s*\{[^}]*width:\s*6px;[^}]*height:\s*6px;/s);
+  assert.match(manager, /\.role-nav::-webkit-scrollbar-track\s*\{[^}]*background:\s*transparent;/s);
+  assert.match(manager, /\.role-nav::-webkit-scrollbar-thumb\s*\{[^}]*border-radius:\s*999px;[^}]*background:\s*rgb\(255 189 92 \/ 28%\);/s);
   assert.match(manager, /const cardsPerPage = ref\(16\)/);
   assert.match(manager, /const paginatedProjects = computed/);
   assert.match(manager, /v-for="project in paginatedProjects"/);
