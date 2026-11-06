@@ -92,10 +92,10 @@ test('ForFuner AI is shared by both composers and submits through the platform s
   assert.match(video, /store\.createTask\(request, source\)/);
   assert.doesNotMatch(image, /if \(platformGenerationSelected\.value\) return;/);
   assert.match(image, /store\.createBatch\(request, source\)/);
-  // 平台源报价走 quote-preview，且报价未就绪时禁止确认。
-  assert.match(video, /store\.quoteVideo\(createRequest\(form\)\)/);
+  // Platform quotes use the V2 credit API, and confirmation stays blocked until ready.
+  assert.match(video, /creditUsage\.quote\('video', \{ model: form\.model/);
   assert.match(video, /platformConfirmBlocked/);
-  // 图片源单价走图片报价端点，总数 = 单价 × 数量（N 张 = N 个平台任务）。
-  assert.match(image, /store\.quoteImage\(createRequest\(form\)\)/);
+  // Image total remains the unit quote multiplied by the requested count.
+  assert.match(image, /creditUsage\.quote\('image', \{ model: form\.model, size: form\.resolution \}\)/);
   assert.match(image, /quoteUnit\.value \* form\.count/);
 });

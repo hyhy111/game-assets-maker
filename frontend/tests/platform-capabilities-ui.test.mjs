@@ -120,7 +120,7 @@ test('both composers block submit and offer a retry when capabilities are missin
   ]);
   for (const file of [video, image]) {
     assert.match(file, /if \(capabilitiesBlocked\.value\) return;/);
-    assert.match(file, /:disabled="submitting \|\| capabilitiesBlocked \|\|/);
+    assert.match(file, /:disabled="submitting \|\| platformConfirmBlocked \|\| capabilitiesBlocked \|\|/);
     assert.match(file, /-capabilities-blocked/);
     assert.match(file, /@click="reloadCapabilities\(\)"/);
     // 失败展示后端原文，未就绪展示"获取中"
@@ -213,13 +213,14 @@ test('duration options are scoped to the selected resolution', async () => {
   assert.deepEqual(model.durationsByResolution['720p'], [4], '720p 不得出现没有定价的 5s');
 });
 
-test('the composer reads durations from durationsByResolution and re-clamps on resolution change', async () => {
+test('the composer reads durations by resolution without overwriting the selected draft', async () => {
   const text = await source('views/SeedanceCreate.vue');
-  // 时长选项按当前分辨率取，而不是模型级并集
+  // Duration options come from the current resolution rather than a model-level union.
   assert.match(text, /durationsByResolution\?\.\[form\.resolution\]/);
   assert.match(text, /entry\.durationsByResolution\?\.\[form\.resolution\]/);
-  // 换分辨率要重新收敛时长（否则会留下该分辨率下不可售的悬空值）
-  assert.match(text, /watch\(\(\) => form\.resolution, \(\) => \{\s*if \(platformGenerationSelected\.value\) clampToPlatformModel\(\);/);
-  // 旧的模型级 durations 字段不应再被客户端读取
+  // Capability refreshes preserve the draft; unavailable combinations are guarded by payment and quote checks.
+  assert.doesNotMatch(text, /watch\(\(\) => form\.resolution/);
+  assert.match(text, /creditUsage\.canPay\('video', form\.model, form\.resolution, form\.duration\)/);
+  // The legacy model-level durations field must not drive the options.
   assert.doesNotMatch(text, /entry\?\.durations/);
 });

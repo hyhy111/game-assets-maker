@@ -96,7 +96,7 @@ export const useCreditUsageStore = defineStore('credit-usage', () => {
   watch(() => auth.token, () => { reset(); if (auth.isLoggedIn) void refresh(); });
   watch(() => auth.isLoggedIn, loggedIn => { if (loggedIn) void refresh(); else reset(); }, { immediate: true });
   watch(() => billing.account, () => { expired.value = true; if (auth.isLoggedIn) void refresh(); });
-  if (typeof window !== 'undefined') {
+  if (typeof window !== 'undefined' && typeof document !== 'undefined') {
     window.addEventListener('focus', () => { if (auth.isLoggedIn) void refresh(); });
     document.addEventListener('visibilitychange', () => { if (!document.hidden && auth.isLoggedIn) void refresh(); });
     const states = new Map<string, string>();

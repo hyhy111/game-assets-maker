@@ -17,6 +17,17 @@ const capabilities = {
   image: { models: [{ model: imageId, sizes: ['1K', '1.5K', '2K'] }] },
   video: { models: [{ model: videoId, resolutions: ['720p'], durationsByResolution: { '720p': [4] } }], ratios: ['16:9'] },
 };
+const availability = {
+  asOf: '2026-01-01T00:00:00Z', refreshAt: '2026-01-01T00:01:00Z',
+  account: { generalAvailable: 10000, bonusAvailable: 0, totalAvailable: 10000, buckets: [] },
+  combinations: [
+    { context: { platform: 'forfuner-ai', mediaType: 'image', model: imageId, resolution: null, durationSec: null, sizeLabel: '2K' }, quote: 60, generalAvailable: 10000, bonusAvailable: 0, message: '', canSubmit: true },
+    { context: { platform: 'forfuner-ai', mediaType: 'video', model: videoId, resolution: '720p', durationSec: 4, sizeLabel: null }, quote: 199, generalAvailable: 10000, bonusAvailable: 0, message: '', canSubmit: true },
+  ],
+};
+const jsonResponse = data => new Response(JSON.stringify({ code: 200, data }), {
+  status: 200, headers: { 'Content-Type': 'application/json' },
+});
 const renderer = createRenderer({
   createElement: () => ({ children: [] }), createText: () => ({}), createComment: () => ({}),
   insert() {}, remove() {}, setText() {}, setElementText() {}, patchProp() {},
@@ -28,8 +39,22 @@ async function mountPage(t, kind, { loggedIn = true, capabilityResponse, quoteRe
   const bridge = createScriptedPyWebViewBridge({
     set_platform_config: [{ resolve: { success: true } }],
     get_platform_capabilities: [{ resolve: capabilityResponse ?? { success: true, data: capabilities } }],
-    seedream_quote_image: [{ resolve: quoteResponse ?? { success: true, data: { quote: 60 } } }],
-    seedance_quote_video: [{ resolve: quoteResponse ?? { success: true, data: { quote: 199 } } }],
+  });
+  const httpCalls = [];
+  t.mock.method(globalThis, 'fetch', async (input, init = {}) => {
+    const path = new URL(String(input)).pathname;
+    httpCalls.push({ path, method: init.method ?? 'GET' });
+    if (path === '/app/credit/v2/availability') return jsonResponse(availability);
+    const quoteMatch = path.match(/^\/app\/credit\/v2\/quote\/(image|video)$/);
+    if (quoteMatch) {
+      const response = typeof quoteResponse === 'function' ? await quoteResponse() : quoteResponse;
+      return jsonResponse({
+        quote: response?.data?.quote ?? (quoteMatch[1] === 'image' ? 60 : 199),
+        canSubmit: true,
+        message: '',
+      });
+    }
+    throw new Error(`No scripted HTTP response for ${path}`);
   });
   bridge.window.scrollTo = () => {};
   const pinia = createPinia();
@@ -64,14 +89,14 @@ async function mountPage(t, kind, { loggedIn = true, capabilityResponse, quoteRe
   app.mount({ children: [] });
   t.after(() => app.unmount());
   await settle();
-  return { app, workspace, auth, calls: bridge.calls, tick: async () => { await settle(); t.mock.timers.tick(400); await settle(); } };
+  return { app, workspace, auth, httpCalls, tick: async () => { await settle(); t.mock.timers.tick(400); await settle(); } };
 }
 
 for (const kind of ['image', 'video']) {
   test(`${kind}: first entry loads a quote when model and parameters already match`, async t => {
     const page = await mountPage(t, kind);
     await page.tick();
-    const quotes = page.calls.filter(call => call.method === (kind === 'image' ? 'seedream_quote_image' : 'seedance_quote_video'));
+    const quotes = page.httpCalls.filter(call => call.path === `/app/credit/v2/quote/${kind}`);
     assert.equal(quotes.length, 1, 'first entry must request the credit estimate without editing parameters');
     assert.equal(page.app._instance.setupState[kind === 'image' ? 'quoteUnit' : 'quoteValue'], kind === 'image' ? 60 : 199);
   });
@@ -80,12 +105,12 @@ for (const kind of ['image', 'video']) {
     let resolveCapabilities;
     const response = new Promise(resolve => { resolveCapabilities = resolve; });
     const page = await mountPage(t, kind, { capabilityResponse: () => response });
-    const method = kind === 'image' ? 'seedream_quote_image' : 'seedance_quote_video';
+    const quotePath = `/app/credit/v2/quote/${kind}`;
     await page.tick();
-    assert.equal(page.calls.filter(call => call.method === method).length, 0);
+    assert.equal(page.httpCalls.filter(call => call.path === quotePath).length, 0);
     resolveCapabilities({ success: true, data: capabilities });
     await page.tick();
-    assert.equal(page.calls.filter(call => call.method === method).length, 1);
+    assert.equal(page.httpCalls.filter(call => call.path === quotePath).length, 1);
     assert.equal(page.app._instance.setupState[kind === 'image' ? 'quoteUnit' : 'quoteValue'], kind === 'image' ? 60 : 199);
   });
 
@@ -108,7 +133,7 @@ for (const kind of ['image', 'video']) {
     await page.tick();
     page.auth.status = 'authenticated';
     await page.tick();
-    assert.equal(page.calls.filter(call => call.method === (kind === 'image' ? 'seedream_quote_image' : 'seedance_quote_video')).length, 1);
+    assert.equal(page.httpCalls.filter(call => call.path === `/app/credit/v2/quote/${kind}`).length, 1);
   });
 }
 
