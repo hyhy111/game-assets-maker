@@ -28,6 +28,14 @@
             </div>
           </div>
 
+          <!-- 重置密码后跳回的提示 -->
+          <div
+            v-if="route.query.reset === '1'"
+            class="p-3 bg-primary/10 border border-primary/30 rounded-lg text-primary"
+          >
+            {{ t('auth.resetSuccess') }}
+          </div>
+
           <Input
             v-model="form.email"
             type="email"
@@ -45,6 +53,15 @@
             :error="errors.password"
             autocomplete="current-password"
           />
+
+          <div class="text-right -mt-2">
+            <router-link
+              :to="{ path: '/forgot-password', query: { email: form.email || undefined } }"
+              class="text-sm text-primary hover:underline"
+            >
+              {{ t('auth.forgotPassword') }}
+            </router-link>
+          </div>
 
           <label class="flex items-center gap-2 text-sm text-gray-300 cursor-pointer select-none">
             <input

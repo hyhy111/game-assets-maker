@@ -7,6 +7,8 @@ import type {
   EmailCodeBody,
   LoginBody,
   RegisterBody,
+  ResetCodeBody,
+  ResetPasswordBody,
   UserInfo
 } from '@/types/auth';
 
@@ -23,6 +25,16 @@ export async function sendEmailCode(body: EmailCodeBody): Promise<void> {
 /** 注册 */
 export async function register(body: RegisterBody): Promise<void> {
   await httpPost('/register', body);
+}
+
+/** 发送重置密码验证码（服务端对本接口会一次性消费图形验证码） */
+export async function sendResetEmailCode(body: ResetCodeBody): Promise<void> {
+  await httpPost('/resetPassword/code', body);
+}
+
+/** 提交重置密码；成功后服务端会吊销该账号的全部会话 */
+export async function resetPassword(body: ResetPasswordBody): Promise<void> {
+  await httpPost('/resetPassword', body);
 }
 
 // 认证接口一律不走静默恢复：登录失败就是登录失败，不该拿保存的凭证再去登一次

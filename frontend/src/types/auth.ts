@@ -40,3 +40,14 @@ export interface EmailCodeBody {
   code: string;
   uuid: string;
 }
+
+/** 发送重置密码验证码请求体（与注册发码同形，单独命名以表达用途） */
+export type ResetCodeBody = EmailCodeBody;
+
+/** 重置密码请求体 */
+export interface ResetPasswordBody {
+  email: string;
+  emailCode: string;
+  password: string;
+  confirmPassword: string;
+}

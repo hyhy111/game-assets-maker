@@ -27,6 +27,11 @@ const routes = [
     component: () => import('./views/Register.vue'),
     beforeEnter: () => (useAuthStore().isLoggedIn ? { path: '/' } : true)
   },
+  {
+    path: '/forgot-password',
+    component: () => import('./views/ForgotPassword.vue'),
+    beforeEnter: () => (useAuthStore().isLoggedIn ? { path: '/' } : true)
+  },
   { path: '/create', component: ProjectCreate },
   { path: '/editor', component: EditorLayout },
   { path: '/batch-trim', component: BatchTrim },
