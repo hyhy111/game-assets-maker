@@ -1,9 +1,11 @@
 """Extract the final frame of a local video with OpenCV.
 
-The platform rejects ``return_last_frame`` (one artifact per job), so video
-continuation derives the next segment's first frame locally from the already
-downloaded MP4. OpenCV is the codebase's established video dependency (the
-Seedance downloader validates videos with it); no new dependency is needed.
+Platform tasks now return the upstream last frame, so continuation normally
+uses that artifact directly (see ``SeedanceManager._continuation_frame_source``).
+This local extraction remains the fallback for tasks whose frame was missing,
+expired, or not downloaded. OpenCV is the codebase's established video
+dependency (the Seedance downloader validates videos with it); no new
+dependency is needed.
 """
 
 from __future__ import annotations

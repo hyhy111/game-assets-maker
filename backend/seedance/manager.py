@@ -231,8 +231,6 @@ class SeedanceTaskManager:
         assert self._platform is not None
 
         request = self._request_from_task(task)
-        if request.return_last_frame:
-            raise ValueError("平台模式不支持 return_last_frame（平台一任务一制品）")
         if request.duration == -1 or not PLATFORM_MIN_DURATION <= request.duration <= PLATFORM_MAX_DURATION:
             raise ValueError("平台模式时长须为 4~15 秒")
         if request.resolution not in PLATFORM_RESOLUTIONS:
@@ -266,6 +264,8 @@ class SeedanceTaskManager:
             "ratio": request.ratio,
             "duration": request.duration,
             "generate_audio": request.generate_audio,
+            # 平台侧无条件注入 true；这里显式带上，保持两端契约可读。
+            "return_last_frame": True,
         }
 
     def _upload_platform_asset(self, path: Path) -> str:
@@ -450,10 +450,10 @@ class SeedanceTaskManager:
             return self._create(request, retry_of=task.local_id)
 
     def _continue_platform_unlocked(self, task: SeedanceTask) -> dict[str, Any]:
-        """Derive the next segment's first frame locally (the platform does not
-        return last frames), record it for preview, and create the follow-up job."""
-        frame_path = self._extract_continuation_frame(task)
-        task.output_paths["continuation_frame"] = "output/continuation_frame.png"
+        """Use the platform-returned last frame when available; otherwise fall
+        back to local extraction, then create the follow-up job."""
+        frame_path, relative = self._continuation_frame_source(task)
+        task.output_paths["continuation_frame"] = relative
         task.updated_at = self._iso_now()
         self._repository._write_unlocked(task)
         request = SeedanceRequest.from_dict(
@@ -479,11 +479,29 @@ class SeedanceTaskManager:
                     existing_path = None
                 if existing_path is not None and existing_path.is_file():
                     return existing_path
-            frame_path = self._extract_continuation_frame(task)
-            task.output_paths["continuation_frame"] = "output/continuation_frame.png"
+            frame_path, relative = self._continuation_frame_source(task)
+            task.output_paths["continuation_frame"] = relative
             task.updated_at = self._iso_now()
             self._repository._write_unlocked(task)
             return frame_path
+
+    def _continuation_frame_source(self, task: SeedanceTask) -> tuple[Path, str]:
+        """Return ``(absolute path, relative asset path)`` for the next first frame.
+
+        Prefer the upstream returned last frame (downloaded by the normal result
+        download step). Fall back to local cv2 extraction when it is missing,
+        expired, or not downloaded — continuation must not depend on the 24h link.
+        """
+        returned = task.output_paths.get("returned_last_frame")
+        if isinstance(returned, str) and returned:
+            try:
+                returned_path = self._repository.resolve_asset(task.local_id, returned)
+            except (FileNotFoundError, ValueError):
+                returned_path = None
+            if returned_path is not None and returned_path.is_file():
+                return returned_path, returned
+        frame_path = self._extract_continuation_frame(task)
+        return frame_path, "output/continuation_frame.png"
 
     def _extract_continuation_frame(self, task: SeedanceTask) -> Path:
         video_relative = task.output_paths.get("video")
