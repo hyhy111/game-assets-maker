@@ -36,6 +36,14 @@
             {{ successMessage }}
           </div>
 
+          <!-- Neutral hint (例如：二次发码前需要重新输入图形验证码) -->
+          <div
+            v-if="hintMessage"
+            class="p-3 bg-dark-surface border border-dark-border rounded-lg text-gray-300 text-sm"
+          >
+            {{ hintMessage }}
+          </div>
+
           <Input
             v-model="form.email"
             type="email"
@@ -157,10 +165,14 @@ const form = reactive({
 const errors = reactive({ email: '', code: '', emailCode: '', password: '', confirmPassword: '' });
 const submitError = ref('');
 const successMessage = ref('');
+const hintMessage = ref('');
 
 const captchaEnabled = ref(false);
 const captchaUuid = ref('');
 const captchaImg = ref('');
+// 服务端在发码时一次性消费图形验证码：成功后旧图已失效，但不能立刻清空输入框吓用户一跳。
+// 标记下来，等用户真的需要再次发码时再换图、再要求重新输入。
+const captchaConsumed = ref(false);
 
 const sendingCode = ref(false);
 const countdown = ref(0);
@@ -192,8 +204,16 @@ function validateEmail(): boolean {
 async function onSendEmailCode() {
   submitError.value = '';
   successMessage.value = '';
+  hintMessage.value = '';
   errors.code = '';
   if (!validateEmail()) return;
+
+  // 兜底：倒计时期间按钮是禁用的，正常走不到这里；万一走到，先换图再说
+  if (captchaEnabled.value && captchaConsumed.value) {
+    resetConsumedCaptcha();
+    return;
+  }
+
   if (captchaEnabled.value && !form.code) {
     errors.code = t('auth.captchaRequired');
     return;
@@ -203,15 +223,28 @@ async function onSendEmailCode() {
     await authStore.sendResetEmailCode(form.email, form.code, captchaUuid.value);
     // 文案与服务端一致：不区分邮箱是否注册
     successMessage.value = t('auth.resetCodeSent');
+    // 服务端已消费这张图形码，但**不在这里换图/清输入**：用户当前的目标是提交新密码，
+    // 图形码不再参与提交。等倒计时结束、需要再次发码时再换成新图（见 resetConsumedCaptcha）。
+    captchaConsumed.value = true;
     startCountdown();
-    // 服务端在发码时消费图形验证码，本地立即换一张，避免下次请求沿用已被消费的图
-    refreshCaptcha();
   } catch (e) {
     submitError.value = e instanceof Error ? e.message : String(e);
     refreshCaptcha();
   } finally {
     sendingCode.value = false;
   }
+}
+
+/**
+ * 倒计时结束：若上一张图形码已被服务端消费，换新图并提示重新输入。
+ * 此时清空图形码输入框是合理的——旧答案确实已经失效，且用户正准备再次发码。
+ */
+async function resetConsumedCaptcha() {
+  if (!captchaEnabled.value || !captchaConsumed.value) return;
+  captchaConsumed.value = false;
+  successMessage.value = '';
+  await refreshCaptcha();
+  hintMessage.value = t('auth.captchaRenewed');
 }
 
 function startCountdown() {
@@ -221,6 +254,7 @@ function startCountdown() {
     if (countdown.value <= 0 && countdownTimer !== undefined) {
       window.clearInterval(countdownTimer);
       countdownTimer = undefined;
+      void resetConsumedCaptcha();
     }
   }, 1000);
 }
@@ -238,6 +272,7 @@ function validate(): boolean {
 async function onSubmit() {
   submitError.value = '';
   successMessage.value = '';
+  hintMessage.value = '';
   if (!validate()) return;
   try {
     await authStore.resetPassword(form.email, form.emailCode, form.password, form.confirmPassword);

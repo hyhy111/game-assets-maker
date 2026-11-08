@@ -82,6 +82,7 @@ export default {
     resetPassword: '重置密码',
     resetCodeSent: '若该邮箱已注册，重置验证码将发送至邮箱，请查收',
     resetSuccess: '密码重置成功，请使用新密码登录',
+    captchaRenewed: '图形验证码已使用并更换，请重新输入图中验证码后再发送',
     backToLogin: '已有账号？去登录',
   },
   settings: {

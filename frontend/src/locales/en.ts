@@ -82,6 +82,7 @@ export default {
     resetPassword: 'Reset Password',
     resetCodeSent: 'If this email is registered, a reset code has been sent to it',
     resetSuccess: 'Password reset. Please log in with your new password.',
+    captchaRenewed: 'That captcha has been used and refreshed. Enter the new code before sending again.',
     backToLogin: 'Have an account? Log in',
   },
   settings: {
