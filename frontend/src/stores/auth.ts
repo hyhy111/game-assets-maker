@@ -92,6 +92,38 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  async function sendResetEmailCode(email: string, code: string, uuid: string): Promise<void> {
+    await authApi.sendResetEmailCode({ email, code, uuid });
+  }
+
+  async function resetPassword(email: string, emailCode: string, password: string, confirmPassword: string): Promise<void> {
+    loading.value = true;
+    error.value = null;
+    try {
+      await authApi.resetPassword({ email, emailCode, password, confirmPassword });
+    } catch (e) {
+      error.value = toMessage(e);
+      throw e;
+    } finally {
+      loading.value = false;
+    }
+  }
+
+  /**
+   * 重置密码成功后收尾：清 token 与本地保存的旧凭证。
+   *
+   * 服务端已吊销该账号的全部会话，旧 token 必然失效；本地加密凭证里存的是**旧密码**，
+   * 不清掉的话静默恢复会拿旧密码反复重登失败，直到冷却期把用户卡在"半登录"状态。
+   */
+  function afterPasswordReset(): void {
+    clearCredentials();
+    setToken(null);
+    token.value = null;
+    userInfo.value = null;
+    status.value = 'guest';
+    sessionExpired.value = false;
+  }
+
   /**
    * 登录；remember 为 true 时加密保存凭证，false 时清除历史凭证
    */
@@ -301,6 +333,9 @@ export const useAuthStore = defineStore('auth', () => {
     fetchCaptcha,
     sendEmailCode,
     register,
+    sendResetEmailCode,
+    resetPassword,
+    afterPasswordReset,
     login,
     fetchUserInfo,
     autoLogin,
