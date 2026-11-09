@@ -101,10 +101,12 @@ class SeedreamBatchManager:
         batch = self._repository.get(local_id)
         request = batch.request if isinstance(batch.request, dict) else {}
         reference_path, reference_url = self._reference_image_restore(local_id, request)
+        model = "pro" if request.get("model") == "lite" else request.get("model", "pro")
         return {
+            "model_id": platform_model_id(model),
             "request": {
                 "prompt": request.get("prompt", ""),
-                "model": "pro" if request.get("model") == "lite" else request.get("model", "pro"),
+                "model": model,
                 "resolution": request.get("resolution", "2K"),
                 "ratio": request.get("ratio", "16:9"),
                 "count": request.get("count", 1),

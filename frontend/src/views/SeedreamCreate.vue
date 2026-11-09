@@ -615,7 +615,7 @@ onMounted(async () => {
     if (draft) {
       const request = draft.request;
       form.prompt = request.prompt ?? '';
-      form.model = (request.model as SeedreamModel) ?? form.model;
+      form.model = (platformGenerationSelected.value ? (draft.model_id ?? request.model) : request.model) ?? form.model;
       form.resolution = platformGenerationSelected.value ? ((request.resolution as SeedreamResolution) ?? form.resolution) : correctResolution(form.model, (request.resolution as SeedreamResolution) ?? form.resolution);
       form.ratio = (request.ratio as SeedreamRatio) ?? form.ratio;
       form.count = request.count ?? form.count;

@@ -1149,6 +1149,29 @@ def test_manager_get_regeneration_draft_returns_original_request(tmp_path):
     assert draft["request"]["count"] == 3
 
 
+@pytest.mark.parametrize(
+    ("model", "model_id"),
+    [
+        ("pro", "doubao-seedream-5-0-pro-260628"),
+        ("flash", "doubao-seedream-5-0-flash-260915"),
+        ("future-image-model", "future-image-model"),
+    ],
+)
+def test_regeneration_draft_includes_platform_model_id_without_rewriting_history(tmp_path, model, model_id):
+    transport = FakeTransport(_ok_response())
+    manager = _make_manager(tmp_path, transport)
+    request = SeedreamRequest(prompt="deer", model=model, resolution="2K", ratio="16:9")
+    batch = manager._repository.create_batch(request)
+    original = manager._repository.get(batch.local_id).to_dict()
+
+    draft = manager.get_regeneration_draft(batch.local_id)
+
+    assert draft["model_id"] == model_id
+    assert draft["request"] == request.to_dict()
+    assert manager._repository.get(batch.local_id).to_dict() == original
+    assert transport.calls == []
+
+
 def test_manager_get_regeneration_draft_makes_no_paid_calls(tmp_path):
     """get_regeneration_draft must not call generate_image or create a new batch."""
     call_count = {"transport": 0}

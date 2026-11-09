@@ -712,6 +712,8 @@ export interface SeedreamEraserResult {
 
 export interface SeedreamRegenerationDraft {
   request: SeedreamCreateRequest;
+  /** Upstream ID used when restoring a local model into the platform source. */
+  model_id?: string;
   reference_image_url?: string | null;
 }
 

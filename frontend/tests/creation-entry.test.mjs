@@ -35,15 +35,16 @@ const renderer = createRenderer({
 });
 const settle = async () => { for (let i = 0; i < 10; i++) await nextTick(); };
 
-async function mountPage(t, kind, { loggedIn = true, capabilityResponse, quoteResponse } = {}) {
+async function mountPage(t, kind, { loggedIn = true, capabilityResponse, quoteResponse, regenerationResponse, generationSource = 'forfuner-ai' } = {}) {
   const bridge = createScriptedPyWebViewBridge({
     set_platform_config: [{ resolve: { success: true } }],
     get_platform_capabilities: [{ resolve: capabilityResponse ?? { success: true, data: capabilities } }],
+    seedream_get_regeneration_draft: regenerationResponse ? [{ resolve: regenerationResponse }] : [],
   });
   const httpCalls = [];
   t.mock.method(globalThis, 'fetch', async (input, init = {}) => {
     const path = new URL(String(input)).pathname;
-    httpCalls.push({ path, method: init.method ?? 'GET' });
+    httpCalls.push({ path, method: init.method ?? 'GET', body: init.body ? JSON.parse(init.body) : null });
     if (path === '/app/credit/v2/availability') return jsonResponse(availability);
     const quoteMatch = path.match(/^\/app\/credit\/v2\/quote\/(image|video)$/);
     if (quoteMatch) {
@@ -72,7 +73,7 @@ async function mountPage(t, kind, { loggedIn = true, capabilityResponse, quoteRe
     default_generate_audio: true, default_return_last_frame: false, api_key_configured: true,
   };
   if (kind !== 'workspace') {
-    workspace.generationSource = 'forfuner-ai';
+    workspace.generationSource = generationSource;
     workspace.imageDraft.model = imageId;
     workspace.videoDraft.model = videoId;
     workspace.videoDraft.return_last_frame = false;
@@ -80,7 +81,7 @@ async function mountPage(t, kind, { loggedIn = true, capabilityResponse, quoteRe
   const filename = kind === 'image' ? 'SeedreamCreate' : kind === 'video' ? 'SeedanceCreate' : 'AICreationWorkspace';
   const { default: component } = await loadFrontendModule(`/src/views/${filename}.vue`);
   const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/ai-creation', component: { render: () => null } }] });
-  await router.push('/ai-creation');
+  await router.push(regenerationResponse ? '/ai-creation?regenerate=batch-to-restore' : '/ai-creation');
   await router.isReady();
   const app = renderer.createApp({ ...component, render: () => null }, { embedded: true, showTaskList: false, showBatchList: false });
   app.use(pinia).use(router).use(createI18n({ legacy: false, locale: 'en', missingWarn: false, fallbackWarn: false, messages: { en: {} } }));
@@ -89,8 +90,45 @@ async function mountPage(t, kind, { loggedIn = true, capabilityResponse, quoteRe
   app.mount({ children: [] });
   t.after(() => app.unmount());
   await settle();
-  return { app, workspace, auth, httpCalls, tick: async () => { await settle(); t.mock.timers.tick(400); await settle(); } };
+  return { app, workspace, auth, bridge, httpCalls, tick: async () => { await settle(); t.mock.timers.tick(400); await settle(); } };
 }
+
+for (const catalogDelayed of [false, true]) {
+  test(`image: restoring an API-key batch quotes the upstream model ID with ${catalogDelayed ? 'delayed' : 'ready'} capabilities`, async t => {
+    let resolveCatalog;
+    const catalog = new Promise(resolve => { resolveCatalog = resolve; });
+    const request = { prompt: 'restored deer', model: 'pro', resolution: '2K', ratio: '16:9', count: 1, source: 'api-key', reference_image: null };
+    const page = await mountPage(t, 'image', {
+      capabilityResponse: catalogDelayed ? () => catalog : undefined,
+      regenerationResponse: { success: true, data: { request, model_id: imageId } },
+    });
+    if (catalogDelayed) resolveCatalog({ success: true, data: capabilities });
+    await page.tick();
+
+    assert.equal(page.workspace.generationSource, 'forfuner-ai');
+    assert.equal(page.workspace.imageDraft.model, imageId);
+    assert.equal(page.workspace.imageDraft.prompt, request.prompt);
+    assert.equal(page.workspace.imageDraft.resolution, '2K');
+    const quotes = page.httpCalls.filter(call => call.path === '/app/credit/v2/quote/image');
+    assert.ok(quotes.length);
+    assert.ok(quotes.every(call => call.body.model === imageId));
+    assert.equal(page.app._instance.setupState.platformConfirmBlocked, false);
+    assert.equal(page.bridge.calls.some(call => call.method === 'seedream_create_batch'), false);
+  });
+}
+
+test('image: restoring a custom-key draft keeps its local model and makes no platform quote', async t => {
+  const page = await mountPage(t, 'image', {
+    generationSource: 'api-key',
+    regenerationResponse: {
+      success: true,
+      data: { request: { prompt: 'restored deer', model: 'pro', resolution: '2K', ratio: '16:9', count: 1 }, model_id: imageId },
+    },
+  });
+  await page.tick();
+  assert.equal(page.workspace.imageDraft.model, 'pro');
+  assert.equal(page.httpCalls.some(call => call.path === '/app/credit/v2/quote/image'), false);
+});
 
 for (const kind of ['image', 'video']) {
   test(`${kind}: first entry loads a quote when model and parameters already match`, async t => {
