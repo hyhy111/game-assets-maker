@@ -107,6 +107,12 @@ class PlatformVideoClient:
                 expires = job.get("upstreamExpiresAt")
                 if expires is not None:
                     content["upstream_expires_at"] = expires
+            last_frame = job.get("lastFrameUrl")
+            if isinstance(last_frame, str) and last_frame:
+                content["last_frame_url"] = last_frame
+                frame_expires = job.get("lastFrameExpiresAt")
+                if frame_expires is not None:
+                    content["last_frame_expires_at"] = frame_expires
             mapped["content"] = content
         error = parse_error_json(job.get("error"))
         if error is not None:

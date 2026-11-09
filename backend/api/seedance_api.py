@@ -334,12 +334,6 @@ class SeedanceAPI:
 
     @staticmethod
     def _validate_platform_params(request: SeedanceRequest) -> None:
-        if request.return_last_frame:
-            raise ValidationError(
-                "return_last_frame",
-                "PLATFORM_UNSUPPORTED",
-                "平台模式不支持 return_last_frame（平台一任务一制品）",
-            )
         if request.duration == -1 or not PLATFORM_MIN_DURATION <= request.duration <= PLATFORM_MAX_DURATION:
             raise ValidationError("duration", "INVALID_DURATION", "平台模式时长须为 4~15 秒")
         if request.resolution not in PLATFORM_RESOLUTIONS:

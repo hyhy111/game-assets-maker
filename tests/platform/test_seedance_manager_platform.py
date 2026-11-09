@@ -176,10 +176,17 @@ def test_create_unauthorized_raises_for_relogin(manager, platform, platform_requ
     assert task.error["code"] == "UNAUTHORIZED"
 
 
+def test_create_accepts_return_last_frame_and_asks_platform(manager, platform, platform_request):
+    platform_request.return_last_frame = True
+    result = manager.create(platform_request)
+    task = manager._repository.get(result["local_id"])
+    assert task.remote_status == "queued"
+    assert platform.created_payloads[0]["return_last_frame"] is True
+
+
 @pytest.mark.parametrize(
     "mutate",
     [
-        lambda request: setattr(request, "return_last_frame", True),
         lambda request: setattr(request, "duration", -1),
         lambda request: setattr(request, "resolution", "4k"),
         lambda request: setattr(request, "ratio", "9:16"),
@@ -191,6 +198,80 @@ def test_create_rejects_unsupported_platform_params(manager, platform, platform_
     task = manager._repository.get(result["local_id"])
     assert task.remote_status == "failed"
     assert platform.created_payloads == []
+
+
+def test_platform_last_frame_is_downloaded_and_exposed_in_output_urls(repository, tmp_path, platform_request):
+    """平台映射出的 content.last_frame_url 必须走真实 ResultDownloader，
+    并在 UI 装饰器的 output_urls 里出现 returned_last_frame。"""
+    import time
+
+    import cv2
+    import numpy as np
+
+    from backend.api.seedance_api import SeedanceAPI
+    from backend.platform.video import artifact_url
+    from backend.seedance.downloader import ResultDownloader
+
+    task = repository.create_draft(platform_request)
+    video_file = tmp_path / "remote.mp4"
+    writer = cv2.VideoWriter(str(video_file), cv2.VideoWriter_fourcc(*"mp4v"), 10, (16, 16))
+    assert writer.isOpened()
+    writer.write(np.zeros((16, 16, 3), dtype=np.uint8))
+    writer.release()
+    frame_file = tmp_path / "remote-last.png"
+    Image.new("RGB", (8, 8), "red").save(frame_file)
+
+    video_url = "https://upstream.example/24h.mp4"
+    frame_url = "https://upstream.example/24h-last.png"
+    expires_at = int(time.time() * 1000) + 3_600_000
+
+    def mark(current: SeedanceTask) -> None:
+        current.remote_status = "succeeded"
+        current.remote = {
+            "id": "job-1",
+            "status": "succeeded",
+            "platform_status": "SUCCEEDED",
+            "content": {
+                "video_url": artifact_url("job-1"),
+                "upstream_url": video_url,
+                "upstream_expires_at": expires_at,
+                "last_frame_url": frame_url,
+            },
+        }
+
+    task = repository.update(task.local_id, mark)
+
+    class Transport:
+        def __init__(self) -> None:
+            self.urls: list[str] = []
+
+        def download(self, url: str) -> bytes:
+            self.urls.append(url)
+            if url == video_url:
+                return video_file.read_bytes()
+            if url == frame_url:
+                return frame_file.read_bytes()
+            raise AssertionError(url)
+
+    transport = Transport()
+    downloaded = ResultDownloader(repository, transport).download_task(task)
+    assert transport.urls == [video_url, frame_url]
+    assert downloaded.output_paths["returned_last_frame"] == "output/returned_last_frame.png"
+    assert downloaded.download_status == "downloaded"
+
+    class Resolver:
+        def resolve(self, local_id: str, asset_key: str) -> Path:
+            relative = downloaded.output_paths.get(asset_key)
+            if relative is None:
+                raise FileNotFoundError(asset_key)
+            path = repository.resolve_asset(local_id, relative)
+            if not path.is_file():
+                raise FileNotFoundError(asset_key)
+            return path
+
+    api = SeedanceAPI(manager=None, media_base_url="http://127.0.0.1:8080", media_resolver=Resolver())
+    decorated = api._decorate_task({"local_id": downloaded.local_id})
+    assert "returned_last_frame" in decorated["output_urls"]
 
 
 def test_sync_polls_platform_until_succeeded_and_downloads(manager, platform, platform_request):
@@ -304,6 +385,43 @@ def test_ensure_continuation_frame_is_stable(manager, platform, platform_request
     first = manager.ensure_continuation_frame(local_id)
     second = manager.ensure_continuation_frame(local_id)
     assert first == second and first.is_file()
+
+
+def test_continue_prefers_returned_last_frame_over_local_extraction(
+    manager, platform, platform_request, tmp_path
+):
+    """平台已下载的尾帧优先用于续跑；缺失时才回退本地 cv2 抽帧。"""
+    from platform_test_helpers import make_video_bytes
+
+    result = manager.create(platform_request)
+    local_id = result["local_id"]
+    platform.download_bytes = make_video_bytes(tmp_path / "clip.mp4")
+    manager._repository.update(
+        local_id,
+        lambda current: setattr(current, "remote_status", "succeeded"),
+    )
+    manager._repository.update(
+        local_id,
+        lambda current: setattr(current, "remote", {"content": {"video_url": artifact_url("job-1")}}),
+    )
+    manager._download_succeeded(manager._repository.get(local_id))
+
+    returned = manager._repository.resolve_asset(local_id, "output/returned_last_frame.png")
+    returned.parent.mkdir(parents=True, exist_ok=True)
+    Image.new("RGB", (300, 300), "magenta").save(returned)
+    manager._repository.update(
+        local_id,
+        lambda current: current.output_paths.__setitem__(
+            "returned_last_frame", "output/returned_last_frame.png"
+        ),
+    )
+
+    continued = manager.continue_generation(local_id)
+    persisted = manager._repository.get(continued["local_id"])
+    first_frame = manager._repository.resolve_asset(
+        persisted.local_id, persisted.input_paths["first_frame"]
+    )
+    assert first_frame.read_bytes() == returned.read_bytes()
 
 
 def test_platform_sync_does_not_write_custom_key_audit(manager, platform, platform_request):

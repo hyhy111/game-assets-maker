@@ -86,8 +86,8 @@ test('ForFuner AI is shared by both composers and submits through the platform s
   }
   assert.match(workspaceStore, /const generationSource = ref<GenerationSource>\('api-key'\)/);
   assert.match(workspaceStore, /function setGenerationSource\(source: GenerationSource\)/);
-  // 平台源不再硬拦截提交：视频走 return_last_frame 覆盖 + 来源透传，图片按来源建批。
-  assert.match(video, /platformGenerationSelected\.value\s*\? \{ \.\.\.createRequest\(form\), return_last_frame: false \}/);
+  // 平台源不再硬拦截提交：视频无条件请求尾帧（平台统一返回）+ 来源透传，图片按来源建批。
+  assert.match(video, /platformGenerationSelected\.value\s*\? \{ \.\.\.createRequest\(form\), return_last_frame: true \}/);
   assert.match(video, /store\.validateRequest\(request, workspace\.generationSource\)/);
   assert.match(video, /store\.createTask\(request, source\)/);
   assert.doesNotMatch(image, /if \(platformGenerationSelected\.value\) return;/);

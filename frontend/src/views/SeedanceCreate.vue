@@ -686,7 +686,8 @@ onMounted(async () => {
   }
   modelDefaultsReady.value = true;
   if (platformGenerationSelected.value) {
-    form.return_last_frame = false;
+    // Platform jobs always return the last frame without resetting restored parameters.
+    form.return_last_frame = true;
   }
   initialDraftSignature = JSON.stringify(form);
 
@@ -723,6 +724,9 @@ onMounted(async () => {
   form.return_last_frame = request.return_last_frame ?? form.return_last_frame;
   previewUrls.first_frame = source.preview_urls.first_frame ?? '';
   previewUrls.last_frame = source.preview_urls.last_frame ?? '';
+  if (platformGenerationSelected.value) {
+    form.return_last_frame = true;
+  }
 });
 
 function clearDraft() {
@@ -949,7 +953,7 @@ async function submit() {
   }
   if (!ensureGenerationAccess()) return;
   const request = platformGenerationSelected.value
-    ? { ...createRequest(form), return_last_frame: false }
+    ? { ...createRequest(form), return_last_frame: true }
     : createRequest(form);
   const preflight = await store.validateRequest(request, workspace.generationSource);
   if (!preflight) {
@@ -1004,7 +1008,8 @@ function selectGenerationSource(source: string) {
   workspace.setGenerationSource(next);
   if (next === 'forfuner-ai') {
     // 参数收敛：平台源强制重置越界值（后端同样校验，双保险）。
-    form.return_last_frame = false;
+    // 尾帧由平台无条件返回，开关只读显示为开启。
+    form.return_last_frame = true;
     clampToPlatformModel();
   } else {
     // Restore the saved API-key default when the current ID belongs to the platform.

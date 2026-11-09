@@ -69,6 +69,36 @@ def test_get_task_success_without_direct_link_keeps_pseudo_placeholder():
     assert mapped["status"] == "succeeded"
     assert mapped["content"]["video_url"] == artifact_url("9001")
     assert "upstream_url" not in mapped["content"]
+    assert "last_frame_url" not in mapped["content"]
+
+
+def test_get_task_maps_fresh_last_frame():
+    transport = FakeTransport(
+        lambda m, u, h, b: describe(
+            "SUCCEEDED",
+            upstreamUrl="https://upstream.example/v.mp4",
+            upstreamExpiresAt=9999999999999,
+            lastFrameUrl="https://upstream.example/last.jpg",
+            lastFrameExpiresAt=9999999999999,
+        )
+    )
+    mapped = make_video_client(transport).get_task("9001")
+    assert mapped["content"]["last_frame_url"] == "https://upstream.example/last.jpg"
+    assert mapped["content"]["last_frame_expires_at"] == 9999999999999
+
+
+def test_get_task_without_last_frame_omits_frame_fields():
+    """过期或上游未返回时平台不下发 lastFrameUrl；客户端不得伪造。"""
+    transport = FakeTransport(
+        lambda m, u, h, b: describe(
+            "SUCCEEDED",
+            upstreamUrl="https://upstream.example/v.mp4",
+            upstreamExpiresAt=9999999999999,
+        )
+    )
+    mapped = make_video_client(transport).get_task("9001")
+    assert "last_frame_url" not in mapped["content"]
+    assert "last_frame_expires_at" not in mapped["content"]
 
 
 def test_get_task_running_has_no_content():
