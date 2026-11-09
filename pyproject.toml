@@ -31,6 +31,7 @@ dependencies = [
     # （backend/core/credential_crypto.py 构造时抛错，JS 侧 catch 成 false）。
     "pywin32>=306; sys_platform == 'win32'",
     "cryptography>=41.0.0",
+    "certifi>=2026.2.25",
     "opencv-python>=4.8.0",
     "Pillow>=10.0.0",
     "numpy>=1.24.0",

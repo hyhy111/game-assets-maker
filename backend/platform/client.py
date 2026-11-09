@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any, Protocol
 from uuid import uuid4
 
+from backend.http_tls import create_ssl_context
 from backend.platform.trace import trace_failure, trace_success
 
 _DEFAULT_TIMEOUT_SECONDS = 30.0
@@ -47,7 +48,7 @@ class UrllibTransport:
     ) -> HttpResponse:
         request = urllib.request.Request(url, data=body, headers=headers, method=method)
         try:
-            with urllib.request.urlopen(request, timeout=timeout) as response:
+            with urllib.request.urlopen(request, timeout=timeout, context=create_ssl_context()) as response:
                 return HttpResponse(response.status, dict(response.headers.items()), response.read())
         except urllib.error.HTTPError as error:
             return HttpResponse(error.code, dict(error.headers.items()) if error.headers else {}, error.read())

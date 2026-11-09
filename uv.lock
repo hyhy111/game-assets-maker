@@ -1723,6 +1723,7 @@ name = "game-assets-maker"
 version = "1.0.3"
 source = { editable = "." }
 dependencies = [
+    { name = "certifi" },
     { name = "cryptography" },
     { name = "filelock" },
     { name = "imageio-ffmpeg" },
@@ -1746,6 +1747,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "certifi", specifier = ">=2026.2.25" },
     { name = "cryptography", specifier = ">=41.0.0" },
     { name = "filelock", specifier = ">=3.15" },
     { name = "imageio-ffmpeg", specifier = ">=0.5.1" },

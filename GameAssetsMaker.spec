@@ -13,7 +13,7 @@ Model weights and user configuration are not bundled.
 
 from PyInstaller.building.build_main import Analysis
 from PyInstaller.building.api import COLLECT, EXE, PYZ
-from PyInstaller.utils.hooks import copy_metadata
+from PyInstaller.utils.hooks import collect_data_files, copy_metadata
 
 if sys.platform == 'darwin':
     from PyInstaller.building.osx import BUNDLE
@@ -33,7 +33,7 @@ a = Analysis(
         ('src/core', 'src/core'),
         ('src/utils', 'src/utils'),
         ('icon', 'icon'),
-    ] + copy_metadata('rembg') + copy_metadata('pymatting'),
+    ] + copy_metadata('rembg') + copy_metadata('pymatting') + collect_data_files('certifi'),
     hiddenimports=[
         'rembg',
         'rembg.session_factory',
