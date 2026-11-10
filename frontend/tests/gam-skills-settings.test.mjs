@@ -10,7 +10,8 @@ after(closeSfcRenderer);
 const source = await readFile(new URL('../src/components/settings/GamSkillsSettings.vue', import.meta.url), 'utf8');
 const script = source.match(/<script setup lang="ts">([\s\S]*?)<\/script>/)[1].replace(/^import .*;$/gm, '');
 
-function setup(clipboard, fallback = true) {
+const absent = { status: 'not_installed', source: 'none', installed_count: 0, total_count: 6, outdated: [], error: '', can_check: false, can_install: true, node_available: true };
+function setup(clipboard, fallback = true, system = {}, query = {}) {
   const calls = { copied: [], removed: 0, focused: 0 };
   const textarea = { style: {}, select() {}, remove() { calls.removed++; } };
   const document = {
@@ -19,10 +20,16 @@ function setup(clipboard, fallback = true) {
     body: { append() {} },
     execCommand(action) { assert.equal(action, 'copy'); calls.copied.push(textarea.value); return fallback; },
   };
-  const compiled = ts.transpileModule(`${script}\n({ agent, agentOptions, command, copied, copyFailed, copyCommand });`, {
+  const compiled = ts.transpileModule(`${script}\n({ agent, agentOptions, command, copied, copyFailed, copyCommand, status, checking, installing, installed, operationError, refreshStatus, installSkills });`, {
     compilerOptions: { target: ts.ScriptTarget.ES2022 },
   }).outputText;
-  const state = vm.runInNewContext(compiled, { computed, ref, watch, useI18n: () => ({ t: key => key }), navigator: { clipboard }, document });
+  const state = vm.runInNewContext(compiled, {
+    computed, ref, watch, onMounted() {}, onBeforeUnmount() {},
+    useRoute: () => ({ query }),
+    useGamSkillsUpdatesStore: () => ({ record() {}, refresh: async () => {} }),
+    api: { system: { getGamSkillsStatus: async () => ({ ...absent }), ...system } },
+    useI18n: () => ({ t: key => key }), navigator: { clipboard }, document,
+  });
   return { state, calls };
 }
 
@@ -68,7 +75,7 @@ test('settings show the installer immediately below the update card', async () =
   assert.match(html, /data-test="gam-skills-agent"/);
   assert.match(html, /id="gam-skills"/);
   assert.match(html, /npx skills add hyhy111\/gam-skills -g -a codex --skill &quot;\*&quot;/);
-  assert.match(html, /Node\.js/);
+  assert.match(html, /一键安装/);
 });
 
 test('home hero links below AI creation directly to the GAM Skills installation section', async () => {
@@ -90,4 +97,87 @@ test('settings offer common model defaults without separate ForFuner AI controls
   });
   assert.match(html, /aria-label="默认模型"/);
   assert.doesNotMatch(html, /ForFuner AI.*默认模型|platform-default-|自定义 API Key 默认模型/);
+});
+
+test('only an npx installation exposes update checking while other installations stay untouched', async () => {
+  for (const source of ['npx', 'other', 'none']) {
+    const state = { ...absent, source, status: source === 'other' ? 'unmanaged' : source === 'npx' ? 'update_available' : 'not_installed',
+      can_install: source !== 'other', can_check: source === 'npx', installed_count: source === 'npx' ? 6 : 0,
+      outdated: source === 'npx' ? ['gam-cli'] : [] };
+    const html = await renderSfc('components/settings/GamSkillsSettings.vue', {
+      configureSetup(bindings) { bindings.status.value = state; },
+    });
+    assert.match(html, /data-test="gam-skills-install"/);
+    if (source === 'npx') {
+      assert.match(html, /data-test="gam-skills-check"/);
+      assert.match(html, /其中 1 个有更新/);
+    } else assert.doesNotMatch(html, /data-test="gam-skills-check"/);
+    if (source === 'other') {
+      assert.match(html, /请通过原安装方式维护/);
+      assert.match(html, /<button[^>]*disabled[^>]*data-test="gam-skills-install"/);
+    }
+  }
+});
+
+test('missing Node.js disables one-click install but keeps the copyable command', async () => {
+  const html = await renderSfc('components/settings/GamSkillsSettings.vue', {
+    configureSetup(bindings) { bindings.status.value = { ...absent, node_available: false }; },
+  });
+  assert.match(html, /<button[^>]*disabled[^>]*data-test="gam-skills-install"/);
+  assert.match(html, /Node\.js 22\.20/);
+  assert.match(html, /data-test="gam-skills-copy"/);
+});
+
+test('switching agents discards the previous check response', async () => {
+  let resolveOld;
+  const old = new Promise(resolve => { resolveOld = resolve; });
+  const { state } = setup(undefined, true, {
+    getGamSkillsStatus: async agent => agent === 'codex' ? old : { ...absent, status: 'unmanaged', source: 'other' },
+  });
+  const checking = state.refreshStatus();
+  state.agent.value = 'cursor';
+  await nextTick();
+  await nextTick();
+  resolveOld({ ...absent, source: 'npx', status: 'update_available', outdated: ['gam-cli'] });
+  await checking;
+  assert.equal(state.status.value.source, 'other');
+  assert.equal(state.checking.value, false);
+});
+
+test('install is explicit, prevents duplicates and reports failed verification', async () => {
+  let finish;
+  let calls = 0;
+  const pending = new Promise(resolve => { finish = resolve; });
+  const { state } = setup(undefined, true, { installGamSkills: async agent => {
+    assert.equal(agent, 'codex'); calls++; return pending;
+  } });
+  state.status.value = { ...absent };
+  assert.equal(calls, 0);
+  const installing = state.installSkills();
+  await state.installSkills();
+  assert.equal(calls, 1);
+  assert.equal(state.installing.value, true);
+  finish({ success: false, state: { ...absent, error: 'INSTALL_FAILED' } });
+  await installing;
+  assert.equal(state.installed.value, false);
+  assert.equal(state.operationError.value, 'INSTALL_FAILED');
+  assert.equal(state.installing.value, false);
+});
+
+test('a verified install refreshes the version status and reports completion', async () => {
+  const managed = { ...absent, source: 'npx', status: 'installed', installed_count: 6, can_check: true };
+  const { state } = setup(undefined, true, {
+    installGamSkills: async () => ({ success: true, state: managed }),
+    getGamSkillsStatus: async () => ({ ...managed, status: 'up_to_date' }),
+  });
+  state.status.value = { ...absent };
+  await state.installSkills();
+  assert.equal(state.installed.value, true);
+  assert.equal(state.status.value.status, 'up_to_date');
+  assert.equal(state.installing.value, false);
+});
+
+test('a home badge link selects its agent while unrecognized query values use the default', () => {
+  assert.equal(setup(undefined, true, {}, { skillsAgent: 'claude-code' }).state.agent.value, 'claude-code');
+  assert.equal(setup(undefined, true, {}, { skillsAgent: 'unknown' }).state.agent.value, 'codex');
 });

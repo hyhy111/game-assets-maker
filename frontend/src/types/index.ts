@@ -790,3 +790,20 @@ export interface AppUpdateInfo {
   status: 'available' | 'ignored' | 'up_to_date' | 'error';
   error: '' | 'NETWORK_ERROR' | 'NOT_FOUND_OR_PRIVATE' | 'ACCESS_DENIED' | 'RATE_LIMITED' | 'INVALID_RELEASE';
 }
+
+export interface GamSkillsStatus {
+  status: 'not_installed' | 'unmanaged' | 'installed' | 'up_to_date' | 'update_available' | 'error';
+  source: 'none' | 'other' | 'npx';
+  installed_count: number;
+  total_count: number;
+  outdated: string[];
+  error: string;
+  can_check: boolean;
+  can_install: boolean;
+  node_available: boolean;
+}
+
+export interface GamSkillsInstallResult {
+  success: boolean;
+  state: GamSkillsStatus;
+}

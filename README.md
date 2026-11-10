@@ -114,6 +114,8 @@ npx skills add hyhy111/gam-skills -g --skill "*"
 | `gam-cli` | 通过 `gam-agent` 填写草稿、查询任务和操作客户端。 |
 | `gam-export` | 将 PNG 动画帧、裁剪偏移和音效导入 Godot 4。 |
 
+也可以在 GAM「设置 → GAM Skills 安装」中选择工具并一键安装，需要 Node.js 22.20 或更新版本及 npm。仅对有 `npx skills` 安装记录的 GAM Skills 检测和提示更新；启动时确认有新版本后，首页的 Skills 入口会显示黄色小角标，点击可进入对应工具的安装设置。手动复制、Git 克隆或其他工具管理的同名 Skills 不会被覆盖，请通过原安装方式维护。
+
 安装后可直接描述需求，例如“用 gam-pic-prompt，帮我写一个侧视剑士的图片提示词”，或“用 gam-export，把这个素材目录导入我的 Godot 4 项目”。
 
 操作客户端前请先安装并打开 GAM，并允许 Agent 访问本地文件和执行命令。安装包自带 `gam-agent`，固定入口见 [开发与打包](DEVELOPMENT.md#打包发行)。`gam-export` 另需 Python 3.10+，仅依赖标准库；导出时提供素材目录和 Godot 4 项目目录。本地素材处理无需登录，在线 AI 生成使用客户端中的账号或自定义 Key 配置。更多 Agent 的安装选项见 [Skills CLI 支持列表](https://github.com/vercel-labs/skills#supported-agents)。
@@ -229,6 +231,8 @@ npx skills add hyhy111/gam-skills -g --skill "*"
 | `gam-guide` | Look up features, parameters, account settings, and API key configuration. |
 | `gam-cli` | Use `gam-agent` to fill drafts, query tasks, and control the desktop app. |
 | `gam-export` | Import PNG animation frames, trim offsets, and audio into Godot 4. |
+
+You can also select an agent and install from **Settings → Install GAM Skills** in GAM, with Node.js 22.20 or later and npm available. Update checks and alerts apply only to GAM Skills recorded by `npx skills`. A confirmed startup update adds a small yellow badge to the home-page Skills link, which opens the matching agent's installation settings. Copies installed manually, cloned with Git, or managed by other tools are left untouched; maintain them with their original installer.
 
 After installation, describe your request, for example: “Use gam-pic-prompt to write an image prompt for a side-view swordsman,” or “Use gam-export to import this asset directory into my Godot 4 project.”
 

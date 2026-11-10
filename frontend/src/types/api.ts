@@ -22,6 +22,8 @@ import type {
   Step3Params,
   AppConfig,
   AppUpdateInfo,
+  GamSkillsStatus,
+  GamSkillsInstallResult,
   ModelStatus,
   ProjectTrimStatus,
   BatchTrimResult,
@@ -117,6 +119,9 @@ export interface PyWebViewWindow extends Window {
       open_project_folder: (project_path: string) => Promise<boolean>;
       get_app_version: () => Promise<string>;
       check_app_update: () => Promise<AppUpdateInfo>;
+      get_gam_skills_status: (agent?: string, checkUpdates?: boolean) => Promise<GamSkillsStatus>;
+      install_gam_skills: (agent?: string) => Promise<GamSkillsInstallResult>;
+      get_gam_skills_updates: () => Promise<Record<string, GamSkillsStatus>>;
       ignore_app_update: (version: string) => Promise<boolean>;
       open_app_update: () => Promise<boolean>;
       open_github_repository: () => Promise<boolean>;

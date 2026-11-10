@@ -25,12 +25,27 @@
             {{ t('projectManager.heroStart') }}
           </Button>
           <RouterLink
-            to="/ai-creation/settings#gam-skills"
+            :to="skillsLink"
+            :title="skillsUpdates.hasUpdate ? t('skillsInstall.updateBadge') : undefined"
             class="inline-flex items-center gap-2 rounded-lg px-1 py-1 text-base text-gray-400 transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             data-test="project-manager-install-skills"
           >
-            <Download class="h-4 w-4" aria-hidden="true" />
+            <span
+              class="relative inline-flex shrink-0"
+              aria-hidden="true"
+            >
+              <Download class="h-4 w-4" />
+              <span
+                v-if="skillsUpdates.hasUpdate"
+                class="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-primary ring-2 ring-dark-bg"
+                data-test="gam-skills-update-badge"
+              />
+            </span>
             {{ t('projectManager.heroInstallSkills') }}
+            <span
+              v-if="skillsUpdates.hasUpdate"
+              class="sr-only"
+            >{{ t('skillsInstall.updateBadge') }}</span>
           </RouterLink>
         </div>
 
@@ -292,12 +307,17 @@ import { Download, Sparkles } from 'lucide-vue-next';
 import { useI18n } from 'vue-i18n';
 import { RouterLink } from 'vue-router';
 import Button from '@/components/common/Button.vue';
+import { useGamSkillsUpdatesStore } from '@/stores/gamSkillsUpdates';
 
 const emit = defineEmits<{
   'start-ai-creation': [];
 }>();
 
 const { t } = useI18n();
+const skillsUpdates = useGamSkillsUpdatesStore();
+const skillsLink = computed(() => skillsUpdates.updateAgent
+  ? `/ai-creation/settings?skillsAgent=${encodeURIComponent(skillsUpdates.updateAgent)}#gam-skills`
+  : '/ai-creation/settings#gam-skills');
 const activeStage = ref(0);
 const flowLabels = ['Prompt', 'Pic', 'Pic + Prompt', 'Animation', 'Assets'];
 const assetActions = ['Idle', 'Run', 'Attack', 'Hurt'];

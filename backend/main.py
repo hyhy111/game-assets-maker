@@ -402,6 +402,7 @@ class API:
         self._process_api_instance = None
         self._config_api_instance = None
         self._update_api_instance = None
+        self._skills_api_instance = None
         self._batch_trim_api_instance = None
         self._audio_api_instance = None
         self._seedance_api_instance = None
@@ -914,6 +915,26 @@ class API:
     def check_app_update(self) -> dict[str, Any]:
         """Check once per application session, independently of login."""
         return self._update_api.check()
+
+    @property
+    def _skills_api(self):
+        if self._skills_api_instance is None:
+            from backend.api.skills_api import SkillsAPI
+
+            self._skills_api_instance = SkillsAPI()
+        return self._skills_api_instance
+
+    def get_gam_skills_status(self, agent: str = "codex", check_updates: bool = False) -> dict[str, Any]:
+        """Inspect installer provenance before checking only managed GAM Skills."""
+        return self._skills_api.status(agent, check_updates)
+
+    def install_gam_skills(self, agent: str = "codex") -> dict[str, Any]:
+        """Install the fixed GAM Skills package for an allowlisted agent."""
+        return self._skills_api.install(agent)
+
+    def get_gam_skills_updates(self) -> dict[str, Any]:
+        """Return per-agent update states for the home-page indicator."""
+        return self._skills_api.updates()
 
     def ignore_app_update(self, version: str) -> bool:
         """Ignore only the newer version returned by the current release check."""

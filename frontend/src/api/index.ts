@@ -23,6 +23,8 @@ import type {
   Step3Params,
   AppConfig,
   AppUpdateInfo,
+  GamSkillsStatus,
+  GamSkillsInstallResult,
   BackgroundColor,
   ModelStatus,
   ProjectTrimStatus,
@@ -354,6 +356,18 @@ export const systemApi = {
 
   async checkAppUpdate(): Promise<AppUpdateInfo> {
     return callApi<AppUpdateInfo>('check_app_update', 'checkAppUpdate');
+  },
+
+  async getGamSkillsStatus(agent: string, checkUpdates = false): Promise<GamSkillsStatus> {
+    return callApi<GamSkillsStatus>('get_gam_skills_status', 'getGamSkillsStatus', agent, checkUpdates);
+  },
+
+  async installGamSkills(agent: string): Promise<GamSkillsInstallResult> {
+    return callApi<GamSkillsInstallResult>('install_gam_skills', 'installGamSkills', agent);
+  },
+
+  async getGamSkillsUpdates(): Promise<Record<string, GamSkillsStatus>> {
+    return callApi<Record<string, GamSkillsStatus>>('get_gam_skills_updates', 'getGamSkillsUpdates');
   },
 
   async ignoreAppUpdate(version: string): Promise<boolean> {
