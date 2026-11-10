@@ -10,13 +10,13 @@ via PlatformClient; every other URL falls through to plain urllib.
 from __future__ import annotations
 
 import time
-import urllib.request
 from datetime import UTC, datetime
 from typing import Any
 
 from backend.http_tls import create_ssl_context
 from backend.platform.client import PlatformClient
 from backend.platform.video import ARTIFACT_URL_PREFIX
+from src.utils.diagnostics import logged_urlopen
 
 
 def _expiry_ms(value: Any) -> int | None:
@@ -80,7 +80,7 @@ def direct_link_candidates(entry: dict[str, Any], fallback_url: str) -> list[str
 
 class UrllibFallbackTransport:
     def download(self, url: str) -> bytes:
-        with urllib.request.urlopen(url, timeout=60.0, context=create_ssl_context()) as response:
+        with logged_urlopen(url, timeout=60.0, context=create_ssl_context()) as response:
             return response.read()
 
 

@@ -22,6 +22,10 @@ For installation and the first processing workflow, see the [README](README.md).
 
 私有仓库测试可在启动进程中设置 `GAM_UPDATE_GITHUB_TOKEN`，使用仅授权本仓库且具有 `Contents: read` 权限的 Token。该值只用于后端请求，不保存到配置、不返回前端，也不放入安装包。未设置时匿名查询，适用于公开发行仓库。`latest` 必须存在非草稿、非预发布的正式 Release；404 可能表示尚无正式版本或无访问权限。
 
+### 错误诊断日志
+
+安装版会自动将远程请求失败记录到 `~/.gam/logs/network.log`，包括连接、证书、超时、HTTP 错误、业务失败和失败任务状态。Seedream / Seedance 的 API 异常分别记录到同目录的 `seedream.log`、`seedance.log`，保留操作名、异常原因、调用堆栈及可用的任务标识。通用错误提示中的 `error_id` 可与日志对应。这些诊断记录不受“启用错误日志”设置控制，不记录请求正文、图片内容或凭证，URL 查询参数会被移除。每个文件最多 5 MB，保留 3 份轮转备份；写入失败不影响原操作。设置 `GAM_DATA_ROOT` 时日志随之移动，源码开发模式默认写入工作区 `logs/`。
+
 ## English
 
 ### Renaming roles and animations
@@ -37,3 +41,7 @@ Image and video settings each have one default model shared by Custom API Key an
 At each launch, the app checks the latest stable GitHub Release in the background. Settings shows the current version. A newer release reveals Update and Ignore this version, with a yellow dot on the header settings icon. Update opens that release page for download; quit the app and install manually. Ignoring persists immediately in the active data-root configuration and hides only that version’s header dot. Settings retains the Update button and release notes. Future releases remain eligible. Failed checks do not block local processing or claim the app is up to date.
 
 For private-repository tests, set `GAM_UPDATE_GITHUB_TOKEN` in the launching process using a token restricted to this repository with `Contents: read`. It stays in the backend request, outside frontend responses, saved config and packaged artifacts. Without it, checks are anonymous for public releases. The latest endpoint requires a published stable release; 404 can mean no stable release or insufficient access.
+
+### Error diagnostics
+
+Installed builds automatically record remote connection, certificate, timeout, HTTP, business and failed-job errors in `~/.gam/logs/network.log`. Seedream and Seedance API exceptions are recorded separately in `seedream.log` and `seedance.log`, including the operation, cause, traceback and available task identifiers. Generic error messages include an `error_id` matching the log. These diagnostics are independent of the error-logging setting. Request bodies, image contents and credentials are omitted or redacted; URL query parameters are removed. Each file rotates at 5 MB with three backups, and logging failures do not affect the original operation. `GAM_DATA_ROOT` relocates the logs; source development defaults to the workspace's `logs/` directory.

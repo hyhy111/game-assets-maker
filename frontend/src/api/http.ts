@@ -6,6 +6,7 @@
  */
 
 import { logEvent } from '@/debug/request-log';
+import { reportNetworkError } from '@/network-diagnostics';
 
 const BASE_URL: string = import.meta.env.VITE_APP_API_BASE_URL ?? 'http://localhost:8081';
 const TOKEN_KEY = 'gam:auth:token';
@@ -74,11 +75,23 @@ async function request<T>(path: string, init: RequestInit, options: InternalOpti
   if (token) {
     headers.set('Authorization', `Bearer ${token}`);
   }
+  const secrets = [token ?? ''];
+  if (typeof init.body === 'string') {
+    try {
+      for (const [key, value] of Object.entries(JSON.parse(init.body))) {
+        if (/password|token|key|code|email|prompt/i.test(key) && typeof value === 'string') secrets.push(value);
+      }
+    } catch { /* Request bodies are never included in diagnostics. */ }
+  }
+  const report = (error_type: string, message: string, http_status?: number, code?: number, stack?: string) => {
+    reportNetworkError({ method, url: `${BASE_URL}${path}`, error_type, message, http_status, code, stack, retried }, secrets);
+  };
 
   let res: Response;
   try {
     res = await fetch(`${BASE_URL}${path}`, { ...init, headers });
-  } catch {
+  } catch (error) {
+    report('NetworkError', error instanceof Error ? error.message : String(error), undefined, undefined, error instanceof Error ? error.stack : undefined);
     logEvent(`${label} → 网络错误`, 'error');
     throw new Error(NETWORK_ERROR);
   }
@@ -86,12 +99,18 @@ async function request<T>(path: string, init: RequestInit, options: InternalOpti
   let body: AjaxBody;
   try {
     body = (await res.json()) as AjaxBody;
-  } catch {
+  } catch (error) {
+    report('InvalidResponse', error instanceof Error ? error.message : 'Response is not JSON', res.status);
     logEvent(`${label} → 响应非 JSON`, 'error');
+    throw new Error(NETWORK_ERROR);
+  }
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    report('InvalidResponse', 'Response is not a JSON object', res.status);
     throw new Error(NETWORK_ERROR);
   }
 
   if (res.status === 401 || body.code === 401) {
+    report('Unauthorized', body.msg || 'Unauthorized', res.status, body.code);
     setToken(null);
 
     // 两道防递归：认证接口显式豁免（noRecovery），且只对"确实带着 token 发出"的
@@ -113,7 +132,8 @@ async function request<T>(path: string, init: RequestInit, options: InternalOpti
     throw new Error(body.msg || 'Unauthorized');
   }
 
-  if (body.code !== 200) {
+  if (res.status >= 400 || body.code !== 200) {
+    report(res.status >= 400 ? 'HttpError' : 'BusinessError', body.msg || `Request failed (${body.code ?? res.status})`, res.status, body.code);
     logEvent(`${label} → ${body.code} ${body.msg ?? ''}`.trim(), 'error');
     throw new Error(body.msg || `Request failed (${body.code ?? res.status})`);
   }

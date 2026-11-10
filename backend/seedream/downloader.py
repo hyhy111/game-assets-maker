@@ -1,13 +1,13 @@
 """Atomic downloads for Seedream candidate images."""
 
 import os
-import urllib.request
 from pathlib import Path
 from typing import Protocol
 
 from PIL import Image
 
 from backend.seedream.repository import BatchRepository
+from src.utils.diagnostics import logged_urlopen
 
 
 class DownloadTransport(Protocol):
@@ -16,7 +16,7 @@ class DownloadTransport(Protocol):
 
 class UrllibDownloadTransport:
     def download(self, url: str) -> bytes:
-        with urllib.request.urlopen(url, timeout=60.0) as response:
+        with logged_urlopen(url, timeout=60.0) as response:
             return response.read()
 
 

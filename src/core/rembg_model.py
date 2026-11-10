@@ -61,7 +61,16 @@ def download_u2net(directory: Path, source: str = "modelscope") -> str:
 
     if source not in U2NET_SOURCES:
         raise ValueError("Unsupported model download source")
-    return pooch.retrieve(
-        U2NET_SOURCES[source], known_hash=U2NET_HASH, fname="u2net.onnx",
-        path=directory, progressbar=True,
-    )
+    try:
+        return pooch.retrieve(
+            U2NET_SOURCES[source],
+            known_hash=U2NET_HASH,
+            fname="u2net.onnx",
+            path=directory,
+            progressbar=True,
+        )
+    except Exception as error:
+        from src.utils.diagnostics import record_network_error
+
+        record_network_error("GET", U2NET_SOURCES[source], error)
+        raise

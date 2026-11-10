@@ -754,6 +754,15 @@ class SeedreamAPI:
             error_data = {"code": "INVALID_REQUEST", "message": self._safe_text(str(error)), "field": None}
         else:
             error_data = {"code": "INTERNAL_ERROR", "message": "Unable to complete Seedream request", "field": None}
+        from src.utils.diagnostics import record_exception
+
+        token = self._platform_config.snapshot()[1] if self._platform_config else None
+        error_id = record_exception(
+            "seedream", error, secrets=(self._configured_api_key(), token), code=error_data["code"]
+        )
+        if error_data["message"] == "Unable to complete Seedream request":
+            error_data["error_id"] = error_id
+            error_data["message"] += f" [error_id={error_id}]"
         return {"success": False, "error": error_data}
 
     @staticmethod

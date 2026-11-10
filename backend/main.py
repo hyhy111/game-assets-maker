@@ -1145,6 +1145,15 @@ class API:
 
     # ==================== Platform (ForFuner AI) ====================
 
+    def report_network_error(self, details: dict[str, Any]) -> None:
+        """Persist a bounded frontend diagnostic without request bodies or headers."""
+        from src.utils.app_config import load_app_config
+        from src.utils.diagnostics import record_frontend_error
+
+        token = self._platform_config.snapshot()[1]
+        key = load_app_config().get("seedance", {}).get("api_key", "")
+        record_frontend_error(details, secrets=(token, key))
+
     def set_platform_config(self, base_url: str, token: str | None) -> dict[str, Any]:
         """Push platform base URL + app JWT into the Python backend.
 

@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from typing import Any, Protocol
 
 from backend.ark_audit import ArkAudit, provider_request_id, response_fields
+from src.utils.diagnostics import logged_urlopen, record_job_failure, record_network_error
 
 _TASKS_URL = "https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks"
 _DEFAULT_TIMEOUT_SECONDS = 30.0
@@ -34,7 +35,7 @@ class UrllibTransport:
     ) -> HttpResponse:
         request = urllib.request.Request(url, data=body, headers=headers, method=method)
         try:
-            with urllib.request.urlopen(request, timeout=timeout) as response:
+            with logged_urlopen(request, timeout=timeout) as response:
                 return HttpResponse(response.status, dict(response.headers.items()), response.read())
         except urllib.error.HTTPError as error:
             return HttpResponse(error.code, dict(error.headers.items()) if error.headers else {}, error.read())
@@ -109,6 +110,7 @@ class ArkClient:
         try:
             response = self._transport.request(method, url, self._headers(), body, self._timeout)
         except OSError as error:
+            record_network_error(method, url, error, secrets=(self._api_key,))
             if call:
                 call.event("failure", error_type=type(error).__name__, errno=error.errno)
             raise
@@ -125,12 +127,22 @@ class ArkClient:
             else:
                 parsed = self._json_response(response)
         except (ArkResponseError, ArkAPIError) as error:
+            record_network_error(
+                method,
+                url,
+                error,
+                secrets=(self._api_key,),
+                http_status=response.status,
+                code=getattr(error, "code", None),
+            )
             if call:
                 fields = {"http_status": response.status, "error_type": type(error).__name__}
                 if isinstance(error, ArkAPIError):
                     fields["error_code"] = error.code
                 call.event("failure", **fields)
             raise
+        if isinstance(parsed, dict):
+            record_job_failure(method, url, parsed, secrets=(self._api_key,))
         if call:
             call.event("parsed_response", **response_fields(operation, parsed or {}))
         return parsed

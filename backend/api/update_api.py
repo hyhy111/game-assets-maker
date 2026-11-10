@@ -12,6 +12,7 @@ from urllib.parse import urlsplit
 
 from src.utils.app_config import load_app_config, save_app_config
 from src.utils.app_version import app_version
+from src.utils.diagnostics import logged_urlopen, record_network_error
 
 REPOSITORY = "hyhy111/game-assets-maker"
 LATEST_RELEASE_URL = f"https://api.github.com/repos/{REPOSITORY}/releases/latest"
@@ -62,7 +63,7 @@ class UpdateAPI:
             headers["Authorization"] = f"Bearer {token}"
         request = urllib.request.Request(LATEST_RELEASE_URL, headers=headers)
         try:
-            with urllib.request.urlopen(request, timeout=8) as response:
+            with logged_urlopen(request, timeout=8) as response:
                 raw = response.read(1024 * 1024 + 1)
             if len(raw) > 1024 * 1024:
                 raise ValueError("Release response too large")
@@ -104,7 +105,8 @@ class UpdateAPI:
                 state["error"] = "NETWORK_ERROR"
         except (urllib.error.URLError, TimeoutError, OSError):
             state["error"] = "NETWORK_ERROR"
-        except (ValueError, TypeError):
+        except (ValueError, TypeError) as error:
+            record_network_error("GET", LATEST_RELEASE_URL, error, secrets=(token,))
             state["error"] = "INVALID_RELEASE"
         return state
 

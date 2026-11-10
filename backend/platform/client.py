@@ -20,6 +20,7 @@ from uuid import uuid4
 
 from backend.http_tls import create_ssl_context
 from backend.platform.trace import trace_failure, trace_success
+from src.utils.diagnostics import logged_urlopen, record_job_failure, record_network_error
 
 _DEFAULT_TIMEOUT_SECONDS = 30.0
 _IMAGE_GENERATION_TIMEOUT_SECONDS = 1500.0  # sync endpoint can hold minutes
@@ -48,7 +49,7 @@ class UrllibTransport:
     ) -> HttpResponse:
         request = urllib.request.Request(url, data=body, headers=headers, method=method)
         try:
-            with urllib.request.urlopen(request, timeout=timeout, context=create_ssl_context()) as response:
+            with logged_urlopen(request, timeout=timeout, context=create_ssl_context()) as response:
                 return HttpResponse(response.status, dict(response.headers.items()), response.read())
         except urllib.error.HTTPError as error:
             return HttpResponse(error.code, dict(error.headers.items()) if error.headers else {}, error.read())
@@ -184,15 +185,29 @@ class PlatformClient:
             response = self._transport.request("GET", self._url(path), self._headers(), None, max(self._timeout, 300.0))
         except Exception as error:
             trace_failure("GET", path, type(error).__name__, str(error), secret=self._token)
+            record_network_error("GET", self._url(path), error, secrets=(self._token,), job_id=job_id)
             raise
         if 200 <= response.status < 300:
             if not response.body:
                 trace_failure("GET", path, "PlatformResponseError", "empty artifact body", secret=self._token)
-                raise PlatformResponseError("Platform artifact download is empty")
+                error = PlatformResponseError("Platform artifact download is empty")
+                record_network_error(
+                    "GET", self._url(path), error, secrets=(self._token,), http_status=response.status, job_id=job_id
+                )
+                raise error
             trace_success("GET", path, response.status, "200", f"{len(response.body)} bytes", secret=self._token)
             return response.body
         error = self._artifact_error(response)
         trace_failure("GET", path, type(error).__name__, error.message, secret=self._token)
+        record_network_error(
+            "GET",
+            self._url(path),
+            error,
+            secrets=(self._token,),
+            http_status=response.status,
+            code=error.code,
+            job_id=job_id,
+        )
         raise error
 
     # ---- plumbing ----
@@ -219,7 +234,16 @@ class PlatformClient:
                 raise PlatformResponseError("Platform success response has no data object")
         except Exception as error:
             trace_failure(method, path, type(error).__name__, str(error), secret=self._token)
+            record_network_error(
+                method,
+                self._url(path),
+                error,
+                secrets=(self._token,),
+                code=getattr(error, "code", None),
+                http_status=getattr(error, "status", None),
+            )
             raise
+        record_job_failure(method, self._url(path), payload, secrets=(self._token,))
         trace_success(method, path, response.status, data.get("code"), payload, secret=self._token)
         return payload
 

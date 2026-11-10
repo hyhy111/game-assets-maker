@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Any, Protocol
 
 from backend.ark_audit import ArkAudit, provider_request_id, response_fields
+from src.utils.diagnostics import logged_urlopen, record_network_error
 
 _IMAGES_URL = "https://ark.cn-beijing.volces.com/api/v3/images/generations"
 _DEFAULT_TIMEOUT_SECONDS = 1500.0  # 25 minutes
@@ -34,7 +35,7 @@ class UrllibTransport:
     ) -> HttpResponse:
         request = urllib.request.Request(url, data=body, headers=headers, method=method)
         try:
-            with urllib.request.urlopen(request, timeout=timeout) as response:
+            with logged_urlopen(request, timeout=timeout) as response:
                 return HttpResponse(response.status, dict(response.headers.items()), response.read())
         except urllib.error.HTTPError as error:
             return HttpResponse(error.code, dict(error.headers.items()) if error.headers else {}, error.read())
@@ -77,6 +78,7 @@ class ArkClient:
         try:
             response = self._transport.request("POST", _IMAGES_URL, self._headers(), body, self._timeout)
         except OSError as error:
+            record_network_error("POST", _IMAGES_URL, error, secrets=(self._api_key,))
             if call:
                 call.event("failure", error_type=type(error).__name__, errno=error.errno)
             raise SubmissionUnknownError("Ark image generation outcome is unknown") from error
@@ -90,10 +92,14 @@ class ArkClient:
         try:
             parsed = self._parse_response(response)
         except ArkResponseError as error:
+            record_network_error("POST", _IMAGES_URL, error, secrets=(self._api_key,), http_status=response.status)
             if call:
                 call.event("failure", error_type=type(error).__name__, http_status=response.status)
             raise SubmissionUnknownError("Ark image generation outcome is unknown") from error
         except ArkAPIError as error:
+            record_network_error(
+                "POST", _IMAGES_URL, error, secrets=(self._api_key,), http_status=error.status, code=error.code
+            )
             if call:
                 call.event("failure", http_status=error.status, error_code=error.code)
             raise
@@ -113,6 +119,24 @@ class ArkClient:
         data_list = data.get("data")
         if not isinstance(data_list, list) or not data_list:
             raise ArkResponseError("Ark API response missing image data")
+        for index, entry in enumerate(data_list):
+            detail = entry.get("error") if isinstance(entry, dict) else None
+            if isinstance(detail, dict):
+                error = ArkAPIError(
+                    response.status,
+                    str(detail.get("code") or "IMAGE_GENERATION_FAILED"),
+                    str(detail.get("message") or "Image generation failed"),
+                    self._extract_request_id(response),
+                )
+                record_network_error(
+                    "POST",
+                    _IMAGES_URL,
+                    error,
+                    secrets=(self._api_key,),
+                    http_status=response.status,
+                    code=error.code,
+                    image_index=index,
+                )
         return data
 
     def _api_error(self, response: HttpResponse) -> ArkAPIError:

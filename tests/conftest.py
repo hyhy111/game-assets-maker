@@ -1,4 +1,6 @@
 import json
+import logging
+import os
 import shutil
 import time
 from pathlib import Path
@@ -7,6 +9,22 @@ import cv2
 import numpy as np
 import pytest
 from PIL import Image, ImageDraw
+
+
+@pytest.fixture(autouse=True)
+def isolate_diagnostic_logs(tmp_path, monkeypatch):
+    from src.utils import diagnostics
+
+    # Honor explicit installed-mode roots while isolating tests without an override.
+    monkeypatch.setattr(
+        diagnostics, "data_root", lambda: Path(os.environ.get("GAM_DATA_ROOT") or tmp_path / "diagnostics")
+    )
+    yield
+    for channel in ("network", "seedream", "seedance"):
+        logger = logging.getLogger(f"gam.diagnostics.{channel}")
+        for handler in logger.handlers[:]:
+            logger.removeHandler(handler)
+            handler.close()
 
 
 @pytest.fixture(scope="session")
