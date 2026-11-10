@@ -780,6 +780,7 @@ async function refreshPlatformQuote() {
   try {
     const result = await creditUsage.quote('video', { model: form.model, resolution: form.resolution, duration: form.duration, ratio: form.ratio, generate_audio: form.generate_audio, content: [{ type: 'text', text: 'quote' }] });
     if (result.canSubmit) data = result;
+    else if (creditUsage.bonusNotApplicable(result)) paymentError = t('creditUsage.bonusNotApplicable');
     else paymentError = t('aiCreation.insufficientCredits', { credits: result.quote });
   } catch (error) {
     paymentError = t('aiCreation.platformQuoteFailed', {

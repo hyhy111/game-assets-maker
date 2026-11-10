@@ -170,3 +170,28 @@ test('unchanged account refreshes do not keep invalidating an in-flight snapshot
     assert.equal(f.store.ready, true);
   } finally { f.dispose(); }
 });
+
+test('empty unrestricted history cannot widen a funded restricted grant model scope', async () => {
+  const f = await fixture();
+  try {
+    f.auth.token = 'restricted-account'; f.auth.isLoggedIn = true; await flush();
+    const mini = { platform: 'volc_ark', mediaType: 'video', model: 'doubao-seedance-2-0-mini', resolution: '720p', durationSec: 4, sizeLabel: null };
+    const standard = { ...mini, model: 'doubao-seedance-2-0-standard' };
+    const snapshot = { data: {
+      asOf: '2026-11-10T00:00:00Z', refreshAt: '2026-11-10T00:01:00Z',
+      account: { generalAvailable: 0, bonusAvailable: 1000, totalAvailable: 1000, buckets: [
+        { bucket: { bucketId: 'old-general', creditClass: 'GENERAL', remainAmount: 0, usageMode: 'UNRESTRICTED' }, rules: [] },
+        { bucket: { bucketId: 'restricted-grant', creditClass: 'BONUS', remainAmount: 1000, usageMode: 'RESTRICTED' }, rules: [mini] },
+      ] },
+      combinations: [
+        { context: mini, quote: 199, generalAvailable: 0, bonusAvailable: 1000, canSubmit: true },
+        { context: standard, quote: 560, generalAvailable: 0, bonusAvailable: 0, canSubmit: false },
+      ],
+    } };
+    f.requests[0].resolve(snapshot); await flush();
+    assert.equal(f.store.canSelectModel('video', mini.model), true);
+    assert.equal(f.store.canPay('video', mini.model, '720p', 4), true);
+    assert.equal(f.store.canSelectModel('video', standard.model), false);
+    assert.equal(f.store.canPay('video', standard.model, '720p', 4), false);
+  } finally { f.dispose(); }
+});

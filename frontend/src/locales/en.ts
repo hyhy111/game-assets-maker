@@ -13,6 +13,7 @@ export default {
     scope: 'View credit usage rules',
     optionUnavailable: 'Insufficient eligible credits or bonus not applicable',
     modelNotApplicable: 'Your account credits do not apply to this model',
+    bonusNotApplicable: 'Your bonus credits do not apply to this model or specification. Choose an eligible combination.',
   },
   app: {
     title: 'Game Assets Maker',

@@ -30,6 +30,15 @@ interface Availability {
   asOf: string;
   refreshAt: string;
 }
+interface CreditQuote {
+  quote: number;
+  canSubmit: boolean;
+  message: string;
+  bonusPayment: number;
+  generalPayment: number;
+  reasonCode?: string;
+  reasonCodes?: string[];
+}
 
 /** Server-calculated eligibility, isolated by account and bounded by expiry. */
 export const useCreditUsageStore = defineStore('credit-usage', () => {
@@ -100,9 +109,14 @@ export const useCreditUsageStore = defineStore('credit-usage', () => {
   }
   async function quote(media: 'image' | 'video', request: Record<string, unknown>) {
     const token = auth.token;
-    const result = await httpPost<{ data: { quote: number; canSubmit: boolean; message: string; bonusPayment: number; generalPayment: number } }>(`/app/credit/v2/quote/${media}`, request);
+    const result = await httpPost<{ data: CreditQuote }>(`/app/credit/v2/quote/${media}`, request);
     if (token !== auth.token) throw new Error('登录状态已变化，请重新获取报价');
     return result.data;
+  }
+  function bonusNotApplicable(quote: CreditQuote) {
+    return !quote.canSubmit
+      && (quote.reasonCode === 'BONUS_NOT_APPLICABLE' || quote.reasonCodes?.includes('BONUS_NOT_APPLICABLE') === true)
+      && quote.generalPayment === 0 && quote.bonusPayment === 0;
   }
   function matching(media: string, model: string, resolution?: string, duration?: number) {
     return (data.value?.combinations ?? []).filter(row => {
@@ -120,7 +134,9 @@ export const useCreditUsageStore = defineStore('credit-usage', () => {
     const rows = matching(media, model);
     if (!rows.length) return false;
     if (rows.some(row => row.generalAvailable > 0 || row.bonusAvailable > 0)) return true;
-    // Declared scope remains selectable after its balance is exhausted.
+    // Funded accounts use current eligibility; empty historical buckets must not widen their scope.
+    if (data.value.account.generalAvailable + data.value.account.bonusAvailable > 0) return false;
+    // Keep declared configuration selectable when the entire account is exhausted.
     const now = new Date(data.value.asOf).getTime();
     return data.value.account.buckets.some(({ bucket, rules, capabilityAvailable }) => {
       if (capabilityAvailable === false) return false;
@@ -160,5 +176,5 @@ export const useCreditUsageStore = defineStore('credit-usage', () => {
     window.addEventListener('seedance-task-updated', generationChanged);
     window.addEventListener('seedream-batch-updated', generationChanged);
   }
-  return { data, loading, error, ready, refresh, reset, quote, matching, canPay, canSelectModel };
+  return { data, loading, error, ready, refresh, reset, quote, bonusNotApplicable, matching, canPay, canSelectModel };
 });

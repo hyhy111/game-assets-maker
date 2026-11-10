@@ -13,6 +13,7 @@ export default {
     scope: '查看积分使用范围',
     optionUnavailable: '当前组合可用积分不足或赠送不适用',
     modelNotApplicable: '当前账户积分不适用于此模型',
+    bonusNotApplicable: '赠送积分不适用于当前模型或规格，请切换到适用的组合。',
   },
   app: {
     title: 'Game Assets Maker',

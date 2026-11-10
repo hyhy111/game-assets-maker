@@ -63,6 +63,7 @@ async function mountPage(t, kind, { loggedIn = true, capabilityResponse, quoteRe
       const response = typeof quoteResponse === 'function' ? await quoteResponse(httpCalls.at(-1).body) : quoteResponse;
       if (response instanceof Response) return response;
       return jsonResponse({
+        ...response?.data,
         quote: response?.data?.quote ?? (quoteMatch[1] === 'image' ? 60 : 199),
         canSubmit: response?.data?.canSubmit ?? true,
         message: response?.data?.message ?? '',
@@ -315,7 +316,9 @@ for (const kind of ['image', 'video']) {
       initialModel: excluded,
       capabilityResponse: { success: true, data: { ...capabilities, [kind]: { models: [modelEntry(excluded), modelEntry(eligible)] } } },
       availabilityResponse: { ...availability,
-        account: { generalAvailable: 0, bonusAvailable: 340, totalAvailable: 340, buckets: [] },
+        account: { generalAvailable: 0, bonusAvailable: 340, totalAvailable: 340, buckets: [
+          { bucket: { bucketId: 'empty-general-history', creditClass: 'GENERAL', remainAmount: 0, usageMode: 'UNRESTRICTED' }, rules: [] },
+        ] },
         combinations: [eligible, excluded].map(model => ({
           context: { mediaType: kind, model, resolution: kind === 'video' ? '720p' : null, durationSec: kind === 'video' ? 4 : null, sizeLabel: kind === 'image' ? '2K' : null },
           quote: 360, generalAvailable: 0, bonusAvailable: model === eligible ? 340 : 0,
@@ -506,3 +509,48 @@ test('video still reports an actual continuation draft load failure', async t =>
   assert.equal(page.app._instance.setupState.draftLoadFailed, true);
   assert.equal(page.app._instance.setupState.handoffLoadFailed, false);
 });
+
+for (const kind of ['image', 'video']) {
+  test(`${kind}: inapplicable bonus credits explain the scope and recover after choosing an eligible specification`, async t => {
+    const model = kind === 'image' ? imageId : videoId;
+    const eligibleSize = kind === 'image' ? '1K' : '480p';
+    const currentSize = kind === 'image' ? '2K' : '720p';
+    const page = await mountPage(t, kind, {
+      capabilityResponse: { success: true, data: { ...capabilities, [kind]: { models: [kind === 'image'
+        ? { model, sizes: ['1K', '2K'] }
+        : { model, resolutions: ['480p', '720p'], durationsByResolution: { '480p': [4], '720p': [4] } }] } } },
+      availabilityResponse: { ...availability,
+        account: { generalAvailable: 0, bonusAvailable: 1000, totalAvailable: 1000, buckets: [] },
+        combinations: [eligibleSize, currentSize].map(size => ({
+          context: { platform: 'volc_ark', mediaType: kind, model, resolution: kind === 'video' ? size : null,
+            durationSec: kind === 'video' ? 4 : null, sizeLabel: kind === 'image' ? size : null },
+          quote: 199, generalAvailable: 0, bonusAvailable: size === eligibleSize ? 1000 : 0,
+          canSubmit: size === eligibleSize,
+        })),
+      },
+      quoteResponse: request => ({ data: {
+        quote: 199, canSubmit: (request.size ?? request.resolution) === eligibleSize,
+        generalPayment: 0, bonusPayment: (request.size ?? request.resolution) === eligibleSize ? 199 : 0,
+        reasonCodes: (request.size ?? request.resolution) === eligibleSize ? [] : ['BONUS_NOT_APPLICABLE', 'NO_ELIGIBLE_CREDITS'],
+      } }),
+    });
+    await page.tick();
+    const state = page.app._instance.setupState;
+    assert.equal(state.quoteError, '赠送积分不适用于当前模型或规格，请切换到适用的组合。');
+    assert.doesNotMatch(state.quoteError, /积分不足/);
+    assert.equal(await primarySubmitDisabled(kind, state), true);
+    page.workspace[kind === 'image' ? 'imageDraft' : 'videoDraft'].resolution = eligibleSize;
+    await page.tick();
+    assert.equal(state.quoteError, '');
+    assert.equal(state.platformConfirmBlocked, false);
+  });
+
+  test(`${kind}: partially applicable credits still report a genuine shortfall`, async t => {
+    const page = await mountPage(t, kind, {
+      quoteResponse: { data: { quote: 199, canSubmit: false, generalPayment: 0, bonusPayment: 50,
+        reasonCodes: ['BONUS_NOT_APPLICABLE', 'INSUFFICIENT_ELIGIBLE_CREDITS'] } },
+    });
+    await page.tick();
+    assert.equal(page.app._instance.setupState.quoteError, '预计消耗 199 积分，当前可用积分不足');
+  });
+}
