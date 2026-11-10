@@ -1755,8 +1755,14 @@ function formatDate(dateStr: string): string {
   max-height: 28.95rem;
   overflow-y: auto;
   overscroll-behavior: contain;
-  scrollbar-width: thin;
-  scrollbar-color: rgb(255 189 92 / 28%) transparent;
+}
+
+/* Standard properties override WebKit's custom scrollbar, including in WKWebView. */
+@supports not selector(::-webkit-scrollbar) {
+  .role-nav {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(255 189 92 / 28%) transparent;
+  }
 }
 
 .role-nav::-webkit-scrollbar {
