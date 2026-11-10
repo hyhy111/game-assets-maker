@@ -46,18 +46,25 @@ _SUBSCRIPTION_CLOSE_BUTTON_SCRIPT = """
   button.type = 'button';
   button.setAttribute('aria-label', '关闭订阅窗口');
   button.title = '关闭';
-  button.textContent = '×';
+  button.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" '
+    + 'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" '
+    + 'stroke-linecap="round" aria-hidden="true" style="display:block;flex-shrink:0">'
+    + '<path d="M5 5L19 19M19 5L5 19"/></svg>';
   Object.assign(button.style, {
     position: 'fixed',
     top: '12px',
     right: '12px',
     width: '34px',
     height: '34px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '0',
+    boxSizing: 'border-box',
     border: '1px solid rgba(255, 255, 255, 0.18)',
     borderRadius: '9999px',
     background: 'rgba(10, 10, 12, 0.82)',
     color: '#f5f2ea',
-    font: '24px/30px -apple-system, BlinkMacSystemFont, sans-serif',
     cursor: 'pointer',
     zIndex: '2147483647',
     backdropFilter: 'blur(8px)',
