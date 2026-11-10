@@ -9,6 +9,7 @@ venv/
 
 # Node.js
 node_modules/
+.vite/
 frontend/dist/
 frontend/logs/
 frontend/vite.config.ts.timestamp-*
