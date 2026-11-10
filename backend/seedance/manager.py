@@ -264,8 +264,7 @@ class SeedanceTaskManager:
             "ratio": request.ratio,
             "duration": request.duration,
             "generate_audio": request.generate_audio,
-            # 平台侧无条件注入 true；这里显式带上，保持两端契约可读。
-            "return_last_frame": True,
+            "return_last_frame": request.return_last_frame,
         }
 
     def _upload_platform_asset(self, path: Path) -> str:

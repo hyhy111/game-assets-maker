@@ -11,6 +11,7 @@ import { HelpCircle } from 'lucide-vue-next';
 import { useI18n } from 'vue-i18n';
 import type { CreditBucket } from '@/api/billing';
 import { EXPIRING_DAYS } from '@/stores/billing';
+import { useModelDisplayName } from '@/composables/useModelDisplayName';
 
 const props = defineProps<{
   bucket: CreditBucket;
@@ -19,6 +20,7 @@ const props = defineProps<{
 }>();
 
 const { t } = useI18n();
+const { modelName } = useModelDisplayName();
 const scopeOpen = ref(false);
 let closeTimer: ReturnType<typeof setTimeout> | null = null;
 function keepScope() { if (closeTimer) clearTimeout(closeTimer); }
@@ -31,8 +33,10 @@ const scopeLines = computed(() => {
     const [model, ...spec] = item.split(' · ');
     models.set(model, [...(models.get(model) ?? []), ...spec]);
   }
-  return [...models].map(([model, specs]) => ({ model, specs: specs.join('；') }));
+  return [...models].map(([model, specs]) => ({ model, label: modelName(model), specs: specs.join('；') }));
 });
+const scopeSummary = computed(() => scopeLines.value
+  .map(line => [line.label, line.specs].filter(Boolean).join(' · ')).join('；'));
 function showScope(event: Event) {
   keepScope();
   const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
@@ -148,7 +152,7 @@ const remainLabel = computed(() => {
       </span>
     </div>
     <div v-if="scope" class="mt-2 flex min-w-0 items-center gap-1.5 border-t border-dark-border/60 pt-2 text-[11px] text-gray-400" data-test="bucket-model-scope">
-      <span class="min-w-0 flex-1 truncate">{{ t('creditUsage.availableModels') }}{{ scope }}</span>
+      <span class="min-w-0 flex-1 truncate">{{ t('creditUsage.availableModels') }}{{ scopeSummary }}</span>
       <button
         type="button"
         class="shrink-0 rounded text-gray-500 hover:text-gray-300 focus-visible:outline focus-visible:outline-1 focus-visible:outline-primary"
@@ -167,7 +171,7 @@ const remainLabel = computed(() => {
         <p class="mb-2 font-semibold">{{ t('creditUsage.availableModels') }}</p>
         <ul class="max-h-72 space-y-2 overflow-y-auto">
           <li v-for="line in scopeLines" :key="line.model" class="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-3 border-b border-dark-border/50 pb-2 last:border-0 last:pb-0">
-            <span class="break-words font-medium">{{ line.model }}</span>
+            <span class="break-words font-medium">{{ line.label }}</span>
             <span class="break-words text-gray-400">{{ line.specs }}</span>
           </li>
         </ul>

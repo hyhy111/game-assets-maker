@@ -85,3 +85,88 @@ test('a quote from the previous token cannot authorize the next account', async 
     assert.equal(f.store.canPay('image', 'a'), false);
   } finally { f.dispose(); }
 });
+
+test('model selection uses applicable credits rather than the price of a generation', async () => {
+  const f = await fixture();
+  try {
+    f.auth.token = 'a'; f.auth.isLoggedIn = true; await flush();
+    const snapshot = response(0, 20);
+    snapshot.data.combinations.push({ ...snapshot.data.combinations[0], context: { mediaType: 'image', model: 'other', sizeLabel: '2K' }, bonusAvailable: 0 });
+    f.requests[0].resolve(snapshot); await flush();
+    assert.equal(f.store.canSelectModel('image', 'a'), true);
+    assert.equal(f.store.canPay('image', 'a', '2K'), false);
+    assert.equal(f.store.canSelectModel('image', 'other'), false);
+    assert.equal(f.store.canSelectModel('video', 'a'), false);
+    assert.equal(f.store.canSelectModel('image', 'missing'), false);
+    const refresh = f.store.refresh();
+    assert.equal(f.store.canSelectModel('image', 'a'), false);
+    f.requests[1].reject(new Error('offline')); await refresh;
+    assert.equal(f.store.canSelectModel('image', 'a'), false);
+  } finally { f.dispose(); }
+});
+
+test('exhausted credits preserve only their declared model scope and exclude future buckets', async () => {
+  const f = await fixture();
+  try {
+    f.auth.token = 'a'; f.auth.isLoggedIn = true; await flush();
+    const snapshot = response(0);
+    snapshot.data.combinations.push({ ...snapshot.data.combinations[0], context: { mediaType: 'image', model: 'other', sizeLabel: '2K' } });
+    snapshot.data.account.buckets = [
+      { bucket: { bucketId: 'bonus', remainAmount: 0, usageMode: 'RESTRICTED' }, rules: [snapshot.data.combinations[0].context] },
+      { bucket: { bucketId: 'future', remainAmount: 100, usageMode: 'UNRESTRICTED', effectiveFrom: '2099-01-01T00:00:00Z' } },
+    ];
+    f.requests[0].resolve(snapshot); await flush();
+    assert.equal(f.store.canSelectModel('image', 'a'), true);
+    assert.equal(f.store.canSelectModel('image', 'other'), false);
+    assert.equal(f.store.canPay('image', 'a', '2K'), false);
+    f.auth.isLoggedIn = false; await flush();
+    assert.equal(f.store.canSelectModel('image', 'a'), false);
+  } finally { f.dispose(); }
+});
+
+for (const staleFails of [false, true]) {
+  test(`balance changes queue a fresh snapshot after an in-flight ${staleFails ? 'failure' : 'success'}`, async () => {
+    const f = await fixture();
+    try {
+      f.auth.token = 'a'; f.auth.isLoggedIn = true; await flush();
+      f.billing.account = { totalAvailable: 50 }; await flush();
+      f.billing.account = { totalAvailable: 100 }; await flush();
+      assert.equal(f.requests.length, 1, 'coalesce balance changes while a request is pending');
+      if (staleFails) f.requests[0].reject(new Error('obsolete failure'));
+      else f.requests[0].resolve(response(0));
+      await flush();
+      assert.equal(f.store.ready, false, 'the obsolete snapshot must not authorize or block a selection');
+      assert.equal(f.requests.length, 2, 'refresh immediately instead of waiting for the expiry timer');
+      f.requests[1].resolve(response(100)); await flush();
+      assert.equal(f.store.ready, true);
+      assert.equal(f.store.canPay('image', 'a', '2K', undefined, 2), true);
+    } finally { f.dispose(); }
+  });
+}
+
+test('logout cancels a queued balance refresh', async () => {
+  const f = await fixture();
+  try {
+    f.auth.token = 'a'; f.auth.isLoggedIn = true; await flush();
+    f.billing.account = { totalAvailable: 100 }; await flush();
+    f.auth.isLoggedIn = false; await flush();
+    f.requests[0].resolve(response(100)); await flush();
+    assert.equal(f.requests.length, 1);
+    assert.equal(f.store.data, null);
+    assert.equal(f.store.ready, false);
+  } finally { f.dispose(); }
+});
+
+test('unchanged account refreshes do not keep invalidating an in-flight snapshot', async () => {
+  const f = await fixture();
+  try {
+    f.billing.account = { totalAvailable: 100 }; await flush();
+    f.auth.token = 'a'; f.auth.isLoggedIn = true; await flush();
+    f.requests[0].resolve(response(100)); await flush();
+    const pending = f.store.refresh();
+    f.billing.account = { totalAvailable: 100 }; await flush();
+    f.requests[1].resolve(response(100)); await pending; await flush();
+    assert.equal(f.requests.length, 2);
+    assert.equal(f.store.ready, true);
+  } finally { f.dispose(); }
+});

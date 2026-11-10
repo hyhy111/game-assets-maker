@@ -16,7 +16,13 @@ export interface CreditUsageAccount {
   generalAvailable: number;
   bonusAvailable: number;
   totalAvailable: number;
-  buckets: { bucket: { bucketId: string; remainAmount: number; creditClass?: string }; usageSummary: string; message?: string }[];
+  buckets: {
+    bucket: { bucketId: string; remainAmount: number; creditClass?: string; usageMode?: string; effectiveFrom?: string; expireTime?: string };
+    usageSummary: string;
+    message?: string;
+    rules?: CreditCombination['context'][];
+    capabilityAvailable?: boolean;
+  }[];
 }
 interface Availability {
   combinations: CreditCombination[];
@@ -35,11 +41,13 @@ export const useCreditUsageStore = defineStore('credit-usage', () => {
   const expired = ref(true);
   let revision = 0;
   let pending: Promise<void> | null = null;
+  let refreshQueued = false;
   let timer: ReturnType<typeof setTimeout> | null = null;
   const ready = computed(() => !!data.value && !expired.value && !error.value);
   function reset() {
     revision += 1;
     pending = null;
+    refreshQueued = false;
     data.value = null;
     expired.value = true;
     error.value = '';
@@ -58,7 +66,7 @@ export const useCreditUsageStore = defineStore('credit-usage', () => {
     pending = (async () => {
       try {
         const result = await httpGet<{ data: Availability }>('/app/credit/v2/availability');
-        if (id !== revision || token !== auth.token) return;
+        if (id !== revision || token !== auth.token || refreshQueued) return;
         data.value = result.data;
         expired.value = false;
         if (timer) clearTimeout(timer);
@@ -67,14 +75,28 @@ export const useCreditUsageStore = defineStore('credit-usage', () => {
         const delay = Math.min(60_000, Math.max(250, Number.isFinite(next - asOf) ? next - asOf : 30_000));
         timer = setTimeout(() => { expired.value = true; void refresh(); }, delay);
       } catch (e) {
-        if (id !== revision) return;
+        if (id !== revision || refreshQueued) return;
         expired.value = true;
         error.value = e instanceof Error ? e.message : '积分可用范围加载失败';
       } finally {
-        if (id === revision) { loading.value = false; pending = null; }
+        if (id === revision) {
+          loading.value = false;
+          pending = null;
+          if (refreshQueued) {
+            refreshQueued = false;
+            void refresh();
+          }
+        }
       }
     })();
     return pending;
+  }
+  function invalidate() {
+    expired.value = true;
+    if (!auth.isLoggedIn) return;
+    // A balance change must not be satisfied by an older in-flight snapshot.
+    if (pending) refreshQueued = true;
+    else void refresh();
   }
   async function quote(media: 'image' | 'video', request: Record<string, unknown>) {
     const token = auth.token;
@@ -93,9 +115,28 @@ export const useCreditUsageStore = defineStore('credit-usage', () => {
   function canPay(media: string, model: string, resolution?: string, duration?: number, count = 1) {
     return ready.value && matching(media, model, resolution, duration).some(row => row.generalAvailable + row.bonusAvailable >= row.quote * count);
   }
+  function canSelectModel(media: string, model: string) {
+    if (!ready.value || !data.value) return false;
+    const rows = matching(media, model);
+    if (!rows.length) return false;
+    if (rows.some(row => row.generalAvailable > 0 || row.bonusAvailable > 0)) return true;
+    // Declared scope remains selectable after its balance is exhausted.
+    const now = new Date(data.value.asOf).getTime();
+    return data.value.account.buckets.some(({ bucket, rules, capabilityAvailable }) => {
+      if (capabilityAvailable === false) return false;
+      if (bucket.effectiveFrom && !(new Date(bucket.effectiveFrom.replace(' ', 'T')).getTime() <= now)) return false;
+      if (bucket.expireTime && !(new Date(bucket.expireTime.replace(' ', 'T')).getTime() > now)) return false;
+      if (bucket.usageMode === 'UNRESTRICTED') return true;
+      return bucket.usageMode === 'RESTRICTED' && (rules ?? []).some(rule => rows.some(({ context }) => (
+        (['platform', 'mediaType', 'model', 'resolution', 'durationSec', 'sizeLabel'] as const)
+          .every(key => (rule[key] ?? null) === (context[key] ?? null))
+      )));
+    });
+  }
   watch(() => auth.token, () => { reset(); if (auth.isLoggedIn) void refresh(); });
   watch(() => auth.isLoggedIn, loggedIn => { if (loggedIn) void refresh(); else reset(); }, { immediate: true });
-  watch(() => billing.account, () => { expired.value = true; if (auth.isLoggedIn) void refresh(); });
+  // Polling may replace the account object without changing its balance or buckets.
+  watch(() => JSON.stringify(billing.account), invalidate);
   if (typeof window !== 'undefined' && typeof document !== 'undefined') {
     window.addEventListener('focus', () => { if (auth.isLoggedIn) void refresh(); });
     document.addEventListener('visibilitychange', () => { if (!document.hidden && auth.isLoggedIn) void refresh(); });
@@ -119,5 +160,5 @@ export const useCreditUsageStore = defineStore('credit-usage', () => {
     window.addEventListener('seedance-task-updated', generationChanged);
     window.addEventListener('seedream-batch-updated', generationChanged);
   }
-  return { data, loading, error, ready, refresh, reset, quote, matching, canPay };
+  return { data, loading, error, ready, refresh, reset, quote, matching, canPay, canSelectModel };
 });

@@ -72,12 +72,17 @@
               >
                 {{ promptInfo.count }}/{{ promptInfo.limit }}
                 {{ promptInfo.chinese ? t('seedream.ui.characters') : t('seedream.ui.words') }}
-                <span
+                <I18nT
+                  keypath="seedream.create.promptSuggestion"
+                  tag="span"
+                  scope="global"
                   class="pointer-events-none absolute right-0 top-full z-50 mt-2 hidden w-64 rounded-xl border border-white/10 bg-[#222329] px-3 py-2 text-left text-xs font-normal leading-5 text-gray-300 shadow-2xl shadow-black/40 group-hover:block"
                   data-test="seedream-prompt-suggestion"
                 >
-                  {{ t('seedream.create.promptSuggestion') }}
-                </span>
+                  <template #noTruncation>
+                    <span class="text-primary">{{ t('seedream.create.promptNoTruncation') }}</span>
+                  </template>
+                </I18nT>
               </p>
             </div>
           </div>
@@ -195,7 +200,7 @@
                     type="button"
                     class="rounded-lg px-3 py-2 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-30"
                     :class="form.resolution === resolution ? 'bg-primary/20 text-primary-200 shadow-sm' : 'text-gray-400 hover:bg-white/[0.05] hover:text-gray-200'"
-                    :disabled="!supportedResolutions.includes(resolution) || (platformGenerationSelected && !creditUsage.canPay('image', form.model, resolution, undefined, form.count))"
+                    :disabled="!supportedResolutions.includes(resolution)"
                     :aria-pressed="form.resolution === resolution"
                     :data-value="resolution"
                     @click="form.resolution = resolution"
@@ -241,7 +246,7 @@
               <p v-if="quoteLoading" class="text-sm text-gray-500">{{ t('aiCreation.platformQuoteLoading') }}</p>
               <p v-else-if="platformQuoteTotal !== null" class="text-sm text-gray-300">{{ t('aiCreation.estimatedCredits', { credits: platformQuoteTotal }) }}</p>
               <p v-else-if="creditUsage.error" class="max-w-[16rem] text-xs leading-5 text-warning">{{ t('creditUsage.unavailable') }} <button type="button" class="underline" @click="creditUsage.refresh()">{{ t('creditUsage.refresh') }}</button></p>
-              <p v-else-if="quoteError" class="max-w-[16rem] text-xs leading-5 text-warning">{{ t('aiCreation.platformQuoteFailed', { message: quoteError }) }}</p>
+              <p v-else-if="quoteError" class="max-w-[16rem] text-xs leading-5 text-primary">{{ quoteError }}</p>
               <p v-else class="text-sm text-gray-500">{{ t('aiCreation.creditsUnavailable') }}</p>
             </div>
             <CreationModelSelect
@@ -255,7 +260,7 @@
             <button
               type="submit"
               class="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#ffbd5c] text-[#242424] transition hover:bg-[#ffc975] disabled:cursor-not-allowed disabled:bg-[#4a4a4a] disabled:text-[#777]"
-              :disabled="submitting || platformConfirmBlocked || capabilitiesBlocked || !form.prompt.trim()"
+              :disabled="submitting || platformSubmitBlocked || capabilitiesBlocked || !form.prompt.trim()"
               :aria-label="t('seedream.create.createBatch')"
               :title="t('seedream.create.createBatch')"
               data-test="seedream-submit"
@@ -352,7 +357,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { ArrowUp, Check, ChevronDown, Copy, Settings2 } from 'lucide-vue-next';
-import { useI18n } from 'vue-i18n';
+import { Translation as I18nT, useI18n } from 'vue-i18n';
 import { hasImageDrop, readImageDrop, type SeedreamImageDragPayload } from '@/seedream-image-drag';
 import { useRoute, useRouter } from 'vue-router';
 import DraftClearConfirmation from '@/components/ai-creation/DraftClearConfirmation.vue';
@@ -401,6 +406,8 @@ const emit = defineEmits<{
 
 const { t } = useI18n();
 const route = useRoute();
+// Mode switches share a URL, so restoration parameters belong to the entry mode.
+const draftQuery = route.query.mode === 'video' ? {} : { ...route.query };
 const router = useRouter();
 const store = useSeedreamStore();
 const keySettingsStore = useSeedanceStore();
@@ -423,7 +430,11 @@ const localImageModelOptions = (): ModelOption[] => [
 ];
 const modelOptions = computed<ModelOption[]>(() => (
   platformGenerationSelected.value
-    ? platformModelOptions(platformImageModels.value).map(option => ({ ...option, disabled: !creditUsage.canPay('image', option.value), reason: creditUsage.canPay('image', option.value) ? '' : t(creditUsage.ready ? 'creditUsage.optionUnavailable' : 'creditUsage.loading') }))
+    ? platformModelOptions(platformImageModels.value).map(option => ({
+      ...option,
+      disabled: !creditUsage.canSelectModel('image', option.value),
+      reason: creditUsage.canSelectModel('image', option.value) ? '' : t(creditUsage.ready ? 'creditUsage.modelNotApplicable' : 'creditUsage.loading'),
+    }))
     : localImageModelOptions()
 ));
 
@@ -447,6 +458,7 @@ const showCreditEstimate = computed(() => (
 const quoteReady = computed(() => (
   platformGenerationSelected.value && authStore.isLoggedIn && modelDefaultsReady.value
   && !capabilitiesBlocked.value && !workspace.capabilitiesLoading && creditUsage.ready
+  && creditUsage.canSelectModel('image', form.model)
 ));
 // 平台源报价：单价来自服务端（model + size），总数 = 单价 × 生成数量（N 张 = N 个平台任务）。
 const quoteLoading = ref(false);
@@ -456,12 +468,13 @@ const platformQuoteTotal = computed(() => (
   quoteUnit.value === null ? null : quoteUnit.value * form.count
 ));
 const platformConfirmBlocked = computed(() => platformGenerationSelected.value && (!creditUsage.canPay('image', form.model, form.resolution, undefined, form.count) || quoteLoading.value || !!quoteError.value || quoteUnit.value === null));
+const platformSubmitBlocked = computed(() => authStore.isLoggedIn && platformConfirmBlocked.value);
 const QUOTE_DEBOUNCE_MS = 350;
 let quoteTimer: ReturnType<typeof setTimeout> | null = null;
 let quoteRequestId = 0;
 
 function quoteSignature() {
-  return [form.model, form.resolution].join('|');
+  return [form.model, form.resolution, form.count].join('|');
 }
 
 async function refreshPlatformQuote() {
@@ -478,8 +491,13 @@ async function refreshPlatformQuote() {
   let paymentError = '';
   try {
     const result = await creditUsage.quote('image', { model: form.model, size: form.resolution });
-    if (result.canSubmit) data = result; else paymentError = result.message;
-  } catch (error) { paymentError = error instanceof Error ? error.message : t('creditUsage.unavailable'); }
+    if (result.canSubmit && creditUsage.canPay('image', form.model, form.resolution, undefined, form.count)) data = result;
+    else paymentError = t('aiCreation.insufficientCredits', { credits: result.quote * form.count });
+  } catch (error) {
+    paymentError = t('aiCreation.platformQuoteFailed', {
+      message: error instanceof Error ? error.message : t('creditUsage.unavailable'),
+    });
+  }
   // 只接受最后一次请求的结果，避免快速切模型时旧响应覆盖新报价。
   if (requestId !== quoteRequestId) return;
   quoteLoading.value = false;
@@ -567,29 +585,6 @@ function clampToPlatformModel() {
 }
 const paidConfirmationEnabled = computed(() => configStore.config?.paid_generation_confirmation_enabled !== false);
 
-// Only an untouched initial draft may receive an automatic payable default.
-const initialSelectionPending = ref(!workspace.imageInitialized && !form.prompt && !form.reference_image && !route.query.regenerate && !route.query.continue && !route.query.handoff);
-let initialDraftSignature = '';
-watch(
-  () => [modelDefaultsReady.value, creditUsage.ready, creditUsage.data?.asOf, platformGenerationSelected.value, platformImageModels.value],
-  () => {
-    if (!initialSelectionPending.value || !initialDraftSignature || !modelDefaultsReady.value || !platformGenerationSelected.value || !creditUsage.ready || !platformImageModels.value.length) return;
-    initialSelectionPending.value = false;
-    const original = JSON.parse(initialDraftSignature);
-    const automaticModel = form.model === original.model || form.model === store.settings?.default_model_id || form.model === store.settings?.default_model;
-    if (!automaticModel || Object.keys(original).some(key => key !== 'model' && (form as unknown as Record<string, unknown>)[key] !== original[key])) return;
-    const current = creditUsage.canPay('image', form.model, form.resolution, undefined, form.count);
-    if (current) return;
-    const next = creditUsage.data?.combinations.find(row => row.context.mediaType === 'image'
-      && platformImageModels.value.some(model => model.model === row.context.model)
-      && creditUsage.canPay('image', row.context.model, row.context.sizeLabel ?? undefined, undefined, form.count));
-    if (!next) return;
-    form.model = next.context.model as typeof form.model;
-    form.resolution = next.context.sizeLabel as typeof form.resolution;
-  },
-  { flush: 'post' },
-);
-
 onMounted(async () => {
   if (!store.settings) {
     await store.loadSettings();
@@ -604,10 +599,9 @@ onMounted(async () => {
     resolution: correctResolution(settings?.default_model ?? 'pro', settings?.default_resolution ?? '2K'),
     ratio: settings?.default_ratio ?? '16:9',
   }, settings?.default_model_id);
-  initialDraftSignature = JSON.stringify(form);
   modelDefaultsReady.value = true;
   if (!platformGenerationSelected.value) fixResolution();
-  const regenerateId = typeof route.query.regenerate === 'string' ? route.query.regenerate : '';
+  const regenerateId = typeof draftQuery.regenerate === 'string' ? draftQuery.regenerate : '';
   if (regenerateId) {
     // Restore an editable draft from a previous batch. This does NOT call
     // ImageGenerations or create a new batch - the user must confirm again.
@@ -658,8 +652,15 @@ function clearReferenceImage() {
   workspace.imagePreviewUrls.reference = '';
 }
 
+watch(() => [modelDefaultsReady.value, platformGenerationSelected.value, modelOptions.value, form.model], () => {
+  if (!modelDefaultsReady.value || !platformGenerationSelected.value || !creditUsage.ready) return;
+  if (modelOptions.value.some(option => option.value === form.model && !option.disabled)) return;
+  const next = modelOptions.value.find(option => !option.disabled);
+  if (next) selectModel(next.value);
+});
+
 function selectModel(model: string) {
-  initialSelectionPending.value = false;
+  if (platformGenerationSelected.value && !creditUsage.canSelectModel('image', model)) return;
   form.model = model as SeedreamModel;
   if (platformGenerationSelected.value) clampToPlatformModel();
   else fixResolution();
@@ -703,6 +704,7 @@ async function copyPrompt() {
 
 async function submit() {
   if (submitting.value || confirmModal.value) return;
+  if (platformSubmitBlocked.value) return;
   if (capabilitiesBlocked.value) return;
   if (!form.prompt.trim()) return;
   if (!ensureGenerationAccess()) return;

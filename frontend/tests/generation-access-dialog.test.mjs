@@ -30,7 +30,7 @@ test('both composers guard creation before calling the backend preflight or task
     readFile(new URL('../src/views/SeedanceCreate.vue', import.meta.url), 'utf8'),
   ]);
   assert.match(image, /if \(!ensureGenerationAccess\(\)\) return;/);
-  // 平台源请求覆盖 return_last_frame；其余与 ensureGenerationAccess 之后立即构造。
+  // Build the request only after generation access is granted.
   assert.match(video, /if \(!ensureGenerationAccess\(\)\) return;[\s\S]{0,200}createRequest\(form\)/);
   assert.match(image, /keySettingsStore\.settings\?\.api_key_configured/);
   assert.match(video, /store\.settings\?\.api_key_configured/);
@@ -86,8 +86,8 @@ test('ForFuner AI is shared by both composers and submits through the platform s
   }
   assert.match(workspaceStore, /const generationSource = ref<GenerationSource>\('api-key'\)/);
   assert.match(workspaceStore, /function setGenerationSource\(source: GenerationSource\)/);
-  // 平台源不再硬拦截提交：视频无条件请求尾帧（平台统一返回）+ 来源透传，图片按来源建批。
-  assert.match(video, /platformGenerationSelected\.value\s*\? \{ \.\.\.createRequest\(form\), return_last_frame: true \}/);
+  // Both sources preserve the editable return-frame option.
+  assert.match(video, /const request = createRequest\(form\);/);
   assert.match(video, /store\.validateRequest\(request, workspace\.generationSource\)/);
   assert.match(video, /store\.createTask\(request, source\)/);
   assert.doesNotMatch(image, /if \(platformGenerationSelected\.value\) return;/);

@@ -120,7 +120,7 @@ test('both composers block submit and offer a retry when capabilities are missin
   ]);
   for (const file of [video, image]) {
     assert.match(file, /if \(capabilitiesBlocked\.value\) return;/);
-    assert.match(file, /:disabled="submitting \|\| platformConfirmBlocked \|\| capabilitiesBlocked \|\|/);
+    assert.match(file, /:disabled="submitting \|\| platformSubmitBlocked \|\| capabilitiesBlocked \|\|/);
     assert.match(file, /-capabilities-blocked/);
     assert.match(file, /@click="reloadCapabilities\(\)"/);
     // 失败展示后端原文，未就绪展示"获取中"
@@ -218,9 +218,9 @@ test('the composer reads durations by resolution without overwriting the selecte
   // Duration options come from the current resolution rather than a model-level union.
   assert.match(text, /durationsByResolution\?\.\[form\.resolution\]/);
   assert.match(text, /entry\.durationsByResolution\?\.\[form\.resolution\]/);
-  // Capability refreshes preserve the draft; unavailable combinations are guarded by payment and quote checks.
+  // Capability refreshes preserve the draft; payment checks guard submission.
   assert.doesNotMatch(text, /watch\(\(\) => form\.resolution/);
-  assert.match(text, /creditUsage\.canPay\('video', form\.model, form\.resolution, form\.duration\)/);
+  assert.match(text, /if \(platformSubmitBlocked\.value\) return;/);
   // The legacy model-level durations field must not drive the options.
   assert.doesNotMatch(text, /entry\?\.durations/);
 });

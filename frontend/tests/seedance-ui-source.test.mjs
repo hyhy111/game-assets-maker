@@ -144,7 +144,7 @@ test('Seedance preview and create retain protected actions and preflight guards'
   assert.match(create, /const draftLoadFailed = ref\(false\)/);
   assert.match(create, /if \(!source\) \{\s*draftLoadFailed\.value = true/);
   // capabilitiesBlocked：平台源下能力清单未就绪/拉取失败时一并禁用提交（见 4.1）
-  assert.match(create, /:disabled="submitting \|\| platformConfirmBlocked \|\| capabilitiesBlocked \|\| draftLoadFailed \|\| !form\.first_frame \|\| !form\.prompt\.trim\(\)"/);
+  assert.match(create, /:disabled="submitting \|\| platformSubmitBlocked \|\| capabilitiesBlocked \|\| draftLoadFailed \|\| !form\.first_frame \|\| !form\.prompt\.trim\(\)"/);
   assert.match(create, /const submitting = ref\(false\)/);
   assert.match(create, /if \(submitting\.value\) return/);
   assert.match(create, /form\.first_frame = request\.first_frame/);

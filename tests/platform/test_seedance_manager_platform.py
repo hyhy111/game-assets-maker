@@ -176,12 +176,13 @@ def test_create_unauthorized_raises_for_relogin(manager, platform, platform_requ
     assert task.error["code"] == "UNAUTHORIZED"
 
 
-def test_create_accepts_return_last_frame_and_asks_platform(manager, platform, platform_request):
-    platform_request.return_last_frame = True
+@pytest.mark.parametrize("return_last_frame", [True, False])
+def test_create_preserves_return_last_frame_option(manager, platform, platform_request, return_last_frame):
+    platform_request.return_last_frame = return_last_frame
     result = manager.create(platform_request)
     task = manager._repository.get(result["local_id"])
     assert task.remote_status == "queued"
-    assert platform.created_payloads[0]["return_last_frame"] is True
+    assert platform.created_payloads[0]["return_last_frame"] is return_last_frame
 
 
 @pytest.mark.parametrize(

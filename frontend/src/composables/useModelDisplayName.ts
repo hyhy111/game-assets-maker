@@ -54,12 +54,12 @@ export function useModelDisplayName() {
     if (auth.isLoggedIn) void workspace.ensureCapabilities();
   });
 
-  function modelName(model: string | null | undefined, kind: MediaKind): string {
+  function modelName(model: string | null | undefined, kind?: MediaKind): string {
     if (!model) return '';
     const fromServer = serverDisplayName(workspace.capabilities, model);
     if (fromServer) return fromServer;
 
-    const key = LOCAL_LABEL_KEYS[kind][model];
+    const key = kind ? LOCAL_LABEL_KEYS[kind][model] : (LOCAL_LABEL_KEYS.video[model] ?? LOCAL_LABEL_KEYS.image[model]);
     if (key) {
       const text = t(key);
       // t() 在词条缺失时返回 key 本身——那种情况下退回模型标识，别把 key 当文案渲染

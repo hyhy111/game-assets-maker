@@ -30,3 +30,38 @@ test('model scope belongs to its card and expiry does not repeat the balance', a
   assert.match(html, /2099-01-01 到期/);
   assert.doesNotMatch(html, /billing\.expiresAt/);
 });
+
+test('credit scope summary and expanded rows use the same model names as the creation catalog', async () => {
+  const video = 'doubao-seedance-2-0-mini-260615';
+  const image = 'doubao-seedream-5-0-pro-260628';
+  const ssrContext = {};
+  const html = await renderSfc('components/layout/CreditBucketRow.vue', {
+    props: {
+      bucket: { bucketId: 'bonus', totalAmount: 500, remainAmount: 340 },
+      scope: `${video} · 480p / 4秒；${video} · 720p / 4秒；${image} · 2K；future-model · 1K`,
+    },
+    piniaState: { 'ai-creation': { capabilities: {
+      video: { models: [{ model: video, displayName: 'Seedance2.0 Mini' }] },
+      image: { models: [{ model: image, displayName: 'Seedream 5.0 Pro' }] },
+    } } },
+    configureSetup(bindings) { bindings.scopeOpen.value = true; },
+    ssrContext,
+  });
+  const tooltip = ssrContext.teleports.body;
+  for (const content of [html, tooltip]) {
+    assert.match(content, /Seedance2\.0 Mini/);
+    assert.match(content, /Seedream 5\.0 Pro/);
+    assert.match(content, /480p \/ 4秒；720p \/ 4秒/);
+    assert.match(content, /future-model/);
+    assert.ok(!content.includes(video));
+    assert.ok(!content.includes(image));
+  }
+});
+
+test('credit scope can resolve local image and video model keys without a media kind', async () => {
+  const html = await renderSfc('components/layout/CreditBucketRow.vue', {
+    props: { bucket: { bucketId: 'legacy', totalAmount: 100, remainAmount: 100 }, scope: 'mini · 720p；pro · 2K' },
+  });
+  assert.match(html, /Seedance2\.0 Mini/);
+  assert.match(html, /Seedream 5\.0 Pro/);
+});

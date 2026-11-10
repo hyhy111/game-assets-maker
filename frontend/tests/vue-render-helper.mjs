@@ -106,6 +106,7 @@ export async function renderSfc(path, {
   route = '/',
   piniaState = {},
   configureSetup,
+  ssrContext,
 } = {}) {
   const server = await getVite();
   const module = await server.ssrLoadModule(`/src/${path}`);
@@ -150,7 +151,7 @@ export async function renderSfc(path, {
       en: withSeedreamTestMessages(en, 'en'),
     },
   }));
-  return renderToString(app);
+  return renderToString(app, ssrContext);
 }
 
 export async function closeSfcRenderer() {

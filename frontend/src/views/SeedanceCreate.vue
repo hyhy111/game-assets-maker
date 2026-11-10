@@ -101,12 +101,17 @@
               >
                 {{ promptInfo.count }}/{{ promptInfo.limit }}
                 {{ promptInfo.chinese ? t('seedance.ui.characters') : t('seedance.ui.words') }}
-                <span
+                <I18nT
+                  keypath="seedance.create.promptSuggestion"
+                  tag="span"
+                  scope="global"
                   class="pointer-events-none absolute right-0 top-full z-50 mt-2 hidden w-64 rounded-xl border border-white/10 bg-[#222329] px-3 py-2 text-left text-xs font-normal leading-5 text-gray-300 shadow-2xl shadow-black/40 group-hover:block"
                   data-test="seedance-prompt-suggestion"
                 >
-                  {{ t('seedance.create.promptSuggestion') }}
-                </span>
+                  <template #noTruncation>
+                    <span class="text-primary">{{ t('seedance.create.promptNoTruncation') }}</span>
+                  </template>
+                </I18nT>
               </p>
             </div>
           </div>
@@ -212,10 +217,10 @@
                       type="button"
                       class="rounded-lg px-2 py-2 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-30"
                       :class="form.resolution === resolution ? 'bg-primary/20 text-primary-200 shadow-sm' : 'text-gray-400 hover:bg-white/[0.05] hover:text-gray-200'"
-                      :disabled="!supportedResolutions.includes(resolution) || (platformGenerationSelected && !creditUsage.canPay('video', form.model, resolution))"
+                      :disabled="!supportedResolutions.includes(resolution)"
                       :aria-pressed="form.resolution === resolution"
                       :data-value="resolution"
-                      @click="form.resolution = resolution"
+                      @click="selectResolution(resolution)"
                     >
                       {{ resolution }}
                     </button>
@@ -259,7 +264,6 @@
                             v-slot="{ active, selected }"
                             as="template"
                             :value="duration"
-                            :disabled="platformGenerationSelected && !creditUsage.canPay('video', form.model, form.resolution, duration)"
                           >
                             <li
                               class="flex cursor-pointer items-center justify-between gap-4 rounded-lg px-3 py-2 text-sm whitespace-nowrap"
@@ -269,7 +273,7 @@
                                   ? 'bg-[#303030] text-white'
                                   : 'text-gray-400'"
                             >
-                              <span>{{ duration }}s <small v-if="platformGenerationSelected && !creditUsage.canPay('video', form.model, form.resolution, duration)" class="text-gray-500">{{ t('creditUsage.optionUnavailable') }}</small></span>
+                              <span>{{ duration }}s</span>
                               <Check
                                 v-if="selected"
                                 :size="14"
@@ -289,7 +293,7 @@
               <div class="mt-4 flex flex-wrap gap-x-8 gap-y-4 border-t border-white/[0.06] pt-4">
                 <Switch v-model="form.generate_audio" :label="t('seedance.create.generateAudio')" />
                 <div>
-                  <Switch v-model="form.return_last_frame" :disabled="platformGenerationSelected" :label="t('seedance.create.returnLastFrame')" />
+                  <Switch v-model="form.return_last_frame" :label="t('seedance.create.returnLastFrame')" />
                 </div>
               </div>
 
@@ -310,7 +314,7 @@
               <p v-if="quoteLoading" class="text-sm text-gray-500">{{ t('aiCreation.platformQuoteLoading') }}</p>
               <p v-else-if="quoteValue !== null" class="text-sm text-gray-300">{{ t('aiCreation.estimatedCredits', { credits: quoteValue }) }}</p>
               <p v-else-if="creditUsage.error" class="max-w-[16rem] text-xs leading-5 text-warning">{{ t('creditUsage.unavailable') }} <button type="button" class="underline" @click="creditUsage.refresh()">{{ t('creditUsage.refresh') }}</button></p>
-              <p v-else-if="quoteError" class="max-w-[16rem] text-xs leading-5 text-warning">{{ t('aiCreation.platformQuoteFailed', { message: quoteError }) }}</p>
+              <p v-else-if="quoteError" class="max-w-[16rem] text-xs leading-5 text-primary">{{ quoteError }}</p>
               <p v-else class="text-sm text-gray-500">{{ t('aiCreation.creditsUnavailable') }}</p>
             </div>
             <CreationModelSelect
@@ -324,7 +328,7 @@
             <button
               type="submit"
               class="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#ffbd5c] text-[#242424] transition hover:bg-[#ffc975] disabled:cursor-not-allowed disabled:bg-[#4a4a4a] disabled:text-[#777]"
-              :disabled="submitting || platformConfirmBlocked || capabilitiesBlocked || draftLoadFailed || !form.first_frame || !form.prompt.trim()"
+              :disabled="submitting || platformSubmitBlocked || capabilitiesBlocked || draftLoadFailed || !form.first_frame || !form.prompt.trim()"
               :aria-label="t('seedance.create.createTask')"
               :title="t('seedance.create.createTask')"
               data-test="seedance-submit"
@@ -395,7 +399,7 @@
         </ol>
         <div v-if="platformGenerationSelected" class="mt-4 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm" data-test="seedance-platform-quote" aria-live="polite">
           <p v-if="quoteLoading" class="text-gray-400">{{ t('aiCreation.platformQuoteLoading') }}</p>
-          <p v-else-if="quoteError" class="text-danger">{{ t('aiCreation.platformQuoteFailed', { message: quoteError }) }}</p>
+          <p v-else-if="quoteError" class="text-primary">{{ quoteError }}</p>
           <p v-else-if="quoteValue !== null" class="text-gray-200">{{ t('aiCreation.platformQuote', { credits: quoteValue }) }}</p>
         </div>
         <div class="mt-5 flex justify-end gap-3">
@@ -424,7 +428,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { Listbox, ListboxButton, ListboxOption, ListboxOptions } from '@headlessui/vue';
 import { ArrowRight, ArrowUp, Check, ChevronDown, Copy, Settings2 } from 'lucide-vue-next';
-import { useI18n } from 'vue-i18n';
+import { Translation as I18nT, useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 import DraftClearConfirmation from '@/components/ai-creation/DraftClearConfirmation.vue';
 import GenerationAccessDialog from '@/components/ai-creation/GenerationAccessDialog.vue';
@@ -476,6 +480,8 @@ const emit = defineEmits<{
 
 const { t } = useI18n();
 const route = useRoute();
+// Mode switches share a URL, so restoration parameters belong to the entry mode.
+const draftQuery = route.query.mode === 'image' ? {} : { ...route.query };
 const router = useRouter();
 const store = useSeedanceStore();
 const configStore = useConfigStore();
@@ -518,7 +524,11 @@ const localVideoModelOptions = (): ModelOption[] => [
 ];
 const modelOptions = computed<ModelOption[]>(() => (
   platformGenerationSelected.value
-    ? platformModelOptions(platformVideoModels.value).map(option => ({ ...option, disabled: !creditUsage.canPay('video', option.value), reason: creditUsage.canPay('video', option.value) ? '' : t(creditUsage.ready ? 'creditUsage.optionUnavailable' : 'creditUsage.loading') }))
+    ? platformModelOptions(platformVideoModels.value).map(option => ({
+      ...option,
+      disabled: !creditUsage.canSelectModel('video', option.value),
+      reason: creditUsage.canSelectModel('video', option.value) ? '' : t(creditUsage.ready ? 'creditUsage.modelNotApplicable' : 'creditUsage.loading'),
+    }))
     : localVideoModelOptions()
 ));
 const form: CreateForm = workspace.videoDraft;
@@ -542,14 +552,16 @@ const showCreditEstimate = computed(() => (
 const quoteReady = computed(() => (
   platformGenerationSelected.value && authStore.isLoggedIn && modelDefaultsReady.value
   && !capabilitiesBlocked.value && !workspace.capabilitiesLoading && creditUsage.ready
+  && creditUsage.canSelectModel('video', form.model)
 ));
 // 平台源报价（quote-preview）：编辑页参数一变就刷新，弹窗确认前必须有值。
 const quoteLoading = ref(false);
 const quoteValue = ref<number | null>(null);
 const quoteError = ref('');
 const platformConfirmBlocked = computed(() => (
-  platformGenerationSelected.value && (quoteLoading.value || quoteError.value !== '' || quoteValue.value === null)
+  platformGenerationSelected.value && (!creditUsage.canSelectModel('video', form.model) || quoteLoading.value || quoteError.value !== '' || quoteValue.value === null)
 ));
+const platformSubmitBlocked = computed(() => authStore.isLoggedIn && platformConfirmBlocked.value);
 const QUOTE_DEBOUNCE_MS = 350;
 let quoteTimer: ReturnType<typeof setTimeout> | null = null;
 let quoteRequestId = 0;
@@ -577,8 +589,13 @@ async function refreshPlatformQuote() {
   let paymentError = '';
   try {
     const result = await creditUsage.quote('video', { model: form.model, resolution: form.resolution, duration: form.duration, ratio: form.ratio, generate_audio: form.generate_audio, content: [{ type: 'text', text: 'quote' }] });
-    if (result.canSubmit) data = result; else paymentError = result.message;
-  } catch (error) { paymentError = error instanceof Error ? error.message : t('creditUsage.unavailable'); }
+    if (result.canSubmit) data = result;
+    else paymentError = t('aiCreation.insufficientCredits', { credits: result.quote });
+  } catch (error) {
+    paymentError = t('aiCreation.platformQuoteFailed', {
+      message: error instanceof Error ? error.message : t('creditUsage.unavailable'),
+    });
+  }
   // 只接受最后一次请求的结果，避免快速切参数时旧响应覆盖新报价。
   if (requestId !== quoteRequestId) return;
   quoteLoading.value = false;
@@ -644,30 +661,6 @@ async function copyPrompt() {
   }
 }
 
-// Only an untouched initial draft may receive an automatic payable default.
-const initialSelectionPending = ref(!workspace.videoInitialized && !form.prompt && !form.first_frame && !form.last_frame && !route.query.regenerate && !route.query.continue && !route.query.handoff);
-let initialDraftSignature = '';
-watch(
-  () => [modelDefaultsReady.value, creditUsage.ready, creditUsage.data?.asOf, platformGenerationSelected.value, platformVideoModels.value],
-  () => {
-    if (!initialSelectionPending.value || !initialDraftSignature || !modelDefaultsReady.value || !platformGenerationSelected.value || !creditUsage.ready || !platformVideoModels.value.length) return;
-    initialSelectionPending.value = false;
-    const original = JSON.parse(initialDraftSignature);
-    const automaticModel = form.model === original.model || form.model === store.settings?.default_model_id || form.model === store.settings?.default_model;
-    if (!automaticModel || Object.keys(original).some(key => key !== 'model' && (form as unknown as Record<string, unknown>)[key] !== original[key])) return;
-    const current = creditUsage.canPay('video', form.model, form.resolution, form.duration);
-    if (current) return;
-    const next = creditUsage.data?.combinations.find(row => row.context.mediaType === 'video'
-      && platformVideoModels.value.some(model => model.model === row.context.model)
-      && creditUsage.canPay('video', row.context.model, row.context.resolution ?? undefined, row.context.durationSec ?? undefined));
-    if (!next) return;
-    form.model = next.context.model as typeof form.model;
-    form.resolution = next.context.resolution as typeof form.resolution;
-    form.duration = next.context.durationSec as typeof form.duration;
-  },
-  { flush: 'post' },
-);
-
 onMounted(async () => {
   await store.loadSettings();
   const settings = store.settings;
@@ -685,18 +678,13 @@ onMounted(async () => {
     workspace.initializeVideoDraft(defaultVideoDraft());
   }
   modelDefaultsReady.value = true;
-  if (platformGenerationSelected.value) {
-    // Platform jobs always return the last frame without resetting restored parameters.
-    form.return_last_frame = true;
-  }
-  initialDraftSignature = JSON.stringify(form);
 
-  const regenerateId = typeof route.query.regenerate === 'string' ? route.query.regenerate : '';
-  const continuationId = typeof route.query.continue === 'string' ? route.query.continue : '';
+  const regenerateId = typeof draftQuery.regenerate === 'string' ? draftQuery.regenerate : '';
+  const continuationId = typeof draftQuery.continue === 'string' ? draftQuery.continue : '';
 
-  const handoffId = typeof route.query.handoff === 'string' ? route.query.handoff : '';
+  const handoffId = typeof draftQuery.handoff === 'string' ? draftQuery.handoff : '';
   if (handoffId) {
-    const attemptIndex = Number.parseInt(String(route.query.attempt ?? '0'), 10) || 0;
+    const attemptIndex = Number.parseInt(String(draftQuery.attempt ?? '0'), 10) || 0;
     if (!await workspace.handoffCandidateToVideo(handoffId, attemptIndex)) {
       draftLoadFailed.value = true;
       handoffLoadFailed.value = true;
@@ -724,9 +712,6 @@ onMounted(async () => {
   form.return_last_frame = request.return_last_frame ?? form.return_last_frame;
   previewUrls.first_frame = source.preview_urls.first_frame ?? '';
   previewUrls.last_frame = source.preview_urls.last_frame ?? '';
-  if (platformGenerationSelected.value) {
-    form.return_last_frame = true;
-  }
 });
 
 function clearDraft() {
@@ -797,11 +782,28 @@ function clampToPlatformModel() {
   }
 }
 
+watch(() => [modelDefaultsReady.value, platformGenerationSelected.value, modelOptions.value, form.model], () => {
+  if (!modelDefaultsReady.value || !platformGenerationSelected.value || !creditUsage.ready) return;
+  if (modelOptions.value.some(option => option.value === form.model && !option.disabled)) return;
+  const next = modelOptions.value.find(option => !option.disabled);
+  if (next) selectModel(next.value);
+});
+
 function selectModel(model: string) {
-  initialSelectionPending.value = false;
+  if (platformGenerationSelected.value && !creditUsage.canSelectModel('video', model)) return;
   form.model = model as SeedanceModel;
   if (platformGenerationSelected.value) clampToPlatformModel();
   else fixResolution();
+}
+
+function selectResolution(resolution: SeedanceResolution) {
+  if (platformGenerationSelected.value) {
+    if (!supportedResolutions.value.includes(resolution)) return;
+    const durations = platformModelEntry.value?.durationsByResolution?.[resolution] ?? [];
+    if (!durations.length) return;
+    if (!durations.includes(form.duration)) form.duration = durations[0] as CreateForm['duration'];
+  }
+  form.resolution = resolution;
 }
 
 // 切模型/分辨率/时长/比例/音频都刷新平台报价（仅平台源）。
@@ -941,6 +943,7 @@ function safeCode(code: string) {
 
 async function submit() {
   if (submitting.value) return;
+  if (platformSubmitBlocked.value) return;
   if (paidConfirmModal.value) return;
   if (capabilitiesBlocked.value) return;
   submitting.value = true;
@@ -952,9 +955,7 @@ async function submit() {
     return;
   }
   if (!ensureGenerationAccess()) return;
-  const request = platformGenerationSelected.value
-    ? { ...createRequest(form), return_last_frame: true }
-    : createRequest(form);
+  const request = createRequest(form);
   const preflight = await store.validateRequest(request, workspace.generationSource);
   if (!preflight) {
     const error = store.error;
@@ -1007,9 +1008,7 @@ function selectGenerationSource(source: string) {
   const next = source as GenerationSource;
   workspace.setGenerationSource(next);
   if (next === 'forfuner-ai') {
-    // 参数收敛：平台源强制重置越界值（后端同样校验，双保险）。
-    // 尾帧由平台无条件返回，开关只读显示为开启。
-    form.return_last_frame = true;
+    // Keep the selected return-frame option when switching generation sources.
     clampToPlatformModel();
   } else {
     // Restore the saved API-key default when the current ID belongs to the platform.

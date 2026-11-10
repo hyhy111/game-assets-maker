@@ -30,7 +30,7 @@ test('SeedanceCreate delegates a handoff query to the shared creation-session ac
   ]);
 
   // Detects handoff query param.
-  assert.match(source, /route\.query\.handoff/);
+  assert.match(source, /draftQuery\.handoff/);
   assert.match(source, /workspace\.handoffCandidateToVideo\(handoffId, attemptIndex\)/);
   // The shared action keeps the safe local-path and thumbnail API boundary.
   assert.match(workspaceSource, /api\.seedream\.getHandoffImage/);
@@ -85,7 +85,7 @@ test('SeedanceCreate submit remains guarded by paid confirmation, first_frame an
   );
 
   // The submit button stays disabled when draftLoadFailed, first_frame, or prompt is missing.
-  assert.match(source, /:disabled="submitting \|\| platformConfirmBlocked \|\| capabilitiesBlocked \|\| draftLoadFailed \|\| !form\.first_frame \|\| !form\.prompt\.trim\(\)"/);
+  assert.match(source, /:disabled="submitting \|\| platformSubmitBlocked \|\| capabilitiesBlocked \|\| draftLoadFailed \|\| !form\.first_frame \|\| !form\.prompt\.trim\(\)"/);
   // The paid confirmation action delegates to the single guarded task-creation helper.
   const confirmMatch = source.match(/async function confirmPaidAction\(\)\s*\{[\s\S]*?\n\}/);
   assert.ok(confirmMatch, 'confirmPaidAction function should exist');
