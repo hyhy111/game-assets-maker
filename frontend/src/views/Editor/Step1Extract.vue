@@ -152,6 +152,7 @@ import { api } from '@/api';
 import type { VideoInfo } from '@/types';
 import Button from '@/components/common/Button.vue';
 import Input from '@/components/common/Input.vue';
+import { logEvent } from '@/debug/request-log';
 
 const projectStore = useProjectStore();
 const processStore = useProcessStore();
@@ -201,7 +202,7 @@ onMounted(async () => {
       );
     }
   } catch (e) {
-    console.error('Failed to load video info:', e);
+    logEvent(['Failed to load video info:', e].join(' '), 'error');
   }
 });
 

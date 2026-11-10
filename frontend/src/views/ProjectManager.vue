@@ -1006,6 +1006,7 @@ import Select from '@/components/common/Select.vue';
 import Header from '@/components/layout/Header.vue';
 import ProjectManagerHero from '@/components/project-manager/ProjectManagerHero.vue';
 import LibraryItemMenu from '@/components/project-manager/LibraryItemMenu.vue';
+import { logEvent } from '@/debug/request-log';
 
 const router = useRouter();
 const projectStore = useProjectStore();
@@ -1450,7 +1451,7 @@ async function loadPreviewFrames(project: Project) {
     previewIndexes.value = { ...previewIndexes.value, [project.id]: 0 };
     return frames;
   } catch (error) {
-    console.error('Failed to load project preview:', error);
+    logEvent(['Failed to load project preview:', error].join(' '), 'error');
     return [];
   } finally {
     if ((previewVersions.get(project.id) ?? 0) === version) {
@@ -1536,7 +1537,7 @@ async function openProject(project: Project) {
 
     router.push('/editor');
   } catch (e) {
-    console.error('Failed to preload project frames:', e);
+    logEvent(['Failed to preload project frames:', e].join(' '), 'error');
     // Still navigate so user isn't stuck
     router.push('/editor');
   } finally {

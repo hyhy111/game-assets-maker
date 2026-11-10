@@ -269,6 +269,7 @@ import type { Project, BatchTrimResult } from '@/types';
 import Card from '@/components/common/Card.vue';
 import Button from '@/components/common/Button.vue';
 import Header from '@/components/layout/Header.vue';
+import { logEvent } from '@/debug/request-log';
 
 const router = useRouter();
 const route = useRoute();
@@ -404,7 +405,7 @@ async function executeTrim() {
     });
     trimResults.value = results;
   } catch (error) {
-    console.error('执行裁切失败:', error);
+    logEvent(['执行裁切失败:', error].join(' '), 'error');
   } finally {
     processing.value = false;
   }
@@ -432,7 +433,7 @@ async function openBatchTrimRoots() {
   try {
     await Promise.all(batchTrimRootPaths.value.map(path => api.system.openProjectFolder(path)));
   } catch (error) {
-    console.error('打开裁剪结果目录失败:', error);
+    logEvent(['打开裁剪结果目录失败:', error].join(' '), 'error');
   }
 }
 

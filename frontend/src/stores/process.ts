@@ -8,6 +8,7 @@ import { useProjectStore } from './project';
 import { usePlayerStore } from './player';
 import { createNavigationGuard } from '@/utils/navigation-guard';
 import type { ModelStatus, Step1Params, Step2Params, Step3Params, TaskStatus } from '@/types';
+import { logEvent } from '@/debug/request-log';
 
 export const useProcessStore = defineStore('process', () => {
   const navigation = createNavigationGuard();
@@ -139,7 +140,7 @@ export const useProcessStore = defineStore('process', () => {
       applyStepParams(step, await api.process.getStepParams(projectId, step));
       return true;
     } catch (e) {
-      console.error(`Failed to load step ${step} params:`, e);
+      logEvent([`Failed to load step ${step} params:`, e].join(' '), 'error');
       return false;
     }
   }
@@ -190,7 +191,7 @@ export const useProcessStore = defineStore('process', () => {
 
       return taskId;
     } catch (e) {
-      console.error('Failed to start processing:', e);
+      logEvent(['Failed to start processing:', e].join(' '), 'error');
       throw e;
     }
   }
@@ -223,7 +224,7 @@ export const useProcessStore = defineStore('process', () => {
           stopPolling();
         }
       } catch (e) {
-        console.error('Polling error:', e);
+        logEvent(['Polling error:', e].join(' '), 'error');
         stopPolling();
       }
     };
@@ -305,7 +306,7 @@ export const useProcessStore = defineStore('process', () => {
         currentTask.value = null;
         taskStatus.value = null;
       } catch (e) {
-        console.error('Failed to cancel task:', e);
+        logEvent(['Failed to cancel task:', e].join(' '), 'error');
       }
     }
   }
@@ -316,7 +317,7 @@ export const useProcessStore = defineStore('process', () => {
       if (modelStatus.value.phase === 'ready' || modelStatus.value.phase === 'failed') return;
       modelStatus.value = await api.process.preloadModel(model);
     } catch (e) {
-      console.error('Failed to trigger preload:', e);
+      logEvent(['Failed to trigger preload:', e].join(' '), 'error');
       modelStatus.value = {
         model,
         phase: 'failed',
@@ -331,7 +332,7 @@ export const useProcessStore = defineStore('process', () => {
     try {
       modelStatus.value = await api.process.retryModel('u2net', source);
     } catch (e) {
-      console.error('Failed to prepare model:', e);
+      logEvent(['Failed to prepare model:', e].join(' '), 'error');
       modelStatus.value = { ...modelStatus.value, phase: 'failed', error: { code: 'MODEL_DOWNLOAD_FAILED', message: 'Model preparation failed' } };
     }
   }

@@ -9,6 +9,7 @@ import { useRouter } from 'vue-router';
 import { useProjectStore } from '@/stores/project';
 import { useProcessStore } from '@/stores/process';
 import { useSeedanceStore } from '@/stores/seedance';
+import { logEvent } from '@/debug/request-log';
 
 type AgentOpenStepDetail = {
   projectId: string;
@@ -76,7 +77,7 @@ export function useAgentControl() {
         result = { ok: false, error: error instanceof Error ? error.message : 'UI_APPLY_FAILED' };
       }
       await (window as PyWebViewWindow).pywebview?.api.agent_acknowledge(request.request_id, result);
-    }).catch(error => console.error('Agent receipt failed', error));
+    }).catch(error => logEvent(['Agent receipt failed', error].join(' '), 'error'));
   };
 
   const handleOpenStep = async (event: Event) => {

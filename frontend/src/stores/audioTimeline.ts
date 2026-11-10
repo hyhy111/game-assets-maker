@@ -9,6 +9,7 @@ import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { api } from '@/api';
 import type { AudioClip } from '@/types';
+import { logEvent } from '@/debug/request-log';
 
 /** 将 placementFrame clamp 到 [0, totalFrames - span]（无级，与 src 区间对齐）。 */
 function clampPlacementFrame(clip: AudioClip, frame: number, total: number): number {
@@ -88,7 +89,7 @@ export const useAudioTimelineStore = defineStore('audioTimeline', () => {
     } catch (e) {
       // 读取时间线失败不阻断加载（片段只是不可用，波形仍可显示）
       clips.value = [];
-      console.warn('加载音效时间线失败:', e instanceof Error ? e.message : e);
+      logEvent(['加载音效时间线失败:', e instanceof Error ? e.message : e].join(' '), 'warn');
     }
   }
 
@@ -104,7 +105,7 @@ export const useAudioTimelineStore = defineStore('audioTimeline', () => {
         clips: clips.value,
       });
     } catch (e) {
-      console.warn('保存音效时间线失败:', e instanceof Error ? e.message : e);
+      logEvent(['保存音效时间线失败:', e instanceof Error ? e.message : e].join(' '), 'warn');
     }
   }
 

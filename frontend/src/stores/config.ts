@@ -5,6 +5,7 @@ import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { api } from '@/api';
 import type { AppConfig } from '@/types';
+import { logEvent } from '@/debug/request-log';
 
 export const useConfigStore = defineStore('config', () => {
   // State
@@ -25,7 +26,7 @@ export const useConfigStore = defineStore('config', () => {
         ark_audit_available: loaded.ark_audit_available === true,
       };
     } catch (e) {
-      console.error('Failed to load config:', e);
+      logEvent(['Failed to load config:', e].join(' '), 'error');
       error.value = e instanceof Error ? e.message : 'Failed to load config';
       // Set defaults
       config.value = {
@@ -72,7 +73,7 @@ export const useConfigStore = defineStore('config', () => {
       }
       return success;
     } catch (e) {
-      console.error('Failed to save config:', e);
+      logEvent(['Failed to save config:', e].join(' '), 'error');
       return false;
     }
   }

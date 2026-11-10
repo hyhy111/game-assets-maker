@@ -42,6 +42,7 @@ import { ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import type { Frame } from '@/types';
 import { api } from '@/api';
+import { logEvent } from '@/debug/request-log';
 
 const { t } = useI18n();
 
@@ -69,7 +70,7 @@ watch(() => props.frames, async (newFrames) => {
         const thumb = await api.frame.getFrameThumbnail(frame.path, 64);
         thumbnails.value[frame.index] = thumb;
       } catch (e) {
-        console.error('Failed to load thumbnail:', e);
+        logEvent(['Failed to load thumbnail:', e].join(' '), 'error');
       }
     }
   }

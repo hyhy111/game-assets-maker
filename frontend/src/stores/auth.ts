@@ -203,7 +203,7 @@ export const useAuthStore = defineStore('auth', () => {
         await authApi.logout();
       }
     } catch (e) {
-      console.error('Logout request failed:', e);
+      logEvent(['Logout request failed:', e].join(' '), 'error');
     } finally {
       // 主动登出：清 token 并置"已登出"标记，使重启后不会自动登录。
       // 凭证密文**刻意保留**——它用于登录页回填（见 login-prefill）。

@@ -219,6 +219,7 @@ import Step1Extract from './Step1Extract.vue';
 import Step2Background from './Step2Background.vue';
 import Step3PostProcess from './Step3PostProcess.vue';
 import SeedreamImageEraser from '@/components/seedream/SeedreamImageEraser.vue';
+import { logEvent } from '@/debug/request-log';
 
 const router = useRouter();
 const route = useRoute();
@@ -483,7 +484,7 @@ async function loadFramesForStep(step: number) {
     }
   } catch (e) {
     if (!isCurrentRequest()) return false;
-    console.error('Failed to load frames:', e);
+    logEvent(['Failed to load frames:', e].join(' '), 'error');
     playerStore.loadFrames([]);
     timelineFrameCount.value = 0;
   }

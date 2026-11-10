@@ -105,6 +105,7 @@ import { useI18n } from 'vue-i18n';
 import { usePlayerStore } from '@/stores/player';
 import { api } from '@/api';
 import Button from '../common/Button.vue';
+import { logEvent } from '@/debug/request-log';
 
 const props = withDefaults(defineProps<{
   keyboardDisabled?: boolean;
@@ -247,7 +248,7 @@ async function loadFrameViaBase64(version: number) {
     const imageData = await api.frame.getFrameImage(framePath);
     renderBase64Image(imageData, framePath, version);
   } catch (e) {
-    console.error('Failed to load frame via base64:', e);
+    logEvent(['Failed to load frame via base64:', e].join(' '), 'error');
   }
 }
 
@@ -269,7 +270,7 @@ function renderBase64Image(base64Data: string, intendedPath?: string, version = 
   };
   img.onerror = () => {
     if (version !== renderVersion || (intendedPath && currentFrame.value?.path !== intendedPath)) return;
-    console.error('Failed to render base64 image');
+    logEvent('Failed to render base64 image', 'error');
   };
   // Ensure proper data URI format
   if (base64Data.startsWith('data:')) {

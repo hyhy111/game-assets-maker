@@ -13,6 +13,7 @@ import type {
   LegacyMigrationResult,
   LegacyProjectImportResult,
 } from '@/types';
+import { logEvent } from '@/debug/request-log';
 
 export const useProjectStore = defineStore('project', () => {
   // State
@@ -51,7 +52,7 @@ export const useProjectStore = defineStore('project', () => {
       roles.value = await api.project.getRoles();
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Failed to load projects';
-      console.error('Failed to load projects:', e);
+      logEvent(['Failed to load projects:', e].join(' '), 'error');
     } finally {
       loading.value = false;
     }
@@ -66,7 +67,7 @@ export const useProjectStore = defineStore('project', () => {
       return project;
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Failed to load project';
-      console.error('Failed to load project:', e);
+      logEvent(['Failed to load project:', e].join(' '), 'error');
       return null;
     } finally {
       loading.value = false;
@@ -83,7 +84,7 @@ export const useProjectStore = defineStore('project', () => {
       return project;
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Failed to create project';
-      console.error('Failed to create project:', e);
+      logEvent(['Failed to create project:', e].join(' '), 'error');
       throw e;
     } finally {
       loading.value = false;
@@ -99,7 +100,7 @@ export const useProjectStore = defineStore('project', () => {
       return result;
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Failed to migrate projects';
-      console.error('Failed to migrate legacy projects:', e);
+      logEvent(['Failed to migrate legacy projects:', e].join(' '), 'error');
       throw e;
     } finally {
       loading.value = false;
@@ -115,7 +116,7 @@ export const useProjectStore = defineStore('project', () => {
       return result;
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Failed to import legacy projects';
-      console.error('Failed to import legacy projects:', e);
+      logEvent(['Failed to import legacy projects:', e].join(' '), 'error');
       throw e;
     } finally {
       loading.value = false;
@@ -136,7 +137,7 @@ export const useProjectStore = defineStore('project', () => {
       return success;
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Failed to delete project';
-      console.error('Failed to delete project:', e);
+      logEvent(['Failed to delete project:', e].join(' '), 'error');
       return false;
     } finally {
       loading.value = false;
@@ -158,7 +159,7 @@ export const useProjectStore = defineStore('project', () => {
       return success;
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Failed to delete role';
-      console.error('Failed to delete role:', e);
+      logEvent(['Failed to delete role:', e].join(' '), 'error');
       return false;
     } finally {
       loading.value = false;
@@ -177,7 +178,7 @@ export const useProjectStore = defineStore('project', () => {
       }
       return project;
     } catch (e) {
-      console.error('Failed to update project:', e);
+      logEvent(['Failed to update project:', e].join(' '), 'error');
       throw e;
     }
   }

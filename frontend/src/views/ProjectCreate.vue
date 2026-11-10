@@ -253,6 +253,7 @@ import Card from '@/components/common/Card.vue';
 import Button from '@/components/common/Button.vue';
 import Input from '@/components/common/Input.vue';
 import Header from '@/components/layout/Header.vue';
+import { logEvent } from '@/debug/request-log';
 
 const router = useRouter();
 const route = useRoute();
@@ -342,7 +343,7 @@ async function createProject() {
       router.push('/editor');
     }
   } catch (e) {
-    console.error('Failed to create project:', e);
+    logEvent(['Failed to create project:', e].join(' '), 'error');
   } finally {
     creating.value = false;
   }
