@@ -106,6 +106,7 @@ def test_platform_config_holds_token_in_memory_only():
 # 文件追踪日志（backend/platform/trace.py）
 # --------------------------------------------------------------------------
 
+
 def test_platform_trace_file_never_contains_token(tmp_path):
     """落盘的追踪日志里绝不能出现 token（含异常消息夹带的情形）。
 

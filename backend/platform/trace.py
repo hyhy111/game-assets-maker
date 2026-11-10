@@ -86,9 +86,7 @@ def trace_success(
     _resolve_logger().info(_scrub(f"{method} {path} <- {detail}", secret))
 
 
-def trace_failure(
-    method: str, path: str, kind: str, message: str, *, secret: str | None = None
-) -> None:
+def trace_failure(method: str, path: str, kind: str, message: str, *, secret: str | None = None) -> None:
     """一次失败的平台交互：网络异常、非 JSON、业务错误、401 等。"""
     _resolve_logger().error(_scrub(f"{method} {path} !! {kind}: {message}", secret))
 

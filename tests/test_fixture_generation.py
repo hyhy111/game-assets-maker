@@ -4,9 +4,7 @@ from backend.api.video_api import VideoAPI
 from scripts.generate_test_fixtures import generate_compact_videos
 
 
-def test_private_role_action_videos_become_limited_readable_regression_media(
-    test_assets: Path, tmp_path: Path
-) -> None:
+def test_private_role_action_videos_become_limited_readable_regression_media(test_assets: Path, tmp_path: Path) -> None:
     source = test_assets / "videos"
     output = tmp_path / "compact"
 

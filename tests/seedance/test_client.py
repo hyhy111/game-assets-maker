@@ -109,9 +109,7 @@ def test_delete_task_handles_an_empty_success_response(fake_transport: FakeTrans
 
 
 @pytest.mark.parametrize("status", [400, 500])
-def test_delete_task_empty_error_response_uses_safe_api_error_fallback(
-    fake_transport: FakeTransport, status: int
-):
+def test_delete_task_empty_error_response_uses_safe_api_error_fallback(fake_transport: FakeTransport, status: int):
     fake_transport.queue_empty(status)
 
     with pytest.raises(ArkAPIError) as raised:
@@ -177,9 +175,7 @@ def test_only_create_task_marks_after_send_transport_failure_as_submission_unkno
 
 
 @pytest.mark.parametrize("body", [b"not json", b"[]", b""])
-def test_create_task_marks_invalid_success_response_as_submission_unknown(
-    fake_transport: FakeTransport, body: bytes
-):
+def test_create_task_marks_invalid_success_response_as_submission_unknown(fake_transport: FakeTransport, body: bytes):
     fake_transport.queue_bytes(200, body)
 
     with pytest.raises(SubmissionUnknownError, match="outcome is unknown"):

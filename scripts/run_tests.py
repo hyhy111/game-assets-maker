@@ -253,11 +253,7 @@ def _write_json_report(report_path: Path, report: dict[str, Any], secrets: tuple
 
 
 def _workspace_ready(workspace: Path) -> bool:
-    return (
-        workspace.is_dir()
-        and (workspace / "project").is_dir()
-        and (workspace / "runtime-config.json").is_file()
-    )
+    return workspace.is_dir() and (workspace / "project").is_dir() and (workspace / "runtime-config.json").is_file()
 
 
 def _reported_workspace(report_path: Path, report: dict[str, Any]) -> Path:
@@ -433,9 +429,10 @@ def run_suite(
                     "u2net rembg model is not installed; prepare it explicitly with "
                     "`uv run python scripts/download_models.py u2net`",
                 )
-            elif execution_stage.requires_frontend_dependencies and not (
-                repo_root / "frontend" / "node_modules"
-            ).is_dir():
+            elif (
+                execution_stage.requires_frontend_dependencies
+                and not (repo_root / "frontend" / "node_modules").is_dir()
+            ):
                 result = StageResult(
                     stage.name,
                     "SKIP",
@@ -512,8 +509,7 @@ def run_suite(
         {
             "status": "INTERRUPTED" if interrupted else ("PASS" if exit_code == 0 else "FAIL"),
             "ended_at": _timestamp(),
-            "duration_seconds": (previous_duration if resuming else 0.0)
-            + (time.perf_counter() - suite_started),
+            "duration_seconds": (previous_duration if resuming else 0.0) + (time.perf_counter() - suite_started),
             "last_attempt_duration_seconds": time.perf_counter() - suite_started,
             "workspace_retained": retain_workspace,
         }

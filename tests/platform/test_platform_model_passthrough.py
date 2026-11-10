@@ -50,6 +50,7 @@ def _video_request(frame: Path, **overrides) -> SeedanceRequest:
 
 # ---- 模型标识归一 ----
 
+
 def test_known_short_key_maps_to_upstream_id():
     assert video_model_id("standard") == "doubao-seedance-2-0-260128"
     assert video_model_id("mini") == "doubao-seedance-2-0-mini-260615"
@@ -62,6 +63,7 @@ def test_unknown_id_passes_through_untouched():
 
 
 # ---- 平台源：本地白名单不拦截 ----
+
 
 def test_platform_source_accepts_a_model_the_local_table_does_not_know(frame):
     # 不抛异常即通过：合法域交给后端（parseVideo + 查价）
@@ -80,6 +82,7 @@ def test_image_platform_source_accepts_unknown_model():
 
 
 # ---- 直连源：白名单照旧 ----
+
 
 def test_direct_source_still_rejects_an_unknown_model(frame):
     with pytest.raises(ValidationError):

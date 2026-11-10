@@ -25,11 +25,18 @@ class FakePlatformVideo:
     def __init__(self) -> None:
         self.uploaded: list[Path] = []
         self.created_payloads: list[dict[str, Any]] = []
-        self.create_result: dict[str, Any] | Exception = {"id": "job-1", "status": "queued",
-                                                            "platform_status": "QUEUED", "quote": 100}
+        self.create_result: dict[str, Any] | Exception = {
+            "id": "job-1",
+            "status": "queued",
+            "platform_status": "QUEUED",
+            "quote": 100,
+        }
         self.get_results: list[dict[str, Any] | Exception] = []
-        self.cancel_result: dict[str, Any] | Exception = {"id": "job-1", "status": "cancelled",
-                                                            "platform_status": "CANCELLED"}
+        self.cancel_result: dict[str, Any] | Exception = {
+            "id": "job-1",
+            "status": "cancelled",
+            "platform_status": "CANCELLED",
+        }
         self.download_bytes = b""
 
     def upload_asset(self, path) -> dict[str, Any]:
@@ -137,8 +144,13 @@ def platform_request(tmp_path: Path) -> SeedanceRequest:
 
 
 def _succeeded_remote() -> dict[str, Any]:
-    return {"id": "job-1", "status": "succeeded", "platform_status": "SUCCEEDED",
-            "content": {"video_url": artifact_url("job-1")}, "quote": 100}
+    return {
+        "id": "job-1",
+        "status": "succeeded",
+        "platform_status": "SUCCEEDED",
+        "content": {"video_url": artifact_url("job-1")},
+        "quote": 100,
+    }
 
 
 def test_create_uploads_inputs_and_posts_platform_job(manager, platform, platform_request):
@@ -388,9 +400,7 @@ def test_ensure_continuation_frame_is_stable(manager, platform, platform_request
     assert first == second and first.is_file()
 
 
-def test_continue_prefers_returned_last_frame_over_local_extraction(
-    manager, platform, platform_request, tmp_path
-):
+def test_continue_prefers_returned_last_frame_over_local_extraction(manager, platform, platform_request, tmp_path):
     """平台已下载的尾帧优先用于续跑；缺失时才回退本地 cv2 抽帧。"""
     from platform_test_helpers import make_video_bytes
 
@@ -412,16 +422,12 @@ def test_continue_prefers_returned_last_frame_over_local_extraction(
     Image.new("RGB", (300, 300), "magenta").save(returned)
     manager._repository.update(
         local_id,
-        lambda current: current.output_paths.__setitem__(
-            "returned_last_frame", "output/returned_last_frame.png"
-        ),
+        lambda current: current.output_paths.__setitem__("returned_last_frame", "output/returned_last_frame.png"),
     )
 
     continued = manager.continue_generation(local_id)
     persisted = manager._repository.get(continued["local_id"])
-    first_frame = manager._repository.resolve_asset(
-        persisted.local_id, persisted.input_paths["first_frame"]
-    )
+    first_frame = manager._repository.resolve_asset(persisted.local_id, persisted.input_paths["first_frame"])
     assert first_frame.read_bytes() == returned.read_bytes()
 
 

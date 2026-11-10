@@ -54,8 +54,7 @@ def _called_methods(module) -> set[str]:
 def test_adapter_covers_manager_calls(module, adapter, expected):
     called = _called_methods(module)
     assert expected <= called, (
-        f"管理器调用面发生变化（解析到 {sorted(called)}）；"
-        f"若新增了平台调用，请同步本用例的 expected 集合"
+        f"管理器调用面发生变化（解析到 {sorted(called)}）；若新增了平台调用，请同步本用例的 expected 集合"
     )
     missing = sorted(name for name in called if not hasattr(adapter, name))
     assert not missing, (

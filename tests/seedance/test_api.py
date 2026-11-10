@@ -131,9 +131,7 @@ def test_seedance_image_editor_preserves_source_and_saves_full_size_copy(tmp_pat
         "scale": 32 / 56,
     }
     edit_source_data_url = _png_data_url((120, 80), "blue")
-    saved = api.save_edited_image(
-        str(source), _png_data_url((120, 80)), edit_source_data_url, generation_layout
-    )
+    saved = api.save_edited_image(str(source), _png_data_url((120, 80)), edit_source_data_url, generation_layout)
     assert saved["success"] is True
     destination = Path(saved["data"]["path"])
     assert destination.parent == cache_root / "ai-video-cache" / "edited-inputs"
@@ -145,9 +143,7 @@ def test_seedance_image_editor_preserves_source_and_saves_full_size_copy(tmp_pat
     assert reopened["data"]["generation_layout"] == generation_layout
     assert reopened["data"]["edit_source_data_url"] == edit_source_data_url
 
-    mismatch = api.save_edited_image(
-        str(source), _png_data_url((60, 40)), _png_data_url((120, 80))
-    )
+    mismatch = api.save_edited_image(str(source), _png_data_url((60, 40)), _png_data_url((120, 80)))
     assert mismatch["success"] is False
     assert "dimensions" in mismatch["error"]["message"].lower()
 
@@ -488,7 +484,7 @@ def test_seedance_event_sink_uses_json_and_start_requires_a_window(runtime_confi
 
     window = Window()
     api.set_window(window)
-    manager.event_sink("seedance-task-updated", {"label": "quoted </script> \"value\""})
+    manager.event_sink("seedance-task-updated", {"label": 'quoted </script> "value"'})
 
     assert manager.started == 1
     serialized = window.scripts[0].split("detail: ", 1)[1].rsplit(" }));", 1)[0]

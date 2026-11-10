@@ -407,9 +407,7 @@ def test_disabled_retention_never_calls_cache_clean_automatically_or_manually(ma
     assert manager._config["last_cleanup_at"] is not None
 
 
-def test_start_marks_interrupted_submission_unknown_without_reposting(
-    manager, fake_client, seedance_request
-):
+def test_start_marks_interrupted_submission_unknown_without_reposting(manager, fake_client, seedance_request):
     draft = manager._repository.create_draft(seedance_request)
 
     manager.start()
@@ -454,9 +452,7 @@ def test_shutdown_returns_promptly_when_worker_is_blocked_in_a_request(manager, 
         manager.shutdown()
 
 
-def test_failed_cleanup_does_not_advance_the_cleanup_timestamp(
-    manager, cache_manager, monkeypatch: pytest.MonkeyPatch
-):
+def test_failed_cleanup_does_not_advance_the_cleanup_timestamp(manager, cache_manager, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(cache_manager, "clean", lambda _: (_ for _ in ()).throw(OSError("disk unavailable")))
 
     with pytest.raises(OSError, match="disk unavailable"):
@@ -502,20 +498,26 @@ def test_continue_generation_uses_persisted_returned_frame_and_creates_new_linea
     assert persisted.input_paths.get("last_frame") is None
 
 
-@pytest.mark.parametrize("remote_status,download_status,cache_status", [
-    ("failed", "downloaded", "complete"),
-    ("succeeded", "pending", "complete"),
-    ("succeeded", "downloaded", "cleared"),
-])
+@pytest.mark.parametrize(
+    "remote_status,download_status,cache_status",
+    [
+        ("failed", "downloaded", "complete"),
+        ("succeeded", "pending", "complete"),
+        ("succeeded", "downloaded", "cleared"),
+    ],
+)
 def test_continue_generation_rejects_ineligible_or_cleared_tasks(
     manager, repository, fake_client, seedance_request, remote_status, download_status, cache_status
 ):
     original = _queued_task(manager, fake_client, seedance_request)
-    repository.update(original.local_id, lambda current: (
-        setattr(current, "remote_status", remote_status),
-        setattr(current, "download_status", download_status),
-        setattr(current, "cache_status", cache_status),
-    ))
+    repository.update(
+        original.local_id,
+        lambda current: (
+            setattr(current, "remote_status", remote_status),
+            setattr(current, "download_status", download_status),
+            setattr(current, "cache_status", cache_status),
+        ),
+    )
 
     with pytest.raises(ValueError):
         manager.continue_generation(original.local_id)
@@ -596,9 +598,7 @@ def test_cleanup_saves_complete_seedance_config_without_exposing_key(
     assert manager._config["last_cleanup_at"] is not None
 
 
-def test_event_sink_mutation_and_blocking_do_not_change_task_or_stall_sync(
-    manager, fake_client, seedance_request
-):
+def test_event_sink_mutation_and_blocking_do_not_change_task_or_stall_sync(manager, fake_client, seedance_request):
     task = _queued_task(manager, fake_client, seedance_request)
     fake_client.get_results["remote-1"] = [_remote("remote-1", "running", usage={"total_tokens": 5})]
     entered = threading.Event()

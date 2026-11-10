@@ -93,6 +93,7 @@ def test_capabilities_request_is_logged_without_token(monkeypatch, tmp_path):
 # 下架模型对能力清单的影响（gen-price-admin-tree）
 # --------------------------------------------------------------------------
 
+
 def test_capabilities_spec_excludes_disabled_rows():
     """下架 = 把该模型的行全部置停用；能力清单只认 status='1'，故该模型随之消失。
 
@@ -110,5 +111,5 @@ def test_capabilities_spec_excludes_disabled_rows():
         pytest.skip("External RuoYi server mapper is not available in this checkout")
     text = xml.read_text(encoding="utf-8")
     start = text.index('id="selectEffectiveCapabilities"')
-    block = text[start:text.index("</select>", start)]
+    block = text[start : text.index("</select>", start)]
     assert "status = '1'" in block, "能力清单必须只取生效行，否则下架不会生效"

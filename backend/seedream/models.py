@@ -96,8 +96,7 @@ class ImageBatch:
         if not isinstance(values, dict):
             raise ValueError("Image batch must be an object")
         attempts = [
-            ImageAttempt.from_dict(item) if isinstance(item, dict) else item
-            for item in values.get("attempts", [])
+            ImageAttempt.from_dict(item) if isinstance(item, dict) else item for item in values.get("attempts", [])
         ]
         return cls(
             local_id=values["local_id"],

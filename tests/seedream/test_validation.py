@@ -185,6 +185,7 @@ def test_reference_image_is_optional_in_validate_request(tmp_path):
 # 参考图校验（gen-asset-local-delivery：补齐尺寸缺口 + 与视频接口区分）
 # --------------------------------------------------------------------------
 
+
 def _png(path, size):
     from PIL import Image
 

@@ -90,9 +90,7 @@ def generate_compact_videos(
                 if writer is not None:
                     writer.release()
 
-            generated.append(
-                CompactVideo(role_dir.name, source_path.stem, source_path, output_path, frame_count)
-            )
+            generated.append(CompactVideo(role_dir.name, source_path.stem, source_path, output_path, frame_count))
     return generated
 
 
@@ -111,8 +109,7 @@ def wait_for_local_model(api: API, model: str, timeout: float = 60.0) -> None:
     status = api.get_model_status(model)
     if status["phase"] == "needs_download":
         raise RuntimeError(
-            f"{model} is not installed; prepare it explicitly with "
-            f"`uv run python scripts/download_models.py {model}`"
+            f"{model} is not installed; prepare it explicitly with `uv run python scripts/download_models.py {model}`"
         )
     status = api.preload_model(model)
     deadline = time.time() + timeout

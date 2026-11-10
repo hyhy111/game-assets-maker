@@ -40,8 +40,15 @@ def make_image_client(transport: FakeTransport) -> PlatformImageClient:
 
 
 def describe(status: str, **extra):
-    payload = {"jobId": "9001", "jobType": "video", "status": status, "remoteStatus": "queued", "quote": 100,
-               "error": None, "createdAt": "2026-09-27T00:00:00Z"}
+    payload = {
+        "jobId": "9001",
+        "jobType": "video",
+        "status": status,
+        "remoteStatus": "queued",
+        "quote": 100,
+        "error": None,
+        "createdAt": "2026-09-27T00:00:00Z",
+    }
     payload.update(extra)
     return ajax_ok(payload)
 
@@ -136,8 +143,13 @@ def test_image_mapping_delivers_upstream_url_as_the_url():
 def test_image_mapping_without_direct_link_has_no_upstream_keys():
     transport = FakeTransport(
         lambda m, u, h, b: ajax_ok(
-            {"jobId": "42", "status": "SUCCEEDED", "quote": 30,
-             "images": [{"url": "https://upstream.example/image.png"}], "error": None}
+            {
+                "jobId": "42",
+                "status": "SUCCEEDED",
+                "quote": 30,
+                "images": [{"url": "https://upstream.example/image.png"}],
+                "error": None,
+            }
         )
     )
     mapped = make_image_client(transport).generate_image({"idemKey": "gam-i"})
@@ -304,8 +316,11 @@ def _run_platform_batch(tmp_path: Path, data_entry: dict, image_bytes: bytes, fa
 
 
 def test_platform_image_download_prefers_fresh_direct_link(tmp_path, png_bytes):
-    entry = {"url": "https://upstream.example/i.png", "upstream_url": "https://upstream.example/i.png",
-             "upstream_expires_at": FUTURE_MS}
+    entry = {
+        "url": "https://upstream.example/i.png",
+        "upstream_url": "https://upstream.example/i.png",
+        "upstream_expires_at": FUTURE_MS,
+    }
     batch, downloader = _run_platform_batch(tmp_path, entry, png_bytes)
 
     assert all(attempt.status == "succeeded" for attempt in batch.attempts)

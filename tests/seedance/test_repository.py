@@ -33,9 +33,7 @@ def test_create_draft_copies_inputs_and_persists_full_prompt(repository, seedanc
     seedance_request.first_frame.with_name(f"{seedance_request.first_frame.name}.layout.json").write_text(
         json.dumps(layout), encoding="utf-8"
     )
-    edit_source = seedance_request.first_frame.with_name(
-        f"{seedance_request.first_frame.name}.edit-source.png"
-    )
+    edit_source = seedance_request.first_frame.with_name(f"{seedance_request.first_frame.name}.edit-source.png")
     _write_image(edit_source)
 
     task = repository.create_draft(seedance_request)

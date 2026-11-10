@@ -27,8 +27,7 @@ class FakePlatformImages:
             "jobId": "img-1",
             "platform_status": "SUCCEEDED",
             "quote": 30,
-            "data": [{"url": UPSTREAM_IMAGE, "upstream_url": UPSTREAM_IMAGE,
-                      "upstream_expires_at": FUTURE_MS}],
+            "data": [{"url": UPSTREAM_IMAGE, "upstream_url": UPSTREAM_IMAGE, "upstream_expires_at": FUTURE_MS}],
         }
         self.image_bytes = b""
 
@@ -134,8 +133,12 @@ def test_platform_attempt_uploads_reference_image(manager, repository, platform,
 
 
 def test_platform_attempt_failed_sets_error(manager, repository, platform):
-    platform.result = {"jobId": "img-2", "platform_status": "FAILED", "quote": 0,
-                       "error": {"class": "RATE_LIMITED", "message": "触发限流"}}
+    platform.result = {
+        "jobId": "img-2",
+        "platform_status": "FAILED",
+        "quote": 0,
+        "error": {"class": "RATE_LIMITED", "message": "触发限流"},
+    }
     batch = manager.create_batch(_platform_request(Path(".")))
     _wait_terminal(repository, batch["local_id"])
 
@@ -145,8 +148,12 @@ def test_platform_attempt_failed_sets_error(manager, repository, platform):
 
 
 def test_platform_attempt_submission_unknown_stays_unknown(manager, repository, platform):
-    platform.result = {"jobId": "img-3", "platform_status": "SUBMISSION_UNKNOWN", "quote": 30,
-                       "error": {"code": "SUBMISSION_UNKNOWN", "message": "上游未返回确定结果"}}
+    platform.result = {
+        "jobId": "img-3",
+        "platform_status": "SUBMISSION_UNKNOWN",
+        "quote": 30,
+        "error": {"code": "SUBMISSION_UNKNOWN", "message": "上游未返回确定结果"},
+    }
     batch = manager.create_batch(_platform_request(Path(".")))
     _wait_terminal(repository, batch["local_id"])
 
@@ -182,7 +189,8 @@ def test_platform_partial_failure_aggregates_partially_complete(manager, reposit
     # Flip one attempt to failed as if one of two jobs errored upstream.
     persisted = repository.get(batch["local_id"])
     manager._update_attempt(
-        batch["local_id"], 1,
+        batch["local_id"],
+        1,
         lambda a: (setattr(a, "status", "failed"), setattr(a, "error", {"code": "X", "message": "boom"})),
     )
     public = manager.get_batch(batch["local_id"])
@@ -196,7 +204,8 @@ def test_download_failed_can_retry_upstream_url(manager, repository, platform, p
     _wait_terminal(repository, batch["local_id"])
     local_id = batch["local_id"]
     manager._update_attempt(
-        local_id, 0,
+        local_id,
+        0,
         lambda a: (setattr(a, "status", "download_failed"), setattr(a, "error", {"code": "D", "message": "lost"})),
     )
     retried = manager.retry_download(local_id, 0)

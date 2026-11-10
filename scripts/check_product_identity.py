@@ -142,10 +142,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     print("Obsolete product identifiers found:")
     for violation in violations:
-        print(
-            f"{violation.path}:{violation.line_number}: "
-            f"{violation.identifier!r}: {violation.line}"
-        )
+        print(f"{violation.path}:{violation.line_number}: {violation.identifier!r}: {violation.line}")
     return 1
 
 

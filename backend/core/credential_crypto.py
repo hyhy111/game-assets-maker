@@ -41,9 +41,7 @@ class CredentialCrypto:
         # entropy=None binds to the current user; no extra entropy so
         # decrypt_credential works transparently for the same user.
         desc = "game_assets_maker credential"
-        result = win32crypt.CryptProtectData(
-            data, desc, None, None, None, 0
-        )
+        result = win32crypt.CryptProtectData(data, desc, None, None, None, 0)
         return result
 
     @staticmethod

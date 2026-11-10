@@ -26,10 +26,21 @@ def _write_video_with_audio(path: Path, *, fps: int = 10, duration: float = 1.0)
     path.parent.mkdir(parents=True, exist_ok=True)
     subprocess.run(
         [
-            _ffmpeg_exe(), "-y",
-            "-f", "lavfi", "-i", f"testsrc=duration={duration}:size=64x64:rate={fps}",
-            "-f", "lavfi", "-i", f"sine=frequency=440:duration={duration}",
-            "-c:v", "libx264", "-c:a", "aac", "-shortest",
+            _ffmpeg_exe(),
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            f"testsrc=duration={duration}:size=64x64:rate={fps}",
+            "-f",
+            "lavfi",
+            "-i",
+            f"sine=frequency=440:duration={duration}",
+            "-c:v",
+            "libx264",
+            "-c:a",
+            "aac",
+            "-shortest",
             str(path),
         ],
         capture_output=True,
@@ -196,12 +207,15 @@ def test_timeline_persists_relative_wav_path_and_returns_runtime_url(isolated_wo
     api = AudioAPI(assets_base_url="http://127.0.0.1:54321")
     extracted = api.extract_source_audio("hero/attack")
 
-    save_result = api.save_timeline("hero/attack", {
-        "source_fps": extracted["source_fps"],
-        "total_frames": extracted["total_frames"],
-        "source_wav": extracted["source_wav"],
-        "clips": _SAMPLE_CLIPS,
-    })
+    save_result = api.save_timeline(
+        "hero/attack",
+        {
+            "source_fps": extracted["source_fps"],
+            "total_frames": extracted["total_frames"],
+            "source_wav": extracted["source_wav"],
+            "clips": _SAMPLE_CLIPS,
+        },
+    )
 
     assert save_result["success"] is True
     persisted = json.loads((project_path / "cache" / "audio_timeline.json").read_text(encoding="utf-8"))

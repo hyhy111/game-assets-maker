@@ -427,9 +427,7 @@ def test_full_local_suite_skips_before_execution_when_model_is_missing(
     assert report["stages"][0]["status"] == "SKIP"
 
 
-def test_full_local_failure_retains_the_isolated_workspace(
-    repo_root: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_full_local_failure_retains_the_isolated_workspace(repo_root: Path, capsys: pytest.CaptureFixture[str]) -> None:
     observed_workspace: Path | None = None
 
     def failing_pipeline(stage, *, cwd, env):
@@ -578,9 +576,7 @@ def test_command_start_failure_is_reported_and_does_not_abort_remaining_stages(
     assert "[FAIL] Python regression" in capsys.readouterr().out
 
 
-def test_cli_defaults_to_free_suite_and_rejects_unknown_suite(
-    repo_root: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_cli_defaults_to_free_suite_and_rejects_unknown_suite(repo_root: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     selected: list[str] = []
 
     def fake_run_suite(suite, **kwargs):
