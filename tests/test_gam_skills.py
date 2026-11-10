@@ -1,5 +1,6 @@
 """Installer provenance, scoped update checks and safe global installation."""
 
+import hashlib
 import io
 import json
 import shutil
@@ -47,9 +48,20 @@ def installed(service, names=SKILLS, agent="codex", **entry_changes):
 
 
 def remote(monkeypatch, changed=(), **extra):
+    files = []
+    for name in SKILLS:
+        data = ("Updated GAM CLI" if name in changed else f"---\nname: {name}\n---\nGAM").encode()
+        files.append(
+            {
+                "type": "blob",
+                "path": f"{name}/SKILL.md",
+                "sha": hashlib.sha1(f"blob {len(data)}\0".encode() + data, usedforsecurity=False).hexdigest(),
+            }
+        )
     tree = {
         "sha": "b" * 40,
-        "tree": [{"type": "tree", "path": name, "sha": ("b" if name in changed else "a") * 40} for name in SKILLS],
+        "tree": [{"type": "tree", "path": name, "sha": ("b" if name in changed else "a") * 40} for name in SKILLS]
+        + files,
         **extra,
     }
     transport = Mock(side_effect=lambda *a, **kw: io.BytesIO(json.dumps(tree).encode()))
@@ -148,6 +160,128 @@ def test_non_selected_agent_manual_copy_is_not_mistaken_for_npx(service, monkeyp
     transport = remote(monkeypatch)
     assert service.status("claude-code", True)["status"] == "unmanaged"
     transport.assert_not_called()
+
+
+@pytest.mark.parametrize("agent", skills_api.SHARED_AGENTS)
+def test_universal_agents_use_shared_install_without_native_directory(service, monkeypatch, agent):
+    installed(service)
+    _, native, _ = service._paths(agent)
+    if agent != "codex":
+        assert not native.exists()
+    remote(monkeypatch)
+    state = service.status(agent, True)
+    assert state["status"] == "up_to_date"
+    assert state["installed_count"] == len(SKILLS)
+    assert service.status("claude-code")["status"] == "not_installed"
+    assert service.status("windsurf")["status"] == "not_installed"
+
+
+def test_claude_default_copies_remain_recognized_after_cursor_install(service, monkeypatch):
+    installed(service, agent="claude-code")
+    canonical, target, _ = service._paths("claude-code")
+    for name in SKILLS:
+        (target / name).unlink()
+        shutil.move(canonical / name, target / name)
+    assert service.status("claude-code")["installed_count"] == len(SKILLS)
+    installed(service)
+    remote(monkeypatch)
+    assert service.status("claude-code", True)["status"] == "up_to_date"
+    assert service.status("cursor", True)["status"] == "up_to_date"
+
+
+def test_new_shared_install_does_not_claim_old_claude_copy_is_latest_or_overwrite_it(service, monkeypatch):
+    installed(service, agent="claude-code")
+    canonical, target, _ = service._paths("claude-code")
+    for name in SKILLS:
+        (target / name).unlink()
+        shutil.copytree(canonical / name, target / name)
+    old = (target / "gam-cli" / "SKILL.md").read_bytes()
+    (canonical / "gam-cli" / "SKILL.md").write_text("New shared version")
+    transport = remote(monkeypatch)
+    runner = Mock()
+    monkeypatch.setattr(skills_api.subprocess, "run", runner)
+    state = service.status("claude-code", True)
+    assert state["status"] == "unmanaged"
+    assert state["error"] == "COPY_VERSION_MISMATCH"
+    assert not service.install("claude-code")["success"]
+    assert (target / "gam-cli" / "SKILL.md").read_bytes() == old
+    transport.assert_not_called()
+    runner.assert_not_called()
+
+
+@pytest.mark.parametrize("agent", ["codex", "claude-code", "windsurf"])
+def test_latest_shared_lock_cannot_hide_stale_actual_files(service, monkeypatch, agent):
+    installed(service, agent=agent, skillFolderHash="b" * 40)
+    canonical, target, _ = service._paths(agent)
+    if target != canonical:
+        for name in SKILLS:
+            (target / name).unlink()
+            shutil.move(canonical / name, target / name)
+    remote(monkeypatch, changed=SKILLS)
+    state = service.status(agent, True)
+    assert state["status"] == "update_available"
+    assert state["outdated"] == list(SKILLS)
+
+
+def test_content_check_covers_nested_files_but_ignores_installer_exclusions(service, monkeypatch):
+    installed(service)
+    canonical, _, _ = service._paths("codex")
+    transport = remote(monkeypatch)
+    for relative in ("__pycache__/cache.pyc", "metadata.json"):
+        path = canonical / "gam-cli" / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("runtime metadata")
+    assert service.status("codex", True)["status"] == "up_to_date"
+    script = canonical / "gam-cli" / "scripts" / "tool.py"
+    script.parent.mkdir()
+    script.write_bytes(b"print('old')\n")
+    data = b"print('new')\n"
+    tree = json.loads(transport().getvalue())
+    tree["tree"].append(
+        {
+            "type": "blob",
+            "path": "gam-cli/scripts/tool.py",
+            "sha": hashlib.sha1(f"blob {len(data)}\0".encode() + data, usedforsecurity=False).hexdigest(),
+        }
+    )
+    transport.side_effect = lambda *a, **kw: io.BytesIO(json.dumps(tree).encode())
+    assert service.status("codex", True)["outdated"] == ["gam-cli"]
+    script.write_bytes(data)
+    assert service.status("codex", True)["status"] == "up_to_date"
+
+
+@pytest.mark.parametrize("agent", [agent for agent in skills_api.AGENTS if agent != "codex"])
+@pytest.mark.parametrize("explicit_copy", [False, True])
+def test_agent_only_npx_copies_support_detection_and_updates(service, monkeypatch, agent, explicit_copy):
+    installed(service, agent=agent, **({"installMode": "copy"} if explicit_copy else {}))
+    canonical, target, lock_path = service._paths(agent)
+    for name in SKILLS:
+        (target / name).unlink()
+        shutil.move(canonical / name, target / name)
+
+    state = service.status(agent)
+    assert state["source"] == "npx"
+    assert state["installed_count"] == len(SKILLS)
+    assert state["can_check"] and state["can_install"]
+    assert service.status("codex")["status"] == "not_installed"
+
+    remote(monkeypatch, changed=("gam-cli",))
+    pending = service.status(agent, True)
+    assert pending["status"] == "update_available" and pending["outdated"] == ["gam-cli"]
+
+    def run(command, **kwargs):
+        assert command[command.index("-a") + 1] == agent
+        (target / "gam-cli" / "SKILL.md").write_text("Updated GAM CLI")
+        lock = json.loads(lock_path.read_text())
+        lock["skills"]["gam-cli"]["skillFolderHash"] = "b" * 40
+        lock_path.write_text(json.dumps(lock))
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(skills_api.subprocess, "run", run)
+    result = service.install(agent)
+    assert result["success"] and result["state"]["installed_count"] == len(SKILLS)
+    assert service.status(agent, True)["status"] == "up_to_date"
+    assert all(not (canonical / name).exists() for name in SKILLS)
 
 
 def test_install_uses_fixed_arguments_and_verifies_files_and_records(service, monkeypatch):
@@ -273,7 +407,8 @@ def test_startup_scan_covers_non_default_agents_and_reuses_remote_fetches(servic
     expected = "error" if offline else "update_available"
     assert result["claude-code"]["status"] == expected
     assert result["codex"]["status"] == expected
-    assert result["cursor"]["status"] == "not_installed"
+    assert all(result[agent]["status"] == expected for agent in skills_api.SHARED_AGENTS)
+    assert result["windsurf"]["status"] == "not_installed"
 
 
 def test_startup_scan_without_npx_installs_never_contacts_upstream(service, monkeypatch):

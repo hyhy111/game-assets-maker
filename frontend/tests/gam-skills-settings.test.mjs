@@ -111,11 +111,26 @@ test('only an npx installation exposes update checking while other installations
     if (source === 'npx') {
       assert.match(html, /data-test="gam-skills-check"/);
       assert.match(html, /其中 1 个有更新/);
+      assert.match(html.replace(/<!--[\s\S]*?-->/g, ''), /data-test="gam-skills-install"[^>]*>\s*更新\s*<\/button>/);
+      assert.doesNotMatch(html, /安装 \/ 更新/);
     } else assert.doesNotMatch(html, /data-test="gam-skills-check"/);
     if (source === 'other') {
       assert.match(html, /请通过原安装方式维护/);
       assert.match(html, /<button[^>]*disabled[^>]*data-test="gam-skills-install"/);
     }
+  }
+});
+
+test('up-to-date skills hide the install action unless some skills are missing', async () => {
+  for (const count of [6, 4]) {
+    const html = await renderSfc('components/settings/GamSkillsSettings.vue', {
+      configureSetup(bindings) {
+        bindings.status.value = { ...absent, status: 'up_to_date', source: 'npx', installed_count: count, can_check: true };
+      },
+    });
+    assert.match(html, /data-test="gam-skills-check"/);
+    if (count === 6) assert.doesNotMatch(html, /data-test="gam-skills-install"/);
+    else assert.match(html.replace(/<!--[\s\S]*?-->/g, ''), /data-test="gam-skills-install"[^>]*>\s*一键安装\s*<\/button>/);
   }
 });
 
@@ -126,6 +141,18 @@ test('missing Node.js disables one-click install but keeps the copyable command'
   assert.match(html, /<button[^>]*disabled[^>]*data-test="gam-skills-install"/);
   assert.match(html, /Node\.js 22\.20/);
   assert.match(html, /data-test="gam-skills-copy"/);
+});
+
+test('different independent copies explain the version conflict and cannot be overwritten', async () => {
+  const html = await renderSfc('components/settings/GamSkillsSettings.vue', {
+    configureSetup(bindings) {
+      bindings.status.value = { ...absent, status: 'unmanaged', source: 'other', can_install: false, error: 'COPY_VERSION_MISMATCH' };
+    },
+  });
+  assert.match(html, /无法确认所选工具的版本/);
+  assert.match(html, /请通过原安装方式更新/);
+  assert.doesNotMatch(html, /检测到其他方式安装/);
+  assert.match(html, /<button[^>]*disabled[^>]*data-test="gam-skills-install"/);
 });
 
 test('switching agents discards the previous check response', async () => {

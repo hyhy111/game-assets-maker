@@ -19,6 +19,8 @@ from src.utils.diagnostics import logged_urlopen
 REPOSITORY = "hyhy111/gam-skills"
 SKILLS = ("gam-cli", "gam-export", "gam-guide", "gam-pic-prompt", "gam-video-prompt", "gam-workflow")
 AGENTS = ("codex", "claude-code", "cursor", "opencode", "gemini-cli", "github-copilot", "windsurf")
+SHARED_AGENTS = ("codex", "cursor", "opencode", "gemini-cli", "github-copilot")
+_EXCLUDED = {".git", "__pycache__", "__pypackages__", "metadata.json"}
 _SHA = re.compile(r"[0-9a-f]{40}")
 
 
@@ -69,21 +71,29 @@ class SkillsAPI:
         return [npx], env
 
     @staticmethod
-    def _same_copy(left: Path, right: Path) -> bool:
-        def digest(root: Path):
-            result = {}
-            total = 0
-            for path in root.rglob("*"):
-                if path.is_symlink():
+    def _file_hashes(root: Path) -> dict[str, str] | None:
+        result = {}
+        total = 0
+        for path in root.rglob("*"):
+            relative = path.relative_to(root)
+            if _EXCLUDED.intersection(relative.parts):
+                continue
+            if path.is_symlink():
+                return None
+            if path.is_file():
+                total += path.stat().st_size
+                if len(result) >= 500 or total > 8 * 1024 * 1024:
                     return None
-                if path.is_file():
-                    total += path.stat().st_size
-                    if len(result) >= 500 or total > 8 * 1024 * 1024:
-                        return None
-                    result[path.relative_to(root).as_posix()] = hashlib.sha256(path.read_bytes()).digest()
-            return result
+                data = path.read_bytes()
+                # Git blob IDs compare file contents on both Windows and macOS, without relying on executable bits.
+                result[relative.as_posix()] = hashlib.sha1(
+                    f"blob {len(data)}\0".encode() + data, usedforsecurity=False
+                ).hexdigest()
+        return result
 
-        first, second = digest(left), digest(right)
+    @classmethod
+    def _same_copy(cls, left: Path, right: Path) -> bool:
+        first, second = cls._file_hashes(left), cls._file_hashes(right)
         return first is not None and first == second
 
     def _inspect(self, agent: str) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -126,23 +136,38 @@ class SkillsAPI:
             source_owned = (
                 owned and not source.is_symlink() and not (source / ".git").exists() and (source / "SKILL.md").is_file()
             )
+            # Universal agents install into the shared directory; retain native paths for older installs.
+            target_path = source if agent in SHARED_AGENTS and source_owned else target / name
+            # A single-agent npx install can copy directly without creating a canonical copy or installMode.
+            target_owned = (
+                owned
+                and not (source.exists() or source.is_symlink())
+                and not target_path.is_symlink()
+                and not (target_path / ".git").exists()
+                and (target_path / "SKILL.md").is_file()
+            )
             for root in roots:
                 path = root / name
                 if not (path.exists() or path.is_symlink()):
                     continue
-                managed = source_owned and (path == source or (path.is_symlink() and path.resolve() == source))
-                if (
-                    not managed
-                    and source_owned
-                    and entry.get("installMode") == "copy"
-                    and path.is_dir()
-                    and not path.is_symlink()
-                ):
+                managed = (source_owned and (path == source or (path.is_symlink() and path.resolve() == source))) or (
+                    target_owned and path == target_path
+                )
+                if not managed and source_owned and path.is_dir() and not path.is_symlink():
                     managed = self._same_copy(path, source)
                 if not managed:
-                    return {**state, "status": "unmanaged", "source": "other", "can_install": False}, {}
-            if source_owned and (target / name / "SKILL.md").is_file():
-                entries[name] = entry
+                    conflict = (
+                        source_owned and path.is_dir() and not path.is_symlink() and (path / "SKILL.md").is_file()
+                    )
+                    return {
+                        **state,
+                        "status": "unmanaged",
+                        "source": "other",
+                        "can_install": False,
+                        "error": "COPY_VERSION_MISMATCH" if conflict else "",
+                    }, {}
+            if (source_owned or target_owned) and (target_path / "SKILL.md").is_file():
+                entries[name] = {**entry, "_path": target_path}
         if entries:
             tracked = all(
                 _SHA.fullmatch(str(entry.get("skillFolderHash", ""))) and entry.get("skillPath")
@@ -192,16 +217,29 @@ class SkillsAPI:
                     tree = json.loads(raw)
                     if not isinstance(tree, dict) or tree.get("truncated") or not isinstance(tree.get("tree"), list):
                         raise ValueError("Invalid tree")
-                    trees[ref] = {item["path"]: item["sha"] for item in tree["tree"] if item.get("type") == "tree"}
+                    trees[ref] = tree["tree"]
                 folder = entry["skillPath"].replace("\\", "/").rstrip("/")
                 if folder.lower().endswith("/skill.md"):
                     folder = folder[:-9]
                 if not folder or PurePosixPath(folder).is_absolute() or ".." in PurePosixPath(folder).parts:
                     raise ValueError("Invalid skill path")
-                latest = trees[ref].get(folder)
+                items = trees[ref]
+                latest = next(
+                    (item["sha"] for item in items if item.get("type") == "tree" and item["path"] == folder), None
+                )
                 if not latest or not _SHA.fullmatch(latest):
                     raise ValueError("Skill missing upstream")
-                if latest != entry["skillFolderHash"]:
+                expected = {
+                    item["path"][len(folder) + 1 :]: item["sha"]
+                    for item in items
+                    if item.get("type") == "blob"
+                    and item["path"].startswith(folder + "/")
+                    and not _EXCLUDED.intersection(PurePosixPath(item["path"][len(folder) + 1 :]).parts)
+                }
+                if "SKILL.md" not in expected:
+                    raise ValueError("Skill files missing upstream")
+                # The CLI lock is shared across agents, so its hash alone cannot prove this copy is current.
+                if latest != entry["skillFolderHash"] or self._file_hashes(entry["_path"]) != expected:
                     state["outdated"].append(name)
             state["status"] = "update_available" if state["outdated"] else "up_to_date"
         except (OSError, ValueError, TypeError, KeyError, AttributeError):

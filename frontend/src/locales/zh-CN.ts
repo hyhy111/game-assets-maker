@@ -123,7 +123,7 @@ export default {
     agent: 'Agent 工具',
     hint: '为所选工具全局安装 GAM Skills。也可以复制命令，在终端中安装。',
     install: '一键安装',
-    installOrUpdate: '安装 / 更新',
+    update: '更新',
     checkUpdates: '检查更新',
     updateBadge: 'GAM Skills 有更新',
     checking: '正在检测安装和更新…',
@@ -133,6 +133,7 @@ export default {
     states: {
       not_installed: '未检测到所选工具的 GAM Skills 安装。',
       unmanaged: '检测到其他方式安装的 GAM Skills。请通过原安装方式维护，此处不提醒更新或覆盖安装。',
+      versionConflict: '检测到内容不同的 GAM Skills 副本，无法确认所选工具的版本。',
       installed: '已通过 npx 安装 {count} / {total} 个 GAM Skills。',
       up_to_date: '已通过 npx 安装 {count} / {total} 个 GAM Skills，已安装的版本均为最新。',
       update_available: '已安装 {count} / {total} 个 GAM Skills，其中 {updates} 个有更新。',
@@ -141,6 +142,7 @@ export default {
     errors: {
       DETECTION_FAILED: '无法识别安装记录，请检查原安装方式；不会覆盖已有 Skills。',
       VERSION_UNTRACKED: '安装记录缺少版本信息，可重新安装以建立版本记录。',
+      COPY_VERSION_MISMATCH: '所选工具的副本与共享目录不同，共享安装记录无法确定其来源和版本。请通过原安装方式更新；此处不会覆盖。',
       CHECK_FAILED: '更新检测失败，请检查网络后重试。',
       NODE_REQUIRED: '无法调用 Node.js 和 npm，请安装后重新打开 GAM。',
       INSTALL_FAILED: '安装未完成，请检查网络及 Node.js、npm、Git 环境，也可以复制命令到终端重试。',

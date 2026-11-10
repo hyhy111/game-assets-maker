@@ -123,7 +123,7 @@ export default {
     agent: 'Agent tool',
     hint: 'Install GAM Skills globally for the selected tool, or copy the command to run in a terminal.',
     install: 'Install',
-    installOrUpdate: 'Install / Update',
+    update: 'Update',
     checkUpdates: 'Check for updates',
     updateBadge: 'GAM Skills updates available',
     checking: 'Checking installation and updates…',
@@ -133,6 +133,7 @@ export default {
     states: {
       not_installed: 'No GAM Skills installation found for this tool.',
       unmanaged: 'GAM Skills were installed another way. Maintain them with the original installer; no update alerts or overwrites are provided here.',
+      versionConflict: 'GAM Skills copies differ. The selected tool’s version could not be verified.',
       installed: '{count} / {total} GAM Skills installed with npx.',
       up_to_date: '{count} / {total} GAM Skills installed with npx. All installed skills are up to date.',
       update_available: '{count} / {total} GAM Skills installed; {updates} have updates.',
@@ -141,6 +142,7 @@ export default {
     errors: {
       DETECTION_FAILED: 'Could not identify the installation records. Check the original installer; existing skills will not be overwritten.',
       VERSION_UNTRACKED: 'Version information is missing. Reinstall to establish version tracking.',
+      COPY_VERSION_MISMATCH: 'This tool’s copy differs from the shared directory. The shared installation record cannot establish its origin or version. Update it with the original installer; this copy will not be overwritten here.',
       CHECK_FAILED: 'Could not check for updates. Check your connection and retry.',
       NODE_REQUIRED: 'Could not run Node.js and npm. Install them and restart GAM.',
       INSTALL_FAILED: 'Installation did not complete. Check your connection, Node.js, npm and Git, or run the copied command in a terminal.',

@@ -19,13 +19,14 @@
     </label>
     <div class="mt-4 flex flex-wrap items-center gap-3">
       <Button
+        v-if="showInstallAction"
         type="button"
         :loading="installing"
         :disabled="checking || installing || !status?.can_install || !status?.node_available"
         data-test="gam-skills-install"
         @click="installSkills"
       >
-        {{ t(status?.source === 'npx' ? 'skillsInstall.installOrUpdate' : 'skillsInstall.install') }}
+        {{ t(status?.status === 'update_available' ? 'skillsInstall.update' : 'skillsInstall.install') }}
       </Button>
       <Button
         v-if="status?.source === 'npx'"
@@ -52,7 +53,7 @@
       role="status"
       data-test="gam-skills-status"
     >
-      {{ t(`skillsInstall.states.${status.status}`, { count: status.installed_count, total: status.total_count, updates: status.outdated.length }) }}
+      {{ t(`skillsInstall.states.${status.error === 'COPY_VERSION_MISMATCH' ? 'versionConflict' : status.status}`, { count: status.installed_count, total: status.total_count, updates: status.outdated.length }) }}
     </p>
     <p
       v-if="status && !status.node_available"
@@ -136,6 +137,8 @@ const command = computed(() => `npx skills add hyhy111/gam-skills -g -a ${agent.
 const copied = ref(false);
 const copyFailed = ref(false);
 const status = ref<GamSkillsStatus | null>(null);
+const showInstallAction = computed(() => !status.value || status.value.status !== 'up_to_date'
+  || status.value.installed_count < status.value.total_count);
 const checking = ref(false);
 const installing = ref(false);
 const installed = ref(false);
