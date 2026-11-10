@@ -14,7 +14,11 @@
   >
     <legend :class="compact ? 'sr-only' : 'text-sm font-medium text-gray-200'">
       {{ label }}
-      <span v-if="required" class="text-danger" aria-hidden="true">*</span>
+      <span
+        v-if="required"
+        class="text-danger"
+        aria-hidden="true"
+      >*</span>
     </legend>
     <p
       :id="helpId"
@@ -23,16 +27,31 @@
       {{ help }}
     </p>
 
-    <div v-if="compact" class="relative h-[82px] w-[68px]">
-      <div v-if="modelValue" class="group relative h-full w-full">
+    <div
+      v-if="compact"
+      class="relative h-[82px] w-[68px]"
+    >
+      <div
+        v-if="modelValue"
+        class="group relative h-full w-full"
+      >
         <button
           type="button"
           class="h-full w-full overflow-hidden rounded-[4px] border-2 border-gray-300/80 bg-[#2b2e36] p-0.5 shadow-lg shadow-black/30 transition hover:border-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           :title="editLabel || changeLabel"
           @click="openSelectedImage"
         >
-          <img v-if="previewUrl && !previewFailed" :src="previewUrl" alt="" class="h-full w-full rounded-[2px] object-cover" @error="previewFailed = true">
-          <span v-else class="text-[10px] text-gray-400">{{ t('aiCreation.imageUnavailable') }}</span>
+          <img
+            v-if="previewUrl && !previewFailed"
+            :src="previewUrl"
+            alt=""
+            class="h-full w-full rounded-[2px] object-cover"
+            @error="previewFailed = true"
+          >
+          <span
+            v-else
+            class="text-[10px] text-gray-400"
+          >{{ t('aiCreation.imageUnavailable') }}</span>
           <span class="sr-only">{{ editLabel || changeLabel }}</span>
         </button>
         <button
@@ -41,7 +60,11 @@
           :title="removeLabel"
           @click="emit('clear')"
         >
-          <X :size="12" stroke-width="2.4" aria-hidden="true" />
+          <X
+            :size="12"
+            stroke-width="2.4"
+            aria-hidden="true"
+          />
           <span class="sr-only">{{ removeLabel }}</span>
         </button>
       </div>
@@ -53,7 +76,11 @@
         :title="selectLabel"
         @click="emit('select')"
       >
-        <Plus :size="20" stroke-width="2" aria-hidden="true" />
+        <Plus
+          :size="20"
+          stroke-width="2"
+          aria-hidden="true"
+        />
         <span class="text-[11px] font-medium leading-none">
           {{ cardLabel || label }}<span
             v-if="required"
@@ -95,12 +122,25 @@
           class="h-36 w-40 rounded-lg bg-black/30 object-contain"
           @error="previewFailed = true"
         >
-        <p v-else class="text-xs text-gray-400">{{ t('aiCreation.imageUnavailable') }}</p>
+        <p
+          v-else
+          class="text-xs text-gray-400"
+        >
+          {{ t('aiCreation.imageUnavailable') }}
+        </p>
         <div class="min-w-0 flex-1">
-          <p class="truncate text-sm font-medium text-gray-200">{{ fileName }}</p>
-          <p class="mt-1 text-xs text-[var(--seedance-muted)]">{{ selectedLabel }}</p>
+          <p class="truncate text-sm font-medium text-gray-200">
+            {{ fileName }}
+          </p>
+          <p class="mt-1 text-xs text-[var(--seedance-muted)]">
+            {{ selectedLabel }}
+          </p>
           <div class="mt-4 flex flex-wrap gap-2">
-            <button type="button" class="btn-secondary px-3 py-1.5 text-xs" @click="emit('select')">
+            <button
+              type="button"
+              class="btn-secondary px-3 py-1.5 text-xs"
+              @click="emit('select')"
+            >
               {{ changeLabel }}
             </button>
             <button
@@ -112,7 +152,11 @@
             >
               {{ editLabel }}
             </button>
-            <button type="button" class="px-3 py-1.5 text-xs text-gray-400 hover:text-white" @click="emit('clear')">
+            <button
+              type="button"
+              class="px-3 py-1.5 text-xs text-gray-400 hover:text-white"
+              @click="emit('clear')"
+            >
               {{ removeLabel }}
             </button>
           </div>
@@ -126,7 +170,10 @@
         @click="emit('select')"
       >
         <span class="grid h-11 w-11 place-items-center rounded-xl bg-white/[0.05]">
-          <ImagePlus :size="21" aria-hidden="true" />
+          <ImagePlus
+            :size="21"
+            aria-hidden="true"
+          />
         </span>
         <span class="text-sm font-medium">{{ selectLabel }}</span>
       </button>

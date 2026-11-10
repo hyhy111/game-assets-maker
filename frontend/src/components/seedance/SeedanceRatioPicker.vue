@@ -1,5 +1,8 @@
 <template>
-  <div class="grid grid-cols-4 gap-1 rounded-xl bg-black/15 p-1" data-test="seedance-ratio">
+  <div
+    class="grid grid-cols-4 gap-1 rounded-xl bg-black/15 p-1"
+    data-test="seedance-ratio"
+  >
     <button
       v-for="ratio in ratios"
       :key="ratio.value"

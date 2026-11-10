@@ -11,7 +11,10 @@
         data-test="seedance-composer"
       >
         <div class="relative flex min-h-[282px] items-center gap-5 px-1 py-1">
-          <div class="relative flex shrink-0 items-center gap-3 sm:gap-4" data-test="seedance-frame-strip">
+          <div
+            class="relative flex shrink-0 items-center gap-3 sm:gap-4"
+            data-test="seedance-frame-strip"
+          >
             <SeedanceImagePicker
               class="-rotate-[7deg] transition-transform duration-200 hover:-translate-y-0.5 hover:-rotate-[4deg]"
               :model-value="form.first_frame"
@@ -37,7 +40,12 @@
               @drop-file="dropLocalFrame('first_frame', $event)"
               @drop-error="dropError = t($event)"
             />
-            <ArrowRight :size="14" class="shrink-0 text-gray-600" stroke-width="1.8" aria-hidden="true" />
+            <ArrowRight
+              :size="14"
+              class="shrink-0 text-gray-600"
+              stroke-width="1.8"
+              aria-hidden="true"
+            />
             <SeedanceImagePicker
               class="rotate-[4deg] transition-transform duration-200 hover:-translate-y-0.5 hover:rotate-[2deg]"
               :model-value="form.last_frame"
@@ -66,7 +74,10 @@
           </div>
 
           <div class="relative min-w-0 flex-1 self-stretch">
-            <label for="seedance-prompt" class="sr-only">{{ t('seedance.create.promptTitle') }}</label>
+            <label
+              for="seedance-prompt"
+              class="sr-only"
+            >{{ t('seedance.create.promptTitle') }}</label>
             <textarea
               id="seedance-prompt"
               v-model="form.prompt"
@@ -117,17 +128,44 @@
           </div>
         </div>
 
-        <p v-if="imageEditorLaunchError" class="mt-2 text-sm text-danger" role="alert">
+        <p
+          v-if="imageEditorLaunchError"
+          class="mt-2 text-sm text-danger"
+          role="alert"
+        >
           {{ imageEditorLaunchError }}
         </p>
-        <p v-if="errors.first_frame" class="mt-2 text-sm text-danger">{{ errorMessage(errors.first_frame) }}</p>
-        <p v-if="errors.last_frame" class="mt-2 text-sm text-danger">{{ errorMessage(errors.last_frame) }}</p>
-        <p v-if="errors.prompt" class="mt-2 text-sm text-danger">{{ errorMessage(errors.prompt) }}</p>
+        <p
+          v-if="errors.first_frame"
+          class="mt-2 text-sm text-danger"
+        >
+          {{ errorMessage(errors.first_frame) }}
+        </p>
+        <p
+          v-if="errors.last_frame"
+          class="mt-2 text-sm text-danger"
+        >
+          {{ errorMessage(errors.last_frame) }}
+        </p>
+        <p
+          v-if="errors.prompt"
+          class="mt-2 text-sm text-danger"
+        >
+          {{ errorMessage(errors.prompt) }}
+        </p>
 
-        <p v-if="draftLoadFailed" class="mt-3 text-sm text-danger">
+        <p
+          v-if="draftLoadFailed"
+          class="mt-3 text-sm text-danger"
+        >
           {{ handoffLoadFailed ? t('seedance.create.handoffLoadFailed') : t('seedance.create.continuationLoadFailed') }}
         </p>
-        <p v-if="errors.body" class="mt-3 text-sm text-danger">{{ errorMessage(errors.body) }}</p>
+        <p
+          v-if="errors.body"
+          class="mt-3 text-sm text-danger"
+        >
+          {{ errorMessage(errors.body) }}
+        </p>
         <div
           v-if="capabilitiesBlocked"
           class="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning"
@@ -186,13 +224,22 @@
               @click="parametersOpen = !parametersOpen"
               @keydown.escape.stop="parametersOpen = false"
             >
-              <Settings2 :size="15" class="text-gray-400" aria-hidden="true" />
+              <Settings2
+                :size="15"
+                class="text-gray-400"
+                aria-hidden="true"
+              />
               <span>{{ form.ratio === 'adaptive' ? t('seedance.create.adaptive') : form.ratio }}</span>
               <span class="text-gray-600">·</span>
               <span>{{ form.resolution }}</span>
               <span class="text-gray-600">·</span>
               <span>{{ form.duration === -1 ? t('seedance.ui.smart') : `${form.duration}s` }}</span>
-              <ChevronDown :size="14" class="text-gray-500 transition-transform" :class="parametersOpen ? 'rotate-180' : ''" aria-hidden="true" />
+              <ChevronDown
+                :size="14"
+                class="text-gray-500 transition-transform"
+                :class="parametersOpen ? 'rotate-180' : ''"
+                aria-hidden="true"
+              />
             </button>
 
             <div
@@ -202,15 +249,27 @@
               @keydown.escape.stop="parametersOpen = false"
             >
               <fieldset>
-                <legend class="mb-2 text-xs text-gray-500">{{ t('seedance.create.ratio') }}</legend>
-                <SeedanceRatioPicker v-model="form.ratio" :adaptive-label="t('seedance.create.adaptive')" />
-                <p class="mt-2 text-xs text-gray-500">{{ t('seedance.create.adaptiveHelp') }}</p>
+                <legend class="mb-2 text-xs text-gray-500">
+                  {{ t('seedance.create.ratio') }}
+                </legend>
+                <SeedanceRatioPicker
+                  v-model="form.ratio"
+                  :adaptive-label="t('seedance.create.adaptive')"
+                />
+                <p class="mt-2 text-xs text-gray-500">
+                  {{ t('seedance.create.adaptiveHelp') }}
+                </p>
               </fieldset>
 
               <div class="mt-4 grid gap-4 sm:grid-cols-2">
                 <fieldset>
-                  <legend class="mb-2 text-xs text-gray-500">{{ t('seedance.create.resolution') }}</legend>
-                  <div class="grid w-3/4 grid-cols-3 gap-1 rounded-xl bg-black/15 p-1" data-test="seedance-resolution">
+                  <legend class="mb-2 text-xs text-gray-500">
+                    {{ t('seedance.create.resolution') }}
+                  </legend>
+                  <div
+                    class="grid w-3/4 grid-cols-3 gap-1 rounded-xl bg-black/15 p-1"
+                    data-test="seedance-resolution"
+                  >
                     <button
                       v-for="resolution in allResolutions"
                       :key="resolution"
@@ -225,12 +284,20 @@
                       {{ resolution }}
                     </button>
                   </div>
-                  <p v-if="errors.resolution" class="error">{{ errorMessage(errors.resolution) }}</p>
+                  <p
+                    v-if="errors.resolution"
+                    class="error"
+                  >
+                    {{ errorMessage(errors.resolution) }}
+                  </p>
                 </fieldset>
 
                 <div class="text-xs text-gray-500">
                   {{ t('seedance.create.duration') }}
-                  <Listbox v-slot="{ open }" v-model="form.duration">
+                  <Listbox
+                    v-slot="{ open }"
+                    v-model="form.duration"
+                  >
                     <div class="relative mt-2">
                       <ListboxButton
                         class="flex h-10 w-full items-center justify-between gap-2 rounded-xl border border-[#414141] bg-[#2d2d2d] px-3 text-sm text-gray-200 transition-colors hover:border-[#555] hover:bg-[#353535] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
@@ -286,17 +353,28 @@
                       </Transition>
                     </div>
                   </Listbox>
-                  <p v-if="errors.duration" id="seedance-duration-error" class="error">{{ errorMessage(errors.duration) }}</p>
+                  <p
+                    v-if="errors.duration"
+                    id="seedance-duration-error"
+                    class="error"
+                  >
+                    {{ errorMessage(errors.duration) }}
+                  </p>
                 </div>
               </div>
 
               <div class="mt-4 flex flex-wrap gap-x-8 gap-y-4 border-t border-white/[0.06] pt-4">
-                <Switch v-model="form.generate_audio" :label="t('seedance.create.generateAudio')" />
+                <Switch
+                  v-model="form.generate_audio"
+                  :label="t('seedance.create.generateAudio')"
+                />
                 <div>
-                  <Switch v-model="form.return_last_frame" :label="t('seedance.create.returnLastFrame')" />
+                  <Switch
+                    v-model="form.return_last_frame"
+                    :label="t('seedance.create.returnLastFrame')"
+                  />
                 </div>
               </div>
-
             </div>
           </div>
 
@@ -310,12 +388,48 @@
           </button>
 
           <div class="ml-auto flex min-w-0 items-center gap-3 pl-2">
-            <div v-if="showCreditEstimate" class="text-right" data-test="generation-credits" aria-live="polite">
-              <p v-if="quoteLoading" class="text-sm text-gray-500">{{ t('aiCreation.platformQuoteLoading') }}</p>
-              <p v-else-if="quoteValue !== null" class="text-sm text-gray-300">{{ t('aiCreation.estimatedCredits', { credits: quoteValue }) }}</p>
-              <p v-else-if="creditUsage.error" class="max-w-[16rem] text-xs leading-5 text-warning">{{ t('creditUsage.unavailable') }} <button type="button" class="underline" @click="creditUsage.refresh()">{{ t('creditUsage.refresh') }}</button></p>
-              <p v-else-if="quoteError" class="max-w-[16rem] text-xs leading-5 text-primary">{{ quoteError }}</p>
-              <p v-else class="text-sm text-gray-500">{{ t('aiCreation.creditsUnavailable') }}</p>
+            <div
+              v-if="showCreditEstimate"
+              class="text-right"
+              data-test="generation-credits"
+              aria-live="polite"
+            >
+              <p
+                v-if="quoteLoading"
+                class="text-sm text-gray-500"
+              >
+                {{ t('aiCreation.platformQuoteLoading') }}
+              </p>
+              <p
+                v-else-if="quoteValue !== null"
+                class="text-sm text-gray-300"
+              >
+                {{ t('aiCreation.estimatedCredits', { credits: quoteValue }) }}
+              </p>
+              <p
+                v-else-if="creditUsage.error"
+                class="max-w-[16rem] text-xs leading-5 text-warning"
+              >
+                {{ t('creditUsage.unavailable') }} <button
+                  type="button"
+                  class="underline"
+                  @click="creditUsage.refresh()"
+                >
+                  {{ t('creditUsage.refresh') }}
+                </button>
+              </p>
+              <p
+                v-else-if="quoteError"
+                class="max-w-[16rem] text-xs leading-5 text-primary"
+              >
+                {{ quoteError }}
+              </p>
+              <p
+                v-else
+                class="text-sm text-gray-500"
+              >
+                {{ t('aiCreation.creditsUnavailable') }}
+              </p>
             </div>
             <CreationModelSelect
               v-if="showGenerationSourceSelector"
@@ -333,16 +447,34 @@
               :title="t('seedance.create.createTask')"
               data-test="seedance-submit"
             >
-              <span v-if="submitting" class="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" aria-hidden="true" />
-              <ArrowUp v-else :size="20" aria-hidden="true" />
+              <span
+                v-if="submitting"
+                class="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"
+                aria-hidden="true"
+              />
+              <ArrowUp
+                v-else
+                :size="20"
+                aria-hidden="true"
+              />
             </button>
           </div>
         </div>
       </section>
-      <p v-if="dropError" class="mt-2 text-sm text-danger" role="alert">{{ dropError }}</p>
+      <p
+        v-if="dropError"
+        class="mt-2 text-sm text-danger"
+        role="alert"
+      >
+        {{ dropError }}
+      </p>
     </form>
 
-    <section v-if="showTaskList" class="mt-10" data-test="seedance-create-task-list">
+    <section
+      v-if="showTaskList"
+      class="mt-10"
+      data-test="seedance-create-task-list"
+    >
       <SeedanceTaskList />
     </section>
 
@@ -371,9 +503,24 @@
       @click.self="closeValidationModal"
     >
       <div class="max-w-md rounded-xl border border-dark-border bg-dark-surface p-6">
-        <h2 id="validation-title" class="text-lg font-semibold text-white">{{ t('seedance.ui.checkInput') }}</h2>
-        <p id="validation-description" class="mt-3 text-gray-300">{{ modalMessage }}</p>
-        <Button class="mt-5" @click="closeValidationModal">{{ t('common.confirm') }}</Button>
+        <h2
+          id="validation-title"
+          class="text-lg font-semibold text-white"
+        >
+          {{ t('seedance.ui.checkInput') }}
+        </h2>
+        <p
+          id="validation-description"
+          class="mt-3 text-gray-300"
+        >
+          {{ modalMessage }}
+        </p>
+        <Button
+          class="mt-5"
+          @click="closeValidationModal"
+        >
+          {{ t('common.confirm') }}
+        </Button>
       </div>
     </div>
 
@@ -389,22 +536,65 @@
       @click.self="cancelPaidAction"
     >
       <div class="max-w-md rounded-xl border border-dark-border bg-dark-surface p-6">
-        <h2 id="paid-confirm-title" class="text-lg font-semibold text-white">{{ t('seedance.create.paidConfirmTitle') }}</h2>
-        <ol id="paid-confirm-description" class="mt-3 list-decimal space-y-2 pl-5 text-sm leading-6 text-gray-300">
+        <h2
+          id="paid-confirm-title"
+          class="text-lg font-semibold text-white"
+        >
+          {{ t('seedance.create.paidConfirmTitle') }}
+        </h2>
+        <ol
+          id="paid-confirm-description"
+          class="mt-3 list-decimal space-y-2 pl-5 text-sm leading-6 text-gray-300"
+        >
           <li>
-            {{ t('seedance.create.paidConfirmCost') }}<span class="text-warning" data-test="seedance-paid-confirm-irrevocable">{{ t('seedance.create.paidConfirmIrrevocable') }}</span>
+            {{ t('seedance.create.paidConfirmCost') }}<span
+              class="text-warning"
+              data-test="seedance-paid-confirm-irrevocable"
+            >{{ t('seedance.create.paidConfirmIrrevocable') }}</span>
           </li>
           <li>{{ t('seedance.create.paidConfirmDownload') }}</li>
           <li>{{ t('seedance.create.paidConfirmExpiry') }}</li>
         </ol>
-        <div v-if="platformGenerationSelected" class="mt-4 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm" data-test="seedance-platform-quote" aria-live="polite">
-          <p v-if="quoteLoading" class="text-gray-400">{{ t('aiCreation.platformQuoteLoading') }}</p>
-          <p v-else-if="quoteError" class="text-primary">{{ quoteError }}</p>
-          <p v-else-if="quoteValue !== null" class="text-gray-200">{{ t('aiCreation.platformQuote', { credits: quoteValue }) }}</p>
+        <div
+          v-if="platformGenerationSelected"
+          class="mt-4 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm"
+          data-test="seedance-platform-quote"
+          aria-live="polite"
+        >
+          <p
+            v-if="quoteLoading"
+            class="text-gray-400"
+          >
+            {{ t('aiCreation.platformQuoteLoading') }}
+          </p>
+          <p
+            v-else-if="quoteError"
+            class="text-primary"
+          >
+            {{ quoteError }}
+          </p>
+          <p
+            v-else-if="quoteValue !== null"
+            class="text-gray-200"
+          >
+            {{ t('aiCreation.platformQuote', { credits: quoteValue }) }}
+          </p>
         </div>
         <div class="mt-5 flex justify-end gap-3">
-          <Button variant="secondary" :disabled="submitting" @click="cancelPaidAction">{{ t('seedance.create.paidConfirmCancel') }}</Button>
-          <Button :loading="submitting" :disabled="submitting || platformConfirmBlocked" @click="confirmPaidAction">{{ t('seedance.create.paidConfirmConfirm') }}</Button>
+          <Button
+            variant="secondary"
+            :disabled="submitting"
+            @click="cancelPaidAction"
+          >
+            {{ t('seedance.create.paidConfirmCancel') }}
+          </Button>
+          <Button
+            :loading="submitting"
+            :disabled="submitting || platformConfirmBlocked"
+            @click="confirmPaidAction"
+          >
+            {{ t('seedance.create.paidConfirmConfirm') }}
+          </Button>
         </div>
       </div>
     </div>

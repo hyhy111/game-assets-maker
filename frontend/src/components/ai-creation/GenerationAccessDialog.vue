@@ -1,5 +1,8 @@
 <template>
-  <Teleport to="body" :disabled="teleportDisabled">
+  <Teleport
+    to="body"
+    :disabled="teleportDisabled"
+  >
     <div
       v-if="open"
       ref="modalRoot"
@@ -13,14 +16,24 @@
       @keydown="onKeydown"
     >
       <div class="w-full max-w-md rounded-xl border border-dark-border bg-dark-surface p-6 shadow-2xl shadow-black/50">
-        <h2 id="generation-access-title" class="text-lg font-semibold text-white">
+        <h2
+          id="generation-access-title"
+          class="text-lg font-semibold text-white"
+        >
           {{ t(loggedIn ? 'aiCreation.apiKeyRequiredTitle' : 'aiCreation.generationAccessTitle') }}
         </h2>
-        <p id="generation-access-description" class="mt-3 text-sm leading-6 text-gray-300">
+        <p
+          id="generation-access-description"
+          class="mt-3 text-sm leading-6 text-gray-300"
+        >
           {{ t(loggedIn ? 'aiCreation.apiKeyRequiredDescription' : 'aiCreation.generationAccessDescription') }}
         </p>
         <div class="mt-5 flex flex-col gap-3 sm:flex-row sm:justify-end">
-          <Button v-if="!loggedIn" variant="secondary" @click="emit('login')">
+          <Button
+            v-if="!loggedIn"
+            variant="secondary"
+            @click="emit('login')"
+          >
             {{ t('aiCreation.loginToGenerate') }}
           </Button>
           <Button @click="emit('configure-key')">

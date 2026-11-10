@@ -189,7 +189,10 @@
                 </div>
               </fieldset>
 
-              <fieldset class="mt-4" data-test="seedream-resolution">
+              <fieldset
+                class="mt-4"
+                data-test="seedream-resolution"
+              >
                 <legend class="mb-2 text-xs text-gray-500">
                   {{ t('seedream.create.resolution') }}
                 </legend>
@@ -210,7 +213,10 @@
                 </div>
               </fieldset>
 
-              <fieldset class="mt-4" data-test="seedream-count">
+              <fieldset
+                class="mt-4"
+                data-test="seedream-count"
+              >
                 <legend class="mb-2 text-xs text-gray-500">
                   {{ t('seedream.create.count') }}
                 </legend>
@@ -242,12 +248,48 @@
           </button>
 
           <div class="ml-auto flex min-w-0 items-center gap-3 pl-2">
-            <div v-if="showCreditEstimate" class="text-right" data-test="generation-credits" aria-live="polite">
-              <p v-if="quoteLoading" class="text-sm text-gray-500">{{ t('aiCreation.platformQuoteLoading') }}</p>
-              <p v-else-if="platformQuoteTotal !== null" class="text-sm text-gray-300">{{ t('aiCreation.estimatedCredits', { credits: platformQuoteTotal }) }}</p>
-              <p v-else-if="creditUsage.error" class="max-w-[16rem] text-xs leading-5 text-warning">{{ t('creditUsage.unavailable') }} <button type="button" class="underline" @click="creditUsage.refresh()">{{ t('creditUsage.refresh') }}</button></p>
-              <p v-else-if="quoteError" class="max-w-[16rem] text-xs leading-5 text-primary">{{ quoteError }}</p>
-              <p v-else class="text-sm text-gray-500">{{ t('aiCreation.creditsUnavailable') }}</p>
+            <div
+              v-if="showCreditEstimate"
+              class="text-right"
+              data-test="generation-credits"
+              aria-live="polite"
+            >
+              <p
+                v-if="quoteLoading"
+                class="text-sm text-gray-500"
+              >
+                {{ t('aiCreation.platformQuoteLoading') }}
+              </p>
+              <p
+                v-else-if="platformQuoteTotal !== null"
+                class="text-sm text-gray-300"
+              >
+                {{ t('aiCreation.estimatedCredits', { credits: platformQuoteTotal }) }}
+              </p>
+              <p
+                v-else-if="creditUsage.error"
+                class="max-w-[16rem] text-xs leading-5 text-warning"
+              >
+                {{ t('creditUsage.unavailable') }} <button
+                  type="button"
+                  class="underline"
+                  @click="creditUsage.refresh()"
+                >
+                  {{ t('creditUsage.refresh') }}
+                </button>
+              </p>
+              <p
+                v-else-if="quoteError"
+                class="max-w-[16rem] text-xs leading-5 text-primary"
+              >
+                {{ quoteError }}
+              </p>
+              <p
+                v-else
+                class="text-sm text-gray-500"
+              >
+                {{ t('aiCreation.creditsUnavailable') }}
+              </p>
             </div>
             <CreationModelSelect
               v-if="showGenerationSourceSelector"
@@ -279,10 +321,19 @@
           </div>
         </div>
       </section>
-      <p v-if="referenceError" class="mt-2 text-sm text-danger" role="alert">{{ referenceError }}</p>
+      <p
+        v-if="referenceError"
+        class="mt-2 text-sm text-danger"
+        role="alert"
+      >
+        {{ referenceError }}
+      </p>
     </form>
 
-    <div v-if="showBatchList" class="mt-8">
+    <div
+      v-if="showBatchList"
+      class="mt-8"
+    >
       <SeedreamBatchList />
     </div>
 
@@ -309,11 +360,21 @@
           class="mt-3 list-decimal space-y-2 pl-5 text-sm leading-6 text-gray-300"
         >
           <li>
-            <template v-if="platformGenerationSelected">{{ t('aiCreation.platformBilledOnSubmit') }}</template>
-            <template v-else>{{ t('seedream.confirm.cost') }}</template>
-            <span class="text-warning" data-test="seedream-paid-confirm-irrevocable">{{ t('seedream.confirm.irrevocable') }}</span>
+            <template v-if="platformGenerationSelected">
+              {{ t('aiCreation.platformBilledOnSubmit') }}
+            </template>
+            <template v-else>
+              {{ t('seedream.confirm.cost') }}
+            </template>
+            <span
+              class="text-warning"
+              data-test="seedream-paid-confirm-irrevocable"
+            >{{ t('seedream.confirm.irrevocable') }}</span>
           </li>
-          <li v-if="form.reference_image" data-test="seedream-confirm-reference">
+          <li
+            v-if="form.reference_image"
+            data-test="seedream-confirm-reference"
+          >
             {{ t('seedream.confirm.reference') }}
           </li>
           <li>{{ t('seedream.confirm.download') }}</li>

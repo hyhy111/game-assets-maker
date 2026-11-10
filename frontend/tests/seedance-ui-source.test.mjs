@@ -324,7 +324,7 @@ test('settings save action stays in the page bar and logging uses its own row', 
   const settings = await source('views/SeedanceSettings.vue');
   assert.match(settings, /form="seedance-settings-form"/);
   assert.match(settings, /id="seedance-settings-form"/);
-  assert.match(settings, /Switch v-model="appDraft\.logger_enabled"/);
+  assert.match(settings, /Switch\s+v-model="appDraft\.logger_enabled"/);
   assert.doesNotMatch(settings, /default_fps|settings\.defaultFps/);
 });
 

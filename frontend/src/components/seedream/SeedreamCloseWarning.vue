@@ -9,10 +9,16 @@
     @click.self="$emit('continue')"
   >
     <div class="max-w-md rounded-xl border border-dark-border bg-dark-surface p-6">
-      <h2 id="seedream-close-warning-title" class="text-lg font-semibold text-white">
+      <h2
+        id="seedream-close-warning-title"
+        class="text-lg font-semibold text-white"
+      >
         {{ t('seedream.close.title') }}
       </h2>
-      <p id="seedream-close-warning-body" class="mt-3 text-gray-300">
+      <p
+        id="seedream-close-warning-body"
+        class="mt-3 text-gray-300"
+      >
         {{ t('seedream.close.body', { count }) }}
       </p>
       <div class="mt-5 flex justify-end gap-3">

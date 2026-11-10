@@ -7,7 +7,12 @@
       >
         <template #actions>
           <div class="flex items-center gap-3">
-            <p v-if="saveFeedback" class="text-sm text-success">{{ saveFeedback }}</p>
+            <p
+              v-if="saveFeedback"
+              class="text-sm text-success"
+            >
+              {{ saveFeedback }}
+            </p>
             <Button
               type="submit"
               form="seedream-settings-form"
@@ -20,12 +25,18 @@
       </SeedreamPageBar>
     </template>
 
-    <p v-if="settingsError" class="mb-5 rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-danger">
+    <p
+      v-if="settingsError"
+      class="mb-5 rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-danger"
+    >
       {{ settingsError }}
     </p>
 
     <SeedreamPanel v-if="!settings">
-      <div class="flex min-h-32 items-center justify-center text-gray-400" role="status">
+      <div
+        class="flex min-h-32 items-center justify-center text-gray-400"
+        role="status"
+      >
         {{ t('common.loading') }}
       </div>
     </SeedreamPanel>
@@ -47,17 +58,25 @@
             class="mt-2 w-full rounded-lg border border-dark-border bg-dark-bg px-3 py-2 text-gray-100 sm:max-w-xs"
             data-test="seedream-settings-count"
           >
-            <option v-for="count in allowedCounts" :key="count" :value="count">{{ count }}</option>
+            <option
+              v-for="count in allowedCounts"
+              :key="count"
+              :value="count"
+            >{{ count }}</option>
           </select>
         </label>
-        <p class="mt-3 text-xs leading-5 text-gray-400">{{ t('seedream.settings.defaultCountHint') }}</p>
+        <p class="mt-3 text-xs leading-5 text-gray-400">
+          {{ t('seedream.settings.defaultCountHint') }}
+        </p>
       </SeedreamPanel>
 
       <SeedreamPanel
         :title="t('seedream.settings.apiKey')"
         :description="t('seedream.settings.apiKeyDescription')"
       >
-        <p class="text-sm text-gray-300">{{ t('seedream.settings.apiKeySharedHint') }}</p>
+        <p class="text-sm text-gray-300">
+          {{ t('seedream.settings.apiKeySharedHint') }}
+        </p>
       </SeedreamPanel>
     </form>
   </SeedreamShell>

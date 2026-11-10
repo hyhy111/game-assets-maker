@@ -37,18 +37,45 @@
       >
         {{ t('skillsInstall.checkUpdates') }}
       </Button>
-      <span v-if="checking || installing" class="text-sm text-gray-400" role="status">
+      <span
+        v-if="checking || installing"
+        class="text-sm text-gray-400"
+        role="status"
+      >
         {{ t(installing ? 'skillsInstall.installing' : 'skillsInstall.checking') }}
       </span>
     </div>
-    <p v-if="status && !checking" class="mt-3 text-sm" :class="status.status === 'update_available' ? 'text-primary' : 'text-gray-400'" role="status" data-test="gam-skills-status">
+    <p
+      v-if="status && !checking"
+      class="mt-3 text-sm"
+      :class="status.status === 'update_available' ? 'text-primary' : 'text-gray-400'"
+      role="status"
+      data-test="gam-skills-status"
+    >
       {{ t(`skillsInstall.states.${status.status}`, { count: status.installed_count, total: status.total_count, updates: status.outdated.length }) }}
     </p>
-    <p v-if="status && !status.node_available" class="mt-2 text-sm text-primary" data-test="gam-skills-node-required">{{ t('skillsInstall.nodeRequired') }}</p>
-    <p v-if="operationError || status?.error" class="mt-2 text-sm text-primary" role="alert" data-test="gam-skills-error">
+    <p
+      v-if="status && !status.node_available"
+      class="mt-2 text-sm text-primary"
+      data-test="gam-skills-node-required"
+    >
+      {{ t('skillsInstall.nodeRequired') }}
+    </p>
+    <p
+      v-if="operationError || status?.error"
+      class="mt-2 text-sm text-primary"
+      role="alert"
+      data-test="gam-skills-error"
+    >
       {{ errorMessage(operationError || status?.error || '') }}
     </p>
-    <p v-if="installed" class="mt-2 text-sm text-success" role="status">{{ t('skillsInstall.installed') }}</p>
+    <p
+      v-if="installed"
+      class="mt-2 text-sm text-success"
+      role="status"
+    >
+      {{ t('skillsInstall.installed') }}
+    </p>
     <div class="mt-4 flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start">
       <pre class="min-w-0 flex-1 whitespace-pre-wrap break-all rounded-lg border border-dark-border bg-dark-bg p-3 text-sm text-gray-200"><code data-test="gam-skills-command">{{ command }}</code></pre>
       <Button

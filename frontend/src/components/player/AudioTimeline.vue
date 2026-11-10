@@ -1,11 +1,17 @@
 <template>
-  <section class="border-t border-dark-border bg-dark-surface px-4 py-3" @pointerdown="resumeSelectionPreview">
+  <section
+    class="border-t border-dark-border bg-dark-surface px-4 py-3"
+    @pointerdown="resumeSelectionPreview"
+  >
     <div class="mb-2 flex items-center justify-between gap-3 text-xs">
       <div class="flex items-center gap-2 text-gray-300">
         <Volume2 class="h-4 w-4 text-primary" />
         <span class="font-medium">音效轨</span>
       </div>
-      <span v-if="audioStore.loaded" class="text-gray-500">
+      <span
+        v-if="audioStore.loaded"
+        class="text-gray-500"
+      >
         {{ audioStore.totalFrames }} 帧 · {{ audioStore.sourceFps.toFixed(1) }} fps
       </span>
     </div>
@@ -22,12 +28,18 @@
       @mousedown="onSelectionStart"
     >
       <!-- 加载中 -->
-      <div v-if="isLoading" class="absolute inset-0 flex items-center justify-center text-xs text-gray-500">
+      <div
+        v-if="isLoading"
+        class="absolute inset-0 flex items-center justify-center text-xs text-gray-500"
+      >
         正在抽取源音频…
       </div>
 
       <!-- 错误 / 无音轨 -->
-      <div v-else-if="errorMessage" class="absolute inset-0 flex flex-col items-center justify-center gap-1 text-xs">
+      <div
+        v-else-if="errorMessage"
+        class="absolute inset-0 flex flex-col items-center justify-center gap-1 text-xs"
+      >
         <span class="text-red-400">{{ errorMessage }}</span>
         <button
           type="button"
@@ -39,7 +51,10 @@
       </div>
 
       <!-- 空状态（已加载但无峰值数据） -->
-      <div v-else-if="audioStore.loaded && timelinePeaks.length === 0" class="absolute inset-0 flex items-center justify-center text-xs text-gray-500">
+      <div
+        v-else-if="audioStore.loaded && timelinePeaks.length === 0"
+        class="absolute inset-0 flex items-center justify-center text-xs text-gray-500"
+      >
         源音频为空
       </div>
 
@@ -101,7 +116,12 @@
           preserveAspectRatio="none"
           aria-hidden="true"
         >
-          <path :d="peaksToWavePath(clipPeaksList[idx], 100, 80)" fill="none" stroke="currentColor" stroke-width="2" />
+          <path
+            :d="peaksToWavePath(clipPeaksList[idx], 100, 80)"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          />
         </svg>
       </div>
       <!-- 框选矩形 -->
@@ -120,15 +140,27 @@
     </div>
 
     <!-- 工具栏：选区信息 + 创建片段 + 删除（仅 Step 1） -->
-    <div v-if="!clipOnly && audioStore.loaded" class="mt-2 flex items-center gap-3 text-xs">
-      <span v-if="hasValidSelection" class="text-gray-400">
+    <div
+      v-if="!clipOnly && audioStore.loaded"
+      class="mt-2 flex items-center gap-3 text-xs"
+    >
+      <span
+        v-if="hasValidSelection"
+        class="text-gray-400"
+      >
         选区：帧 {{ normalizedSelection.start }} – {{ normalizedSelection.end }}
         （{{ normalizedSelection.end - normalizedSelection.start }} 帧）
       </span>
-      <span v-else-if="hasSelectedClips" class="text-gray-400">
+      <span
+        v-else-if="hasSelectedClips"
+        class="text-gray-400"
+      >
         已选中 {{ audioStore.selectedClipIndices.length }} 个片段（Delete 删除）
       </span>
-      <span v-else class="text-gray-500">在波形上拖动以选择 Source Region</span>
+      <span
+        v-else
+        class="text-gray-500"
+      >在波形上拖动以选择 Source Region</span>
 
       <div class="ml-auto flex items-center gap-2">
         <button
@@ -172,7 +204,10 @@
       </div>
     </div>
 
-    <p v-if="!clipOnly && audioStore.clips.length > 0" class="mt-2 text-xs text-gray-500">
+    <p
+      v-if="!clipOnly && audioStore.clips.length > 0"
+      class="mt-2 text-xs text-gray-500"
+    >
       已保存 {{ audioStore.clips.length }} 个片段。拖动片段可改位，选中后可删除（或 Delete 键）。
     </p>
   </section>

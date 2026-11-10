@@ -3,7 +3,10 @@
     class="overflow-hidden rounded-[14px] border border-[var(--seedance-border)] bg-black/35"
     :class="fill ? 'lg:h-full' : ''"
   >
-    <div v-if="phase === 'succeeded' && videoUrl" :class="fill ? 'lg:h-full' : ''">
+    <div
+      v-if="phase === 'succeeded' && videoUrl"
+      :class="fill ? 'lg:h-full' : ''"
+    >
       <video
         :controls="showControls"
         preload="metadata"
@@ -15,7 +18,10 @@
         @ended="showControls = true"
         @click="showControls = true"
       />
-      <p v-if="summary" class="border-t border-[var(--seedance-border)] px-4 py-3 text-sm text-gray-400">
+      <p
+        v-if="summary"
+        class="border-t border-[var(--seedance-border)] px-4 py-3 text-sm text-gray-400"
+      >
         {{ summary }}
       </p>
     </div>
@@ -37,8 +43,14 @@
       :class="fill ? 'lg:h-full lg:aspect-auto' : ''"
       role="status"
     >
-      <Loader :size="28" class="animate-spin text-primary" aria-hidden="true" />
-      <p class="text-sm">{{ t(`seedance.status.${phase}`) }}</p>
+      <Loader
+        :size="28"
+        class="animate-spin text-primary"
+        aria-hidden="true"
+      />
+      <p class="text-sm">
+        {{ t(`seedance.status.${phase}`) }}
+      </p>
     </div>
   </section>
 </template>

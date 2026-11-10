@@ -21,16 +21,31 @@
           class="h-full w-full object-cover transition duration-300 group-hover/preview:brightness-105"
           draggable="false"
         >
-        <span v-else class="grid h-full place-items-center text-sm text-gray-500">{{ statusText }}</span>
+        <span
+          v-else
+          class="grid h-full place-items-center text-sm text-gray-500"
+        >{{ statusText }}</span>
         <div class="pointer-events-none absolute left-2 right-14 top-2 flex flex-wrap items-start gap-1">
-          <span class="media-overlay-badge media-overlay-status" :class="statusClass">
+          <span
+            class="media-overlay-badge media-overlay-status"
+            :class="statusClass"
+          >
             {{ statusText }}
           </span>
-          <PlatformSourceBadge :source="batch.request.source" overlay />
+          <PlatformSourceBadge
+            :source="batch.request.source"
+            overlay
+          />
         </div>
       </button>
-      <div v-if="$slots['top-right']" class="absolute right-3 top-3 z-[2]">
-        <slot name="top-right" :attempt="selectedAttempt" />
+      <div
+        v-if="$slots['top-right']"
+        class="absolute right-3 top-3 z-[2]"
+      >
+        <slot
+          name="top-right"
+          :attempt="selectedAttempt"
+        />
       </div>
 
       <div
@@ -70,15 +85,26 @@
       </div>
       <dl class="mt-4 grid grid-cols-2 gap-3 border-t border-dark-border pt-4 text-xs">
         <div>
-          <dt class="text-gray-500">{{ t('aiCreation.recent.createdAt') }}</dt>
-          <dd class="mt-1 text-gray-300">{{ createdAt }}</dd>
+          <dt class="text-gray-500">
+            {{ t('aiCreation.recent.createdAt') }}
+          </dt>
+          <dd class="mt-1 text-gray-300">
+            {{ createdAt }}
+          </dd>
         </div>
         <div class="text-right">
-          <dt class="text-gray-500">{{ t('aiCreation.recent.elapsed') }}</dt>
-          <dd class="mt-1 text-gray-300">{{ active ? t('aiCreation.recent.generating') : totalElapsed }}</dd>
+          <dt class="text-gray-500">
+            {{ t('aiCreation.recent.elapsed') }}
+          </dt>
+          <dd class="mt-1 text-gray-300">
+            {{ active ? t('aiCreation.recent.generating') : totalElapsed }}
+          </dd>
         </div>
       </dl>
-      <div v-if="$slots['bottom-right']" class="mt-3 flex justify-end">
+      <div
+        v-if="$slots['bottom-right']"
+        class="mt-3 flex justify-end"
+      >
         <slot name="bottom-right" />
       </div>
     </div>

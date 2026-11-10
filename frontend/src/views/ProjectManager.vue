@@ -194,9 +194,22 @@
           class="library-workbench"
           data-test="project-manager-library-workbench"
         >
-          <div v-if="trimResults.length" class="col-span-full flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dark-border bg-dark-surface px-4 py-3" data-test="trim-feedback-summary" role="status">
-            <p class="text-sm text-gray-300">{{ t('projectManager.trimSummary', trimSummary) }}</p>
-            <Button size="sm" variant="secondary" @click="showTrimResultsModal = true">{{ t('projectManager.viewTrimResults') }}</Button>
+          <div
+            v-if="trimResults.length"
+            class="col-span-full flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dark-border bg-dark-surface px-4 py-3"
+            data-test="trim-feedback-summary"
+            role="status"
+          >
+            <p class="text-sm text-gray-300">
+              {{ t('projectManager.trimSummary', trimSummary) }}
+            </p>
+            <Button
+              size="sm"
+              variant="secondary"
+              @click="showTrimResultsModal = true"
+            >
+              {{ t('projectManager.viewTrimResults') }}
+            </Button>
           </div>
           <aside
             class="role-dock"
@@ -653,11 +666,23 @@
               leave-from="opacity-100 scale-100"
               leave-to="opacity-0 scale-95"
             >
-              <DialogPanel class="w-full max-w-2xl rounded-xl border border-dark-border bg-dark-surface p-6 shadow-2xl" data-test="trim-results-dialog">
+              <DialogPanel
+                class="w-full max-w-2xl rounded-xl border border-dark-border bg-dark-surface p-6 shadow-2xl"
+                data-test="trim-results-dialog"
+              >
                 <div class="flex items-start gap-3">
-                  <span class="grid h-10 w-10 flex-none place-items-center rounded-full" :class="failedTrimIds.length ? 'bg-warning/15 text-warning' : 'bg-success/15 text-success'">
-                    <AlertTriangle v-if="failedTrimIds.length" class="h-5 w-5" />
-                    <CheckCircle v-else class="h-5 w-5" />
+                  <span
+                    class="grid h-10 w-10 flex-none place-items-center rounded-full"
+                    :class="failedTrimIds.length ? 'bg-warning/15 text-warning' : 'bg-success/15 text-success'"
+                  >
+                    <AlertTriangle
+                      v-if="failedTrimIds.length"
+                      class="h-5 w-5"
+                    />
+                    <CheckCircle
+                      v-else
+                      class="h-5 w-5"
+                    />
                   </span>
                   <div class="min-w-0 flex-1">
                     <DialogTitle class="text-lg font-semibold text-white">
@@ -669,29 +694,85 @@
                   </div>
                 </div>
 
-                <p v-if="trimExecutionError" class="mt-4 text-sm text-danger" role="alert">{{ trimExecutionError }}</p>
-                <div class="mt-5 max-h-[40vh] space-y-3 overflow-y-auto" data-test="trim-animation-results">
-                  <div v-for="result in trimResults" :key="result.projectId" class="rounded-lg border border-dark-border bg-dark-bg p-3">
+                <p
+                  v-if="trimExecutionError"
+                  class="mt-4 text-sm text-danger"
+                  role="alert"
+                >
+                  {{ trimExecutionError }}
+                </p>
+                <div
+                  class="mt-5 max-h-[40vh] space-y-3 overflow-y-auto"
+                  data-test="trim-animation-results"
+                >
+                  <div
+                    v-for="result in trimResults"
+                    :key="result.projectId"
+                    class="rounded-lg border border-dark-border bg-dark-bg p-3"
+                  >
                     <div class="flex flex-wrap items-center justify-between gap-2">
-                      <h3 class="min-w-0 break-all text-sm font-medium text-white">{{ result.projectName || result.projectId }}</h3>
-                      <span class="text-xs" :class="result.status === 'success' ? 'text-success' : result.status === 'partial' ? 'text-warning' : 'text-danger'">{{ t(`projectManager.trimStatus.${result.status}`) }}</span>
+                      <h3 class="min-w-0 break-all text-sm font-medium text-white">
+                        {{ result.projectName || result.projectId }}
+                      </h3>
+                      <span
+                        class="text-xs"
+                        :class="result.status === 'success' ? 'text-success' : result.status === 'partial' ? 'text-warning' : 'text-danger'"
+                      >{{ t(`projectManager.trimStatus.${result.status}`) }}</span>
                     </div>
-                    <p v-if="result.successCount !== undefined || result.failedCount !== undefined" class="mt-1 text-xs text-gray-400">{{ t('projectManager.trimFrameSummary', { success: result.successCount ?? 0, failed: result.failedCount ?? 0 }) }}</p>
-                    <p class="mt-2 break-words text-sm" :class="result.status === 'success' ? 'text-gray-300' : 'text-amber-200'">{{ result.message }}</p>
-                    <code v-if="result.outputPath && result.status !== 'error'" class="mt-2 block break-all text-xs text-gray-400">{{ result.outputPath }}</code>
-                    <details v-if="result.failedFrames?.length || result.audioErrors?.length" class="mt-2 text-xs text-gray-400">
-                      <summary class="cursor-pointer text-gray-300">{{ t('projectManager.trimFailureDetails') }}</summary>
+                    <p
+                      v-if="result.successCount !== undefined || result.failedCount !== undefined"
+                      class="mt-1 text-xs text-gray-400"
+                    >
+                      {{ t('projectManager.trimFrameSummary', { success: result.successCount ?? 0, failed: result.failedCount ?? 0 }) }}
+                    </p>
+                    <p
+                      class="mt-2 break-words text-sm"
+                      :class="result.status === 'success' ? 'text-gray-300' : 'text-amber-200'"
+                    >
+                      {{ result.message }}
+                    </p>
+                    <code
+                      v-if="result.outputPath && result.status !== 'error'"
+                      class="mt-2 block break-all text-xs text-gray-400"
+                    >{{ result.outputPath }}</code>
+                    <details
+                      v-if="result.failedFrames?.length || result.audioErrors?.length"
+                      class="mt-2 text-xs text-gray-400"
+                    >
+                      <summary class="cursor-pointer text-gray-300">
+                        {{ t('projectManager.trimFailureDetails') }}
+                      </summary>
                       <ul class="mt-2 space-y-1 break-words">
-                        <li v-for="(frame, index) in result.failedFrames" :key="`frame-${index}`">{{ frame.filename }} — {{ frame.reason }}</li>
-                        <li v-for="(error, index) in result.audioErrors" :key="`audio-${index}`">{{ error }}</li>
+                        <li
+                          v-for="(frame, index) in result.failedFrames"
+                          :key="`frame-${index}`"
+                        >
+                          {{ frame.filename }} — {{ frame.reason }}
+                        </li>
+                        <li
+                          v-for="(error, index) in result.audioErrors"
+                          :key="`audio-${index}`"
+                        >
+                          {{ error }}
+                        </li>
                       </ul>
                     </details>
                   </div>
                 </div>
-                <p v-if="failedTrimIds.length" class="mt-3 text-xs leading-5 text-gray-400">{{ t('projectManager.trimRetryHint') }}</p>
+                <p
+                  v-if="failedTrimIds.length"
+                  class="mt-3 text-xs leading-5 text-gray-400"
+                >
+                  {{ t('projectManager.trimRetryHint') }}
+                </p>
 
-                <div v-if="trimOutputDirectories.length" class="mt-5 space-y-2">
-                  <p class="text-sm text-gray-300">{{ t('projectManager.outputDirectory') }}</p>
+                <div
+                  v-if="trimOutputDirectories.length"
+                  class="mt-5 space-y-2"
+                >
+                  <p class="text-sm text-gray-300">
+                    {{ t('projectManager.outputDirectory') }}
+                  </p>
                   <div
                     v-for="path in trimOutputDirectories"
                     :key="path"
@@ -718,7 +799,13 @@
                   </div>
                 </div>
 
-                <p v-if="trimDirectoryError" class="mt-3 text-sm text-danger" role="alert">{{ trimDirectoryError }}</p>
+                <p
+                  v-if="trimDirectoryError"
+                  class="mt-3 text-sm text-danger"
+                  role="alert"
+                >
+                  {{ trimDirectoryError }}
+                </p>
                 <div class="mt-6 flex flex-wrap justify-end gap-3">
                   <Button
                     variant="secondary"
@@ -726,11 +813,20 @@
                   >
                     {{ t('projectManager.close') }}
                   </Button>
-                  <Button v-if="trimOutputDirectories.length" variant="secondary" @click="openTrimOutputDirectories">
+                  <Button
+                    v-if="trimOutputDirectories.length"
+                    variant="secondary"
+                    @click="openTrimOutputDirectories"
+                  >
                     <FolderOpen class="mr-2 h-4 w-4" />
                     {{ t('projectManager.openOutputDirectory') }}
                   </Button>
-                  <Button v-if="failedTrimIds.length" :loading="trimmingRole !== null" data-test="retry-failed-trim" @click="retryFailedTrim">
+                  <Button
+                    v-if="failedTrimIds.length"
+                    :loading="trimmingRole !== null"
+                    data-test="retry-failed-trim"
+                    @click="retryFailedTrim"
+                  >
                     <RefreshCw class="mr-2 h-4 w-4" />
                     {{ t('projectManager.retryFailedTrim') }}
                   </Button>

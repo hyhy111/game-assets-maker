@@ -12,23 +12,37 @@
     </button>
   </div>
 
-  <p v-if="store.error" class="mb-4 rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-danger">
+  <p
+    v-if="store.error"
+    class="mb-4 rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-danger"
+  >
     {{ store.error.message }}
   </p>
 
   <SeedreamPanel v-if="store.loading && !batches.length">
-    <div class="flex min-h-56 items-center justify-center text-sm text-gray-400" role="status">
+    <div
+      class="flex min-h-56 items-center justify-center text-sm text-gray-400"
+      role="status"
+    >
       {{ t('common.loading') }}
     </div>
   </SeedreamPanel>
 
   <SeedreamPanel v-else-if="!batches.length">
-    <div class="flex min-h-56 flex-col items-center justify-center gap-3 text-center" data-test="seedream-board-empty">
-      <p class="text-sm text-gray-400">{{ t('seedream.board.empty') }}</p>
+    <div
+      class="flex min-h-56 flex-col items-center justify-center gap-3 text-center"
+      data-test="seedream-board-empty"
+    >
+      <p class="text-sm text-gray-400">
+        {{ t('seedream.board.empty') }}
+      </p>
     </div>
   </SeedreamPanel>
 
-  <div v-else class="grid grid-cols-1 gap-4 md:grid-cols-2">
+  <div
+    v-else
+    class="grid grid-cols-1 gap-4 md:grid-cols-2"
+  >
     <article
       v-for="batch in batches"
       :key="batch.local_id"
@@ -55,9 +69,12 @@
             class="h-full min-h-0 w-full object-cover transition duration-300 group-hover:brightness-105"
             :class="thumbnailItemClass(batch, index)"
             :data-test="`seedream-board-thumbnail-${batch.local_id}-${attempt.index}`"
-          />
+          >
         </div>
-        <div v-else class="flex h-full items-center justify-center text-sm text-gray-500">
+        <div
+          v-else
+          class="flex h-full items-center justify-center text-sm text-gray-500"
+        >
           {{ statusLabel(batch) }}
         </div>
         <span
@@ -75,10 +92,22 @@
       </div>
       <div class="p-4">
         <div class="flex flex-wrap gap-1.5 text-xs text-gray-400">
-          <span class="rounded-md bg-black/20 px-2 py-1" :data-test="`seedream-board-model-${batch.local_id}`">{{ modelLabel(batch) }}</span>
-          <span class="rounded-md bg-black/20 px-2 py-1" :data-test="`seedream-board-resolution-${batch.local_id}`">{{ batch.request.resolution }}</span>
-          <span class="rounded-md bg-black/20 px-2 py-1" :data-test="`seedream-board-ratio-${batch.local_id}`">{{ batch.request.ratio }}</span>
-          <span class="rounded-md bg-black/20 px-2 py-1" :data-test="`seedream-board-count-${batch.local_id}`">{{ t('seedream.board.countLabel', { count: batch.attempts.length }) }}</span>
+          <span
+            class="rounded-md bg-black/20 px-2 py-1"
+            :data-test="`seedream-board-model-${batch.local_id}`"
+          >{{ modelLabel(batch) }}</span>
+          <span
+            class="rounded-md bg-black/20 px-2 py-1"
+            :data-test="`seedream-board-resolution-${batch.local_id}`"
+          >{{ batch.request.resolution }}</span>
+          <span
+            class="rounded-md bg-black/20 px-2 py-1"
+            :data-test="`seedream-board-ratio-${batch.local_id}`"
+          >{{ batch.request.ratio }}</span>
+          <span
+            class="rounded-md bg-black/20 px-2 py-1"
+            :data-test="`seedream-board-count-${batch.local_id}`"
+          >{{ t('seedream.board.countLabel', { count: batch.attempts.length }) }}</span>
         </div>
         <div class="mt-3 border-t border-dark-border pt-2 text-xs text-gray-500">
           <span :data-test="`seedream-board-created-${batch.local_id}`">{{ formatCreated(batch.created_at) }}</span>

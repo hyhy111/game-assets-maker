@@ -1,8 +1,19 @@
 <template>
-  <SeedancePanel v-if="items.length" :title="t('seedance.preview.referenceFrames')">
+  <SeedancePanel
+    v-if="items.length"
+    :title="t('seedance.preview.referenceFrames')"
+  >
     <div class="grid gap-3 sm:grid-cols-3">
-      <figure v-for="item in items" :key="item.key" class="overflow-hidden rounded-xl bg-black/20">
-        <img :src="item.url" :alt="item.label" class="aspect-video w-full object-contain">
+      <figure
+        v-for="item in items"
+        :key="item.key"
+        class="overflow-hidden rounded-xl bg-black/20"
+      >
+        <img
+          :src="item.url"
+          :alt="item.label"
+          class="aspect-video w-full object-contain"
+        >
         <figcaption class="border-t border-[var(--seedance-border)] px-3 py-2 text-xs text-gray-400">
           {{ item.label }}
         </figcaption>

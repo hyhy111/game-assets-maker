@@ -214,7 +214,7 @@ test('favorites belong to individual media and stacked covers do not show a favo
   assert.match(singleImage, /data-test="recent-media-favorite-image:batch-1:attempt-0"/);
   assert.doesNotMatch(stackedImages, /data-test="recent-media-favorite-/);
   assert.match(singleVideo, /data-test="recent-media-favorite-video:task-1"/);
-  assert.match(imageCardSource, /<slot name="top-right" :attempt="selectedAttempt"/);
+  assert.match(imageCardSource, /<slot\s+name="top-right"\s+:attempt="selectedAttempt"/);
   assert.match(recentSource, /imageMediaKey\(group\.items\[0\]\.local_id, attempt\.local_id\)/);
   assert.match(recentSource, /useRecentMediaFavorites\(\)/);
   assert.doesNotMatch(recentSource, /recent-prompt-favorites|favoritePromptKeys/);
@@ -292,8 +292,8 @@ test('recent generation cards right-align total elapsed metadata', async () => {
     source('components/ai-creation/RecentVideoGenerationCard.vue'),
   ]);
 
-  assert.match(imageCard, /<div class="text-right">\s*<dt class="text-gray-500">\{\{ t\('aiCreation\.recent\.elapsed'\) \}\}/s);
-  assert.match(videoCard, /<div class="text-right">\s*<dt class="text-gray-500">\{\{ t\('aiCreation\.recent\.elapsed'\) \}\}/s);
+  assert.match(imageCard, /<div class="text-right">\s*<dt class="text-gray-500">\s*\{\{ t\('aiCreation\.recent\.elapsed'\) \}\}/s);
+  assert.match(videoCard, /<div class="text-right">\s*<dt class="text-gray-500">\s*\{\{ t\('aiCreation\.recent\.elapsed'\) \}\}/s);
 });
 
 test('active recent video cards retain their status label and overlay treatment', async () => {

@@ -103,9 +103,9 @@ test('Seedance create screen uses one compact composer with collapsed parameters
 test('Seedance resolution control fits the three remaining resolution options', async () => {
   const source = await import('node:fs/promises').then(({ readFile }) =>
     readFile(new URL('../src/views/SeedanceCreate.vue', import.meta.url), 'utf8'));
-  assert.match(source, /class="grid w-3\/4 grid-cols-3 gap-1 rounded-xl bg-black\/15 p-1" data-test="seedance-resolution"/);
+  assert.match(source, /class="grid w-3\/4 grid-cols-3 gap-1 rounded-xl bg-black\/15 p-1"\s+data-test="seedance-resolution"/);
   assert.match(source, /form\.resolution === resolution \? 'bg-primary\/20 text-primary-200 shadow-sm'/);
-  assert.doesNotMatch(source, /grid-cols-4[^\n]*data-test="seedance-resolution"/);
+  assert.doesNotMatch(source, /grid-cols-4[^>]*data-test="seedance-resolution"/);
 });
 
 test('Seedance ratio picker uses the same compact segmented style as resolution', async () => {
@@ -566,6 +566,6 @@ test('Seedance create form wires paid confirmation before task creation and prot
   assert.match(cancelMatch[0], /pendingRequest = null/);
 
   // Confirm and cancel buttons are both disabled while submitting
-  assert.match(create, /:loading="submitting" :disabled="submitting \|\| platformConfirmBlocked" @click="confirmPaidAction"/);
-  assert.match(create, /:disabled="submitting" @click="cancelPaidAction"/);
+  assert.match(create, /:loading="submitting"\s+:disabled="submitting \|\| platformConfirmBlocked"\s+@click="confirmPaidAction"/);
+  assert.match(create, /:disabled="submitting"\s+@click="cancelPaidAction"/);
 });

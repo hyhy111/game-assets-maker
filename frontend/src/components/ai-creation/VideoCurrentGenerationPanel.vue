@@ -4,7 +4,9 @@
     data-test="video-current-generation-panel"
   >
     <header class="flex min-h-14 items-center gap-3 px-4 py-3">
-      <h2 class="text-sm font-semibold text-white">{{ t('seedance.tasks.title') }}</h2>
+      <h2 class="text-sm font-semibold text-white">
+        {{ t('seedance.tasks.title') }}
+      </h2>
       <SeedanceStatusBadge :task="task" />
       <PlatformSourceBadge :source="task.source" />
       <button
@@ -14,7 +16,15 @@
         data-test="video-current-close"
         @click="emit('close')"
       >
-        <svg class="h-4 w-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+        <svg
+          class="h-4 w-4"
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+          stroke-linecap="round"
+          aria-hidden="true"
+        >
           <path d="M3 3l10 10M13 3L3 13" />
         </svg>
       </button>
@@ -28,21 +38,39 @@
         fill
       />
 
-      <p v-if="task.error" class="mt-4 text-sm leading-5 text-danger" role="alert">
+      <p
+        v-if="task.error"
+        class="mt-4 text-sm leading-5 text-danger"
+        role="alert"
+      >
         {{ task.error.message }}
       </p>
-      <p v-if="downloadLinkMayBeExpired" class="mt-4 text-sm leading-5 text-warning">
+      <p
+        v-if="downloadLinkMayBeExpired"
+        class="mt-4 text-sm leading-5 text-warning"
+      >
         {{ t('seedance.ui.downloadUrlMayBeExpired') }}
       </p>
 
       <div class="mt-4 flex h-11 flex-nowrap items-center gap-2">
-        <Button v-if="canCancel" variant="secondary" @click="emit('cancel', task.local_id)">
+        <Button
+          v-if="canCancel"
+          variant="secondary"
+          @click="emit('cancel', task.local_id)"
+        >
           {{ t('seedance.tasks.cancel') }}
         </Button>
-        <Button v-if="canRetryDownload" variant="secondary" @click="emit('retry-download', task.local_id)">
+        <Button
+          v-if="canRetryDownload"
+          variant="secondary"
+          @click="emit('retry-download', task.local_id)"
+        >
           {{ t('seedance.ui.redownload') }}
         </Button>
-        <Button class="ml-auto" @click="emit('open-detail', task.local_id)">
+        <Button
+          class="ml-auto"
+          @click="emit('open-detail', task.local_id)"
+        >
           {{ t('seedance.tasks.viewDetails') }}
         </Button>
       </div>

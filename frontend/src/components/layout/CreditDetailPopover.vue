@@ -65,15 +65,24 @@ function onSubscribe() {
         @vue:mounted="onOpen"
       >
         <div class="px-4 py-3 border-b border-dark-border">
-          <p class="text-sm font-semibold text-white">{{ t('billing.title') }}</p>
-          <p v-if="hasBonus" class="mt-1 text-xs text-gray-300">{{ t('creditUsage.balance', { general: creditUsage.data?.account.generalAvailable, bonus: creditUsage.data?.account.bonusAvailable }) }}</p>
+          <p class="text-sm font-semibold text-white">
+            {{ t('billing.title') }}
+          </p>
+          <p
+            v-if="hasBonus"
+            class="mt-1 text-xs text-gray-300"
+          >
+            {{ t('creditUsage.balance', { general: creditUsage.data?.account.generalAvailable, bonus: creditUsage.data?.account.bonusAvailable }) }}
+          </p>
         </div>
 
         <div
           v-if="isEmpty"
           class="px-4 py-8 text-center"
         >
-          <p class="text-sm text-gray-500">{{ t('billing.empty') }}</p>
+          <p class="text-sm text-gray-500">
+            {{ t('billing.empty') }}
+          </p>
           <button
             type="button"
             class="mt-3 rounded-lg border border-primary/40 px-4 py-1.5 text-xs text-primary transition-colors hover:bg-primary/10"
@@ -91,8 +100,15 @@ function onSubscribe() {
           v-else
           class="max-h-72 overflow-y-auto px-3 py-3 flex flex-col gap-2.5"
         >
-          <div v-for="b in buckets" :key="b.bucketId">
-            <CreditBucketRow :bucket="b" :scope="bonusDetail(b.bucketId)?.usageSummary" :scope-message="bonusDetail(b.bucketId)?.message" />
+          <div
+            v-for="b in buckets"
+            :key="b.bucketId"
+          >
+            <CreditBucketRow
+              :bucket="b"
+              :scope="bonusDetail(b.bucketId)?.usageSummary"
+              :scope-message="bonusDetail(b.bucketId)?.message"
+            />
           </div>
         </div>
       </PopoverPanel>

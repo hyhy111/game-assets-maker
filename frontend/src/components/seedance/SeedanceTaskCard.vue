@@ -8,9 +8,20 @@
     @keydown.space.self.prevent="openTask"
   >
     <div class="relative aspect-video bg-black/25">
-      <img v-if="previewUrl" :src="previewUrl" alt="" class="h-full w-full object-cover">
-      <div v-else class="grid h-full place-items-center text-gray-600">
-        <Video :size="32" aria-hidden="true" />
+      <img
+        v-if="previewUrl"
+        :src="previewUrl"
+        alt=""
+        class="h-full w-full object-cover"
+      >
+      <div
+        v-else
+        class="grid h-full place-items-center text-gray-600"
+      >
+        <Video
+          :size="32"
+          aria-hidden="true"
+        />
       </div>
       <div class="absolute left-3 top-3 flex items-center gap-1.5">
         <SeedanceStatusBadge :task="task" />
@@ -32,27 +43,48 @@
 
     <div class="p-4">
       <div class="flex flex-wrap gap-1.5 text-xs text-gray-400">
-        <span v-for="tag in tags" :key="tag" class="rounded-md bg-black/20 px-2 py-1">{{ tag }}</span>
+        <span
+          v-for="tag in tags"
+          :key="tag"
+          class="rounded-md bg-black/20 px-2 py-1"
+        >{{ tag }}</span>
       </div>
 
       <dl class="mt-4 grid grid-cols-2 gap-3 border-t border-[var(--seedance-border)] pt-4 text-xs">
         <div>
-          <dt class="text-[var(--seedance-muted)]">{{ t('seedance.tasks.createdAt') }}</dt>
-          <dd class="mt-1 text-gray-300">{{ createdAt }}</dd>
+          <dt class="text-[var(--seedance-muted)]">
+            {{ t('seedance.tasks.createdAt') }}
+          </dt>
+          <dd class="mt-1 text-gray-300">
+            {{ createdAt }}
+          </dd>
         </div>
         <div>
-          <dt class="text-[var(--seedance-muted)]">{{ t('seedance.tasks.elapsed') }}</dt>
-          <dd class="mt-1 text-gray-300">{{ formatElapsed(task.elapsed_seconds) }}</dd>
+          <dt class="text-[var(--seedance-muted)]">
+            {{ t('seedance.tasks.elapsed') }}
+          </dt>
+          <dd class="mt-1 text-gray-300">
+            {{ formatElapsed(task.elapsed_seconds) }}
+          </dd>
         </div>
       </dl>
 
-      <p v-if="task.cache_status === 'cleared'" class="mt-3 text-xs leading-5 text-warning">
+      <p
+        v-if="task.cache_status === 'cleared'"
+        class="mt-3 text-xs leading-5 text-warning"
+      >
         {{ t('seedance.ui.clearedNotice') }}
       </p>
-      <p v-else-if="task.error" class="mt-3 line-clamp-2 text-xs leading-5 text-danger">
+      <p
+        v-else-if="task.error"
+        class="mt-3 line-clamp-2 text-xs leading-5 text-danger"
+      >
         {{ task.error.message }}
       </p>
-      <p v-if="downloadLinkMayBeExpired" class="mt-3 text-xs leading-5 text-warning">
+      <p
+        v-if="downloadLinkMayBeExpired"
+        class="mt-3 text-xs leading-5 text-warning"
+      >
         {{ t('seedance.ui.downloadUrlMayBeExpired') }}
       </p>
 

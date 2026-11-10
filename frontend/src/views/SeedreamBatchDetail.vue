@@ -15,12 +15,18 @@
         data-test="seedream-detail-back"
         @click="backToTasks"
       >
-        <ArrowLeft :size="22" aria-hidden="true" />
+        <ArrowLeft
+          :size="22"
+          aria-hidden="true"
+        />
         {{ t('aiCreation.backToWorkspace') }}
       </button>
     </div>
 
-    <div v-if="loadError" class="mb-4 rounded-xl border border-danger/30 bg-danger/10 p-4 text-danger">
+    <div
+      v-if="loadError"
+      class="mb-4 rounded-xl border border-danger/30 bg-danger/10 p-4 text-danger"
+    >
       {{ loadError }}
     </div>
 
@@ -73,7 +79,12 @@
               :aria-label="t('seedream.detail.saveImage')"
               data-test="seedream-download"
               @click="selectedSucceededAttempt && download(selectedSucceededAttempt.index)"
-            ><Download :size="20" aria-hidden="true" /></button>
+            >
+              <Download
+                :size="20"
+                aria-hidden="true"
+              />
+            </button>
             <button
               type="button"
               class="rounded-lg p-2 text-gray-400 transition duration-200 hover:-translate-y-0.5 hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-40"
@@ -82,7 +93,12 @@
               :aria-label="t('aiCreation.openDirectory')"
               data-test="seedream-open-directory"
               @click="openDirectory"
-            ><FolderOpen :size="20" aria-hidden="true" /></button>
+            >
+              <FolderOpen
+                :size="20"
+                aria-hidden="true"
+              />
+            </button>
             <button
               type="button"
               class="rounded-lg p-2 text-gray-400 transition-colors hover:bg-danger/15 hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger disabled:cursor-not-allowed disabled:opacity-40"
@@ -99,7 +115,13 @@
             </button>
           </div>
         </div>
-        <p v-if="mediaError" class="mb-3 text-sm text-danger" role="alert">{{ mediaError }}</p>
+        <p
+          v-if="mediaError"
+          class="mb-3 text-sm text-danger"
+          role="alert"
+        >
+          {{ mediaError }}
+        </p>
 
         <div
           v-if="selectedSucceededAttempt"
@@ -118,7 +140,7 @@
               class="block max-h-[60vh] max-w-full rounded-lg"
               :data-test="`seedream-image-${selectedSucceededAttempt.index}`"
               draggable="false"
-            />
+            >
             <RecentMediaFavoriteButton
               class="absolute right-3 top-3 z-[2]"
               :favorite="isFavorite(imageMediaKey(batch.local_id, selectedSucceededAttempt.local_id))"
@@ -150,7 +172,11 @@
               :data-test="`seedream-thumbnail-${attempt.index}`"
               @click="selectSucceededAttempt(attempt.index)"
             >
-              <img :src="attemptImageUrl(attempt)" alt="" class="h-16 w-16 object-cover" />
+              <img
+                :src="attemptImageUrl(attempt)"
+                alt=""
+                class="h-16 w-16 object-cover"
+              >
             </button>
           </div>
           <div class="mt-3 flex justify-center gap-2">
@@ -163,7 +189,10 @@
               {{ t('seedream.detail.imageEditor') }}
             </Button>
           </div>
-          <p v-if="editorFeedback[selectedSucceededAttempt.index]" class="mt-2 text-center text-sm text-success">
+          <p
+            v-if="editorFeedback[selectedSucceededAttempt.index]"
+            class="mt-2 text-center text-sm text-success"
+          >
             {{ editorFeedback[selectedSucceededAttempt.index] }}
           </p>
         </div>
@@ -181,7 +210,9 @@
               :data-test="`seedream-loading-${attempt.index}`"
             >
               <div class="h-8 w-8 animate-spin rounded-full border-b-2 border-primary" />
-              <p class="mt-3 text-sm text-gray-400">{{ attemptLoadingMessage(attempt) }}</p>
+              <p class="mt-3 text-sm text-gray-400">
+                {{ attemptLoadingMessage(attempt) }}
+              </p>
             </div>
 
             <!-- Unknown (generation result unknown, may have been billed) -->
@@ -190,9 +221,21 @@
               class="rounded-xl border border-warning/30 bg-warning/10 p-4"
               :data-test="`seedream-unknown-${attempt.index}`"
             >
-              <p class="text-warning font-medium text-sm">{{ t('seedream.batch.unknown') }}</p>
-              <p v-if="attempt.error" class="mt-1 text-sm text-gray-400">{{ attempt.error.message }}</p>
-              <p class="mt-1 text-xs text-gray-500" data-test="seedream-unknown-hint">{{ t('seedream.detail.unknownHint') }}</p>
+              <p class="text-warning font-medium text-sm">
+                {{ t('seedream.batch.unknown') }}
+              </p>
+              <p
+                v-if="attempt.error"
+                class="mt-1 text-sm text-gray-400"
+              >
+                {{ attempt.error.message }}
+              </p>
+              <p
+                class="mt-1 text-xs text-gray-500"
+                data-test="seedream-unknown-hint"
+              >
+                {{ t('seedream.detail.unknownHint') }}
+              </p>
             </div>
 
             <!-- Failed (server error, including 429) -->
@@ -201,9 +244,22 @@
               class="rounded-xl border border-danger/30 bg-danger/10 p-4"
               :data-test="`seedream-failed-${attempt.index}`"
             >
-              <p class="text-danger font-medium text-sm">{{ t('seedream.detail.failed') }}</p>
-              <p v-if="attempt.error" class="mt-1 text-sm text-gray-400">{{ attempt.error.message }}</p>
-              <p v-if="isRateLimited(attempt)" class="mt-1 text-xs text-gray-500" data-test="seedream-rate-limit-hint">{{ t('seedream.detail.rateLimitHint') }}</p>
+              <p class="text-danger font-medium text-sm">
+                {{ t('seedream.detail.failed') }}
+              </p>
+              <p
+                v-if="attempt.error"
+                class="mt-1 text-sm text-gray-400"
+              >
+                {{ attempt.error.message }}
+              </p>
+              <p
+                v-if="isRateLimited(attempt)"
+                class="mt-1 text-xs text-gray-500"
+                data-test="seedream-rate-limit-hint"
+              >
+                {{ t('seedream.detail.rateLimitHint') }}
+              </p>
             </div>
 
             <!-- Download failed (response persisted, can retry download) -->
@@ -212,13 +268,34 @@
               class="rounded-xl border border-warning/30 bg-warning/10 p-4"
               :data-test="`seedream-download-failed-${attempt.index}`"
             >
-              <p class="text-warning font-medium text-sm">{{ t('seedream.detail.downloadFailed') }}</p>
-              <p v-if="attempt.error" class="mt-1 text-sm text-gray-400">{{ attempt.error.message }}</p>
-              <div v-if="attempt.url_expired" class="mt-2" data-test="seedream-url-expired">
-                <p class="text-xs text-gray-500">{{ t('seedream.detail.urlExpired') }}</p>
+              <p class="text-warning font-medium text-sm">
+                {{ t('seedream.detail.downloadFailed') }}
+              </p>
+              <p
+                v-if="attempt.error"
+                class="mt-1 text-sm text-gray-400"
+              >
+                {{ attempt.error.message }}
+              </p>
+              <div
+                v-if="attempt.url_expired"
+                class="mt-2"
+                data-test="seedream-url-expired"
+              >
+                <p class="text-xs text-gray-500">
+                  {{ t('seedream.detail.urlExpired') }}
+                </p>
               </div>
-              <div v-else-if="retryableAttempts.length === 1 && !retryingDownloads" class="mt-2">
-                <Button variant="secondary" size="sm" :data-test="`seedream-retry-download-${attempt.index}`" @click="retryDownload(attempt.index)">
+              <div
+                v-else-if="retryableAttempts.length === 1 && !retryingDownloads"
+                class="mt-2"
+              >
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  :data-test="`seedream-retry-download-${attempt.index}`"
+                  @click="retryDownload(attempt.index)"
+                >
                   {{ t('seedream.detail.retryDownload') }}
                 </Button>
               </div>
@@ -227,7 +304,10 @@
         </div>
       </section>
 
-      <SeedreamPanel class="mt-5" :title="t('seedream.detail.configuration')">
+      <SeedreamPanel
+        class="mt-5"
+        :title="t('seedream.detail.configuration')"
+      >
         <div class="mb-3">
           <span
             class="inline-flex items-center rounded-full px-3 py-1 text-xs font-medium"
@@ -238,10 +318,34 @@
           </span>
         </div>
         <dl class="grid gap-2 text-sm sm:grid-cols-2">
-          <div><dt class="inline text-gray-400">{{ t('seedream.create.model') }}:</dt> <dd class="inline text-gray-100">{{ modelLabel }}</dd></div>
-          <div><dt class="inline text-gray-400">{{ t('seedream.create.resolution') }}:</dt> <dd class="inline text-gray-100">{{ batch.request.resolution }}</dd></div>
-          <div><dt class="inline text-gray-400">{{ t('seedream.create.ratio') }}:</dt> <dd class="inline text-gray-100">{{ batch.request.ratio }}</dd></div>
-          <div><dt class="inline text-gray-400">{{ t('seedream.create.count') }}:</dt> <dd class="inline text-gray-100">{{ batch.attempts.length }}</dd></div>
+          <div>
+            <dt class="inline text-gray-400">
+              {{ t('seedream.create.model') + ':' }}
+            </dt> <dd class="inline text-gray-100">
+              {{ modelLabel }}
+            </dd>
+          </div>
+          <div>
+            <dt class="inline text-gray-400">
+              {{ t('seedream.create.resolution') + ':' }}
+            </dt> <dd class="inline text-gray-100">
+              {{ batch.request.resolution }}
+            </dd>
+          </div>
+          <div>
+            <dt class="inline text-gray-400">
+              {{ t('seedream.create.ratio') + ':' }}
+            </dt> <dd class="inline text-gray-100">
+              {{ batch.request.ratio }}
+            </dd>
+          </div>
+          <div>
+            <dt class="inline text-gray-400">
+              {{ t('seedream.create.count') + ':' }}
+            </dt> <dd class="inline text-gray-100">
+              {{ batch.attempts.length }}
+            </dd>
+          </div>
         </dl>
         <div
           v-if="batch.reference_image_url"
@@ -253,11 +357,15 @@
             class="h-20 w-20 rounded-lg border border-dark-border bg-black/30 object-cover"
             data-test="seedream-reference-thumbnail"
           >
-          <p class="text-xs text-gray-400">{{ t('seedream.create.referenceImage') }}</p>
+          <p class="text-xs text-gray-400">
+            {{ t('seedream.create.referenceImage') }}
+          </p>
         </div>
         <div class="mt-3">
           <div class="flex items-center gap-2">
-            <p class="text-xs text-gray-400">{{ t('seedream.detail.prompt') }}</p>
+            <p class="text-xs text-gray-400">
+              {{ t('seedream.detail.prompt') }}
+            </p>
             <button
               type="button"
               class="rounded p-1 text-gray-400 transition-colors hover:bg-dark-border hover:text-white"
@@ -277,12 +385,20 @@
               />
             </button>
           </div>
-          <p class="mt-1 rounded-lg border border-dark-border p-3 text-sm text-gray-100">{{ batch.request.prompt }}</p>
+          <p class="mt-1 rounded-lg border border-dark-border p-3 text-sm text-gray-100">
+            {{ batch.request.prompt }}
+          </p>
         </div>
-        <div v-if="selectedSucceededAttempt" class="mt-3 flex flex-wrap items-center justify-end gap-4 text-sm">
+        <div
+          v-if="selectedSucceededAttempt"
+          class="mt-3 flex flex-wrap items-center justify-end gap-4 text-sm"
+        >
           <div>
             <span class="text-gray-400">{{ t('seedream.detail.totalTokens') }}:</span>
-            <span class="ml-1 text-gray-100" data-test="seedream-total-tokens-summary">{{ tokensLabel(selectedSucceededAttempt) }}</span>
+            <span
+              class="ml-1 text-gray-100"
+              data-test="seedream-total-tokens-summary"
+            >{{ tokensLabel(selectedSucceededAttempt) }}</span>
           </div>
           <div v-if="selectedSucceededAttempt.elapsed_seconds">
             <span class="text-gray-400">{{ t('seedream.detail.elapsed') }}:</span>
@@ -320,18 +436,41 @@
       @click.self="closeDeleteConfirmation"
     >
       <div class="max-w-md rounded-xl border border-dark-border bg-dark-surface p-6">
-        <h2 id="seedream-delete-title" class="text-lg font-semibold text-white">
+        <h2
+          id="seedream-delete-title"
+          class="text-lg font-semibold text-white"
+        >
           {{ t('seedream.detail.delete') }}
         </h2>
-        <p id="seedream-delete-description" class="mt-3 text-gray-300" data-test="seedream-delete-confirmation">
+        <p
+          id="seedream-delete-description"
+          class="mt-3 text-gray-300"
+          data-test="seedream-delete-confirmation"
+        >
           {{ t('seedream.detail.deleteConfirmation') }}
         </p>
-        <p v-if="deleteError" class="mt-2 text-sm text-danger" data-test="seedream-delete-error">{{ deleteError }}</p>
+        <p
+          v-if="deleteError"
+          class="mt-2 text-sm text-danger"
+          data-test="seedream-delete-error"
+        >
+          {{ deleteError }}
+        </p>
         <div class="mt-5 flex justify-end gap-3">
-          <Button variant="secondary" :disabled="deleting" @click="closeDeleteConfirmation">
+          <Button
+            variant="secondary"
+            :disabled="deleting"
+            @click="closeDeleteConfirmation"
+          >
             {{ t('common.cancel') }}
           </Button>
-          <Button variant="danger" :loading="deleting" :disabled="deleting" data-test="seedream-delete-confirm" @click="confirmDelete">
+          <Button
+            variant="danger"
+            :loading="deleting"
+            :disabled="deleting"
+            data-test="seedream-delete-confirm"
+            @click="confirmDelete"
+          >
             {{ t('seedream.detail.delete') }}
           </Button>
         </div>

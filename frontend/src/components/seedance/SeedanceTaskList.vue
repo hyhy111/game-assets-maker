@@ -12,12 +12,18 @@
     </button>
   </div>
 
-  <p v-if="store.error" class="mb-4 rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-danger">
+  <p
+    v-if="store.error"
+    class="mb-4 rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-danger"
+  >
     {{ store.error.message }}
   </p>
 
   <SeedancePanel v-if="store.loading && !tasks.length">
-    <div class="flex min-h-56 items-center justify-center text-sm text-[var(--seedance-muted)]" role="status">
+    <div
+      class="flex min-h-56 items-center justify-center text-sm text-[var(--seedance-muted)]"
+      role="status"
+    >
       {{ t('common.loading') }}
     </div>
   </SeedancePanel>
@@ -30,7 +36,10 @@
     />
   </SeedancePanel>
 
-  <div v-else class="seedance-task-grid grid gap-4 md:grid-cols-2">
+  <div
+    v-else
+    class="seedance-task-grid grid gap-4 md:grid-cols-2"
+  >
     <SeedanceTaskCard
       v-for="task in tasks"
       :key="task.local_id"
@@ -58,13 +67,25 @@
     @click.self="closeDeleteConfirmation"
   >
     <div>
-      <h2 id="delete-task-title">{{ t('seedance.tasks.delete') }}</h2>
+      <h2 id="delete-task-title">
+        {{ t('seedance.tasks.delete') }}
+      </h2>
       <p id="delete-task-description">
         {{ taskToDelete.protected ? t('seedance.ui.protectedDeleteWarning') : t('seedance.tasks.deleteConfirmation') }}
       </p>
       <div class="mt-5 flex justify-end gap-2">
-        <Button variant="secondary" @click="closeDeleteConfirmation">{{ t('common.cancel') }}</Button>
-        <Button variant="danger" :loading="deleting" :disabled="deleting" @click="deleteTask">
+        <Button
+          variant="secondary"
+          @click="closeDeleteConfirmation"
+        >
+          {{ t('common.cancel') }}
+        </Button>
+        <Button
+          variant="danger"
+          :loading="deleting"
+          :disabled="deleting"
+          @click="deleteTask"
+        >
           {{ t('seedance.tasks.delete') }}
         </Button>
       </div>

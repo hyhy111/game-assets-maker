@@ -4,7 +4,10 @@
       v-if="label || $slots.label"
       class="flex justify-between items-center"
     >
-      <label :for="inputId" class="text-sm font-medium text-gray-300">
+      <label
+        :for="inputId"
+        class="text-sm font-medium text-gray-300"
+      >
         <slot name="label">{{ label }}</slot>
       </label>
       <span

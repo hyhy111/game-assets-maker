@@ -1,5 +1,8 @@
 <template>
-  <Teleport to="body" :disabled="teleportDisabled">
+  <Teleport
+    to="body"
+    :disabled="teleportDisabled"
+  >
     <div
       v-if="open"
       ref="modalRoot"
@@ -13,17 +16,30 @@
       @click.self="emit('cancel')"
     >
       <div class="w-full max-w-md rounded-xl border border-dark-border bg-dark-surface p-6 shadow-2xl shadow-black/50">
-        <h2 id="draft-clear-title" class="text-lg font-semibold text-white">
+        <h2
+          id="draft-clear-title"
+          class="text-lg font-semibold text-white"
+        >
           {{ t('aiCreation.clearTitle') }}
         </h2>
-        <p id="draft-clear-description" class="mt-3 text-gray-300">
+        <p
+          id="draft-clear-description"
+          class="mt-3 text-gray-300"
+        >
           {{ t('aiCreation.clearConfirm') }}
         </p>
         <div class="mt-5 flex justify-end gap-3">
-          <Button variant="secondary" data-test="draft-clear-cancel" @click="emit('cancel')">
+          <Button
+            variant="secondary"
+            data-test="draft-clear-cancel"
+            @click="emit('cancel')"
+          >
             {{ t('common.cancel') }}
           </Button>
-          <Button data-test="draft-clear-submit" @click="emit('confirm')">
+          <Button
+            data-test="draft-clear-submit"
+            @click="emit('confirm')"
+          >
             {{ t('aiCreation.clear') }}
           </Button>
         </div>

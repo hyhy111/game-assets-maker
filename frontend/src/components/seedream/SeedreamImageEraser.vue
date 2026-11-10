@@ -6,82 +6,163 @@
     :aria-label="title || t('seedream.detail.eraserTitle')"
     data-test="seedream-eraser-editor"
   >
-    <Teleport :to="toolbarTarget || 'body'" :disabled="!embedded">
-    <div :class="embedded ? 'flex h-11 items-center gap-2 px-3' : 'mx-auto flex w-full max-w-6xl flex-wrap items-center gap-3 rounded-xl border border-dark-border bg-dark-surface p-3'">
-      <h2 class="mr-auto min-w-0 truncate text-sm font-semibold text-white">{{ title || t('seedream.detail.eraserTitle') }}</h2>
-      <div v-if="!magicWandEnabled" class="flex items-center gap-2 text-sm text-gray-300">
-        <span>{{ t('seedream.detail.backgroundColor') }}</span>
-        <span class="h-5 w-5 rounded border border-white/30" :style="{ backgroundColor: backgroundCss }" />
-        <span class="font-mono text-xs">{{ backgroundCss }}</span>
+    <Teleport
+      :to="toolbarTarget || 'body'"
+      :disabled="!embedded"
+    >
+      <div :class="embedded ? 'flex h-11 items-center gap-2 px-3' : 'mx-auto flex w-full max-w-6xl flex-wrap items-center gap-3 rounded-xl border border-dark-border bg-dark-surface p-3'">
+        <h2 class="mr-auto min-w-0 truncate text-sm font-semibold text-white">
+          {{ title || t('seedream.detail.eraserTitle') }}
+        </h2>
+        <div
+          v-if="!magicWandEnabled"
+          class="flex items-center gap-2 text-sm text-gray-300"
+        >
+          <span>{{ t('seedream.detail.backgroundColor') }}</span>
+          <span
+            class="h-5 w-5 rounded border border-white/30"
+            :style="{ backgroundColor: backgroundCss }"
+          />
+          <span class="font-mono text-xs">{{ backgroundCss }}</span>
+        </div>
+        <Button
+          variant="secondary"
+          size="sm"
+          :disabled="saving || loading || undoStack.length === 0"
+          data-test="seedream-eraser-undo"
+          @click="undo"
+        >
+          <Undo2 :size="16" /> {{ t('common.undo') }}
+        </Button>
+        <Button
+          variant="secondary"
+          size="sm"
+          :disabled="saving || loading || redoStack.length === 0"
+          data-test="seedream-eraser-redo"
+          @click="redo"
+        >
+          <Redo2 :size="16" /> {{ t('common.redo') }}
+        </Button>
+        <span
+          v-if="!embedded"
+          class="min-w-14 text-center text-sm text-gray-400"
+          data-test="seedream-eraser-zoom"
+        >
+          {{ Math.round(zoom * 100) }}%
+        </span>
+        <Button
+          variant="secondary"
+          size="sm"
+          :disabled="saving"
+          @click="emit('cancel')"
+        >
+          {{ t('common.cancel') }}
+        </Button>
+        <button
+          v-if="resizeEnabled || magicWandEnabled"
+          type="button"
+          class="inline-flex h-8 items-center justify-center rounded-lg bg-success px-3 text-sm font-medium text-white transition-colors hover:bg-success/80 disabled:cursor-not-allowed disabled:opacity-50"
+          :disabled="saving || loading || suspended || drawing || (magicWandEnabled ? !originalImageUrl : !dirty && !externalRestoreAvailable)"
+          :class="magicWandEnabled ? 'control-tooltip control-tooltip--below control-tooltip--end' : ''"
+          :data-tooltip="magicWandEnabled ? t(originalImageUrl ? 'magicWand.restoreInitialHint' : initialRestoreUnsupported ? 'magicWand.restoreRestartRequired' : 'magicWand.initialUnavailable') : undefined"
+          data-test="image-editor-restore-original"
+          @click="restoreOriginal"
+        >
+          {{ magicWandEnabled ? t('magicWand.restoreInitial') : t('seedream.detail.restoreOriginal') }}
+        </button>
+        <Button
+          variant="primary"
+          size="sm"
+          :loading="saving"
+          :disabled="saving || loading || !dirty"
+          data-test="seedream-eraser-apply"
+          @click="apply"
+        >
+          {{ magicWandEnabled ? t('magicWand.save') : t('seedream.detail.applyEraser') }}
+        </Button>
       </div>
-      <Button
-        variant="secondary"
-        size="sm"
-        :disabled="saving || loading || undoStack.length === 0"
-        data-test="seedream-eraser-undo"
-        @click="undo"
-      >
-        <Undo2 :size="16" /> {{ t('common.undo') }}
-      </Button>
-      <Button
-        variant="secondary"
-        size="sm"
-        :disabled="saving || loading || redoStack.length === 0"
-        data-test="seedream-eraser-redo"
-        @click="redo"
-      >
-        <Redo2 :size="16" /> {{ t('common.redo') }}
-      </Button>
-      <span v-if="!embedded" class="min-w-14 text-center text-sm text-gray-400" data-test="seedream-eraser-zoom">
-        {{ Math.round(zoom * 100) }}%
-      </span>
-      <Button variant="secondary" size="sm" :disabled="saving" @click="emit('cancel')">
-        {{ t('common.cancel') }}
-      </Button>
-      <button
-        v-if="resizeEnabled || magicWandEnabled"
-        type="button"
-        class="inline-flex h-8 items-center justify-center rounded-lg bg-success px-3 text-sm font-medium text-white transition-colors hover:bg-success/80 disabled:cursor-not-allowed disabled:opacity-50"
-        :disabled="saving || loading || suspended || drawing || (magicWandEnabled ? !originalImageUrl : !dirty && !externalRestoreAvailable)"
-        :class="magicWandEnabled ? 'control-tooltip control-tooltip--below control-tooltip--end' : ''"
-        :data-tooltip="magicWandEnabled ? t(originalImageUrl ? 'magicWand.restoreInitialHint' : initialRestoreUnsupported ? 'magicWand.restoreRestartRequired' : 'magicWand.initialUnavailable') : undefined"
-        data-test="image-editor-restore-original"
-        @click="restoreOriginal"
-      >
-        {{ magicWandEnabled ? t('magicWand.restoreInitial') : t('seedream.detail.restoreOriginal') }}
-      </button>
-      <Button
-        variant="primary"
-        size="sm"
-        :loading="saving"
-        :disabled="saving || loading || !dirty"
-        data-test="seedream-eraser-apply"
-        @click="apply"
-      >
-        {{ magicWandEnabled ? t('magicWand.save') : t('seedream.detail.applyEraser') }}
-      </Button>
-    </div>
 
-    <fieldset v-if="embedded" :disabled="saving || loading || suspended"
-      class="flex h-20 min-w-0 items-center gap-4 overflow-x-auto border-t border-dark-border px-3" data-test="frame-tool-options">
-      <template v-if="tool === 'wand'">
-        <Slider v-model="wandTolerance" class="w-36 shrink-0" :min="0" :max="100" :step="1" :label="`${t('magicWand.tolerance')} (+/-)`" :value-formatter="v => `${v}%`" />
-        <Slider v-model="wandFeather" class="w-36 shrink-0" :min="0" :max="12" :step="1" :label="t('magicWand.feather')" :value-formatter="v => `${v}px`" />
-        <label class="flex shrink-0 items-center gap-2 text-xs text-gray-300"><input v-model="wandContiguous" type="checkbox" />{{ t('magicWand.contiguous') }}</label>
-        <span class="shrink-0 text-xs text-gray-400">{{ t('magicWand.selected', { count: selectedCount }) }}</span>
-        <Button variant="danger" size="sm" :disabled="!selectedCount" @click="deleteWandSelection">{{ t('magicWand.delete') }}</Button>
-        <Button variant="secondary" size="sm" :disabled="!selectedCount" @click="clearWandSelection">{{ t('magicWand.clear') }}</Button>
-      </template>
-      <template v-else-if="tool === 'brush'">
-        <Slider v-model="brushSize" class="w-56 shrink-0" :min="1" :max="200" :step="1" :label="magicWandEnabled ? `${t('seedream.detail.eraserSize')} (+/-)` : t('seedream.detail.eraserSize')" :value-formatter="v => `${v}px`" data-test="frame-eraser-size" />
-        <Slider v-model="brushFeather" class="w-36 shrink-0" :min="0" :max="12" :step="1" :label="t('magicWand.feather')" :value-formatter="v => `${v}px`" data-test="frame-eraser-feather" />
-      </template>
-      <span v-else class="text-xs text-gray-400">{{ t('magicWand.browseHint') }}</span>
-    </fieldset>
+      <fieldset
+        v-if="embedded"
+        :disabled="saving || loading || suspended"
+        class="flex h-20 min-w-0 items-center gap-4 overflow-x-auto border-t border-dark-border px-3"
+        data-test="frame-tool-options"
+      >
+        <template v-if="tool === 'wand'">
+          <Slider
+            v-model="wandTolerance"
+            class="w-36 shrink-0"
+            :min="0"
+            :max="100"
+            :step="1"
+            :label="`${t('magicWand.tolerance')} (+/-)`"
+            :value-formatter="v => `${v}%`"
+          />
+          <Slider
+            v-model="wandFeather"
+            class="w-36 shrink-0"
+            :min="0"
+            :max="12"
+            :step="1"
+            :label="t('magicWand.feather')"
+            :value-formatter="v => `${v}px`"
+          />
+          <label class="flex shrink-0 items-center gap-2 text-xs text-gray-300"><input
+            v-model="wandContiguous"
+            type="checkbox"
+          >{{ t('magicWand.contiguous') }}</label>
+          <span class="shrink-0 text-xs text-gray-400">{{ t('magicWand.selected', { count: selectedCount }) }}</span>
+          <Button
+            variant="danger"
+            size="sm"
+            :disabled="!selectedCount"
+            @click="deleteWandSelection"
+          >
+            {{ t('magicWand.delete') }}
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            :disabled="!selectedCount"
+            @click="clearWandSelection"
+          >
+            {{ t('magicWand.clear') }}
+          </Button>
+        </template>
+        <template v-else-if="tool === 'brush'">
+          <Slider
+            v-model="brushSize"
+            class="w-56 shrink-0"
+            :min="1"
+            :max="200"
+            :step="1"
+            :label="magicWandEnabled ? `${t('seedream.detail.eraserSize')} (+/-)` : t('seedream.detail.eraserSize')"
+            :value-formatter="v => `${v}px`"
+            data-test="frame-eraser-size"
+          />
+          <Slider
+            v-model="brushFeather"
+            class="w-36 shrink-0"
+            :min="0"
+            :max="12"
+            :step="1"
+            :label="t('magicWand.feather')"
+            :value-formatter="v => `${v}px`"
+            data-test="frame-eraser-feather"
+          />
+        </template>
+        <span
+          v-else
+          class="text-xs text-gray-400"
+        >{{ t('magicWand.browseHint') }}</span>
+      </fieldset>
     </Teleport>
 
     <div :class="embedded ? 'h-full' : 'mx-auto mt-3 grid w-full max-w-6xl gap-3 lg:grid-cols-[220px_minmax(0,1fr)]'">
-      <aside v-if="!embedded" class="rounded-xl border border-dark-border bg-dark-surface p-4">
+      <aside
+        v-if="!embedded"
+        class="rounded-xl border border-dark-border bg-dark-surface p-4"
+      >
         <p
           v-if="imageWidth > 0 && imageHeight > 0"
           class="mb-4 text-xs text-gray-500"
@@ -89,22 +170,82 @@
         >
           {{ t('seedream.detail.originalResolution') }}：{{ imageWidth }} × {{ imageHeight }} px
         </p>
-        <div v-if="magicWandEnabled" class="mb-4 space-y-3">
+        <div
+          v-if="magicWandEnabled"
+          class="mb-4 space-y-3"
+        >
           <div class="flex gap-2">
-            <Button size="sm" :variant="tool === 'wand' ? 'primary' : 'secondary'" data-test="magic-wand-tool" @click="tool = 'wand'">{{ t('magicWand.wand') }}</Button>
-            <Button size="sm" :variant="tool === 'brush' ? 'primary' : 'secondary'" @click="tool = 'brush'">{{ t('magicWand.eraser') }}</Button>
+            <Button
+              size="sm"
+              :variant="tool === 'wand' ? 'primary' : 'secondary'"
+              data-test="magic-wand-tool"
+              @click="tool = 'wand'"
+            >
+              {{ t('magicWand.wand') }}
+            </Button>
+            <Button
+              size="sm"
+              :variant="tool === 'brush' ? 'primary' : 'secondary'"
+              @click="tool = 'brush'"
+            >
+              {{ t('magicWand.eraser') }}
+            </Button>
           </div>
-          <p class="text-xs leading-5 text-gray-400">{{ t('magicWand.hint') }}</p>
+          <p class="text-xs leading-5 text-gray-400">
+            {{ t('magicWand.hint') }}
+          </p>
           <template v-if="tool === 'wand'">
-            <Slider v-model="wandTolerance" :min="0" :max="100" :step="1" :label="`${t('magicWand.tolerance')} (+/-)`" :value-formatter="(v) => `${v}%`" data-test="magic-wand-tolerance" />
-            <Slider v-model="wandFeather" :min="0" :max="12" :step="1" :label="t('magicWand.feather')" :value-formatter="(v) => `${v}px`" data-test="magic-wand-feather" />
-            <label class="flex gap-2 text-sm text-gray-300"><input v-model="wandContiguous" type="checkbox" data-test="magic-wand-contiguous" />{{ t('magicWand.contiguous') }}</label>
-            <p class="text-xs text-gray-400">{{ t('magicWand.selected', { count: selectedCount }) }}</p>
-            <Button class="w-full" variant="danger" size="sm" :disabled="!selectedCount || saving || loading" data-test="magic-wand-delete" @click="deleteWandSelection">{{ t('magicWand.delete') }}</Button>
-            <Button class="w-full" variant="secondary" size="sm" :disabled="!selectedCount" @click="clearWandSelection">{{ t('magicWand.clear') }}</Button>
+            <Slider
+              v-model="wandTolerance"
+              :min="0"
+              :max="100"
+              :step="1"
+              :label="`${t('magicWand.tolerance')} (+/-)`"
+              :value-formatter="(v) => `${v}%`"
+              data-test="magic-wand-tolerance"
+            />
+            <Slider
+              v-model="wandFeather"
+              :min="0"
+              :max="12"
+              :step="1"
+              :label="t('magicWand.feather')"
+              :value-formatter="(v) => `${v}px`"
+              data-test="magic-wand-feather"
+            />
+            <label class="flex gap-2 text-sm text-gray-300"><input
+              v-model="wandContiguous"
+              type="checkbox"
+              data-test="magic-wand-contiguous"
+            >{{ t('magicWand.contiguous') }}</label>
+            <p class="text-xs text-gray-400">
+              {{ t('magicWand.selected', { count: selectedCount }) }}
+            </p>
+            <Button
+              class="w-full"
+              variant="danger"
+              size="sm"
+              :disabled="!selectedCount || saving || loading"
+              data-test="magic-wand-delete"
+              @click="deleteWandSelection"
+            >
+              {{ t('magicWand.delete') }}
+            </Button>
+            <Button
+              class="w-full"
+              variant="secondary"
+              size="sm"
+              :disabled="!selectedCount"
+              @click="clearWandSelection"
+            >
+              {{ t('magicWand.clear') }}
+            </Button>
           </template>
           <label class="block text-xs text-gray-400">{{ t('magicWand.preview') }}
-            <select v-model="previewBackground" class="mt-1 w-full rounded border border-dark-border bg-dark-bg p-2 text-white">
+            <select
+              v-model="previewBackground"
+              class="mt-1 w-full rounded border border-dark-border bg-dark-bg p-2 text-white"
+            >
               <option value="checker">{{ t('magicWand.checker') }}</option>
               <option value="white">{{ t('magicWand.white') }}</option>
               <option value="dark">{{ t('magicWand.dark') }}</option>
@@ -125,13 +266,21 @@
           v-if="magicWandEnabled && tool === 'brush'"
           v-model="brushFeather"
           class="mt-3"
-          :min="0" :max="12" :step="1"
+          :min="0"
+          :max="12"
+          :step="1"
           :label="t('magicWand.feather')"
           :value-formatter="v => `${v}px`"
           data-test="seedream-eraser-feather"
         />
-        <div v-if="resizeEnabled" class="mt-5 border-t border-dark-border pt-4">
-          <div class="space-y-3" data-test="image-editor-resize-controls">
+        <div
+          v-if="resizeEnabled"
+          class="mt-5 border-t border-dark-border pt-4"
+        >
+          <div
+            class="space-y-3"
+            data-test="image-editor-resize-controls"
+          >
             <label class="block text-xs text-gray-300">
               {{ t('seedream.detail.targetHeight') }}
               <input
@@ -143,8 +292,11 @@
                 class="mt-1 w-full rounded-lg border border-dark-border bg-dark-bg px-3 py-2 text-white"
                 data-test="image-editor-target-height-ratio"
                 @input="updateResizeRatio($event, 'height')"
-              />
-              <span class="mt-1 block text-gray-500" data-test="image-editor-measured-height-px">
+              >
+              <span
+                class="mt-1 block text-gray-500"
+                data-test="image-editor-measured-height-px"
+              >
                 {{ t('seedream.detail.measuredHeight') }}：{{ guideMeasuredHeight }} px
               </span>
               <span
@@ -173,10 +325,18 @@
                 class="mt-1 w-full rounded-lg border border-dark-border bg-dark-bg px-3 py-2 text-white"
                 data-test="image-editor-bottom-distance-ratio"
                 @input="updateResizeRatio($event, 'margin')"
-              />
+              >
             </label>
-            <p class="text-xs leading-5 text-gray-500">{{ t('seedream.detail.resizeCharacterHint') }}</p>
-            <p v-if="resizeError" class="text-xs text-danger" role="alert">{{ resizeError }}</p>
+            <p class="text-xs leading-5 text-gray-500">
+              {{ t('seedream.detail.resizeCharacterHint') }}
+            </p>
+            <p
+              v-if="resizeError"
+              class="text-xs text-danger"
+              role="alert"
+            >
+              {{ resizeError }}
+            </p>
             <Button
               variant="primary"
               size="sm"
@@ -189,7 +349,13 @@
             </Button>
           </div>
         </div>
-        <p v-if="error || loadError" class="mt-3 text-sm text-danger" role="alert">{{ error || loadError }}</p>
+        <p
+          v-if="error || loadError"
+          class="mt-3 text-sm text-danger"
+          role="alert"
+        >
+          {{ error || loadError }}
+        </p>
       </aside>
 
       <div
@@ -203,7 +369,12 @@
         @pointercancel="finishPan"
         @auxclick.prevent
       >
-        <div v-if="loading" class="absolute inset-0 z-10 flex items-center justify-center text-sm text-gray-400">{{ t('common.loading') }}</div>
+        <div
+          v-if="loading"
+          class="absolute inset-0 z-10 flex items-center justify-center text-sm text-gray-400"
+        >
+          {{ t('common.loading') }}
+        </div>
         <div
           :class="[embedded ? 'absolute left-1/2 top-1/2' : 'relative max-h-[calc(100vh-9rem)] max-w-full', { invisible: loading }]"
           :style="canvasTransformStyle"
@@ -221,7 +392,12 @@
             @pointerenter="showCursor = true"
             @pointerleave="onPointerLeave"
           />
-          <canvas v-if="magicWandEnabled" ref="selectionCanvasRef" class="pointer-events-none absolute inset-0 h-full w-full" data-test="magic-wand-selection" />
+          <canvas
+            v-if="magicWandEnabled"
+            ref="selectionCanvasRef"
+            class="pointer-events-none absolute inset-0 h-full w-full"
+            data-test="magic-wand-selection"
+          />
           <svg
             v-if="magicWandEnabled && selectionOutlinePath"
             class="pointer-events-none absolute inset-0 h-full w-full overflow-visible"
@@ -282,11 +458,24 @@
             />
           </template>
         </div>
-        <p v-if="embedded" class="pointer-events-none absolute bottom-4 left-4 right-20 z-10 w-fit max-w-[calc(100%-6rem)] rounded-lg bg-black/50 px-3 py-2 text-xs leading-5 text-gray-200" data-test="frame-tool-hint">
+        <p
+          v-if="embedded"
+          class="pointer-events-none absolute bottom-4 left-4 right-20 z-10 w-fit max-w-[calc(100%-6rem)] rounded-lg bg-black/50 px-3 py-2 text-xs leading-5 text-gray-200"
+          data-test="frame-tool-hint"
+        >
           {{ t(tool === 'wand' ? 'magicWand.wandHint' : tool === 'brush' ? 'magicWand.eraserHint' : 'magicWand.browseHint') }}
         </p>
-        <p v-if="embedded && (error || loadError)" class="absolute left-4 right-20 top-16 rounded bg-black/80 p-3 text-sm text-danger" role="alert">{{ error || loadError }}</p>
-        <div v-if="embedded && (saving || suspended)" class="absolute inset-0 z-10 cursor-wait" />
+        <p
+          v-if="embedded && (error || loadError)"
+          class="absolute left-4 right-20 top-16 rounded bg-black/80 p-3 text-sm text-danger"
+          role="alert"
+        >
+          {{ error || loadError }}
+        </p>
+        <div
+          v-if="embedded && (saving || suspended)"
+          class="absolute inset-0 z-10 cursor-wait"
+        />
         <div
           v-if="showCursor && !panning && (!magicWandEnabled || tool === 'brush')"
           class="pointer-events-none absolute rounded-full border border-white shadow-[0_0_0_1px_rgba(0,0,0,0.8)]"

@@ -1,5 +1,8 @@
 <template>
-  <Listbox v-model="selectedValue" :disabled="disabled">
+  <Listbox
+    v-model="selectedValue"
+    :disabled="disabled"
+  >
     <div class="relative">
       <!--
         Consumers wrap this select in a <label>. A label forwards clicks on

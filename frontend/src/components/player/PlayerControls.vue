@@ -4,149 +4,157 @@
     data-test="player-controls"
   >
     <div class="flex items-center gap-4 rounded-xl px-4 py-3">
-    <!-- Play/Pause button -->
-    <button
-      class="control-tooltip p-2 rounded-lg bg-primary hover:bg-primary-600 text-dark-bg transition-colors"
-      :aria-label="isPlaying ? t('player.pause') : t('player.play')"
-      @pointerdown="resumeAudioPlayback"
-      @click="playerStore.togglePlay()"
-    >
-      <Play
-        v-if="!isPlaying"
-        class="w-5 h-5"
-      />
-      <Pause
-        v-else
-        class="w-5 h-5"
-      />
-    </button>
-
-    <!-- Frame navigation -->
-    <div class="flex items-center gap-2">
+      <!-- Play/Pause button -->
       <button
-        class="control-tooltip p-1.5 rounded hover:bg-dark-border text-gray-400 hover:text-white transition-colors"
-        :aria-label="t('player.previousFrame')"
-        :disabled="!canGoPrev"
-        @click="playerStore.prevFrame()"
+        class="control-tooltip p-2 rounded-lg bg-primary hover:bg-primary-600 text-dark-bg transition-colors"
+        :aria-label="isPlaying ? t('player.pause') : t('player.play')"
+        @pointerdown="resumeAudioPlayback"
+        @click="playerStore.togglePlay()"
       >
-        <SkipBack class="w-5 h-5" />
-      </button>
-
-      <span class="text-sm text-gray-400 min-w-[80px] text-center">
-        {{ currentTimelineFrame }} / {{ timelineEndFrame }}
-      </span>
-
-      <button
-        class="control-tooltip p-1.5 rounded hover:bg-dark-border text-gray-400 hover:text-white transition-colors"
-        :aria-label="t('player.nextFrame')"
-        :disabled="!canGoNext"
-        @click="playerStore.nextFrame()"
-      >
-        <SkipForward class="w-5 h-5" />
-      </button>
-    </div>
-
-    <!-- Range slider (dual handle) — 音效轨展开时移入下方音效面板与波形对齐 -->
-    <div class="flex-1 mx-4 flex items-center">
-      <RangeSlider
-        v-if="!(processStore.currentStep === 1 && showAudioTimeline)"
-        :total-frames="timelineTotalFrames"
-        :start-frame="timelineStartFrame"
-        :end-frame="timelineEndFrame"
-        :current-frame="currentTimelineFrame"
-        :simple="processStore.currentStep > 1"
-        @update:start-frame="onStartFrameChange"
-        @update:end-frame="onEndFrameChange"
-        @update:current-frame="onCurrentFrameChange"
-      />
-    </div>
-
-    <!-- Playback settings -->
-    <div class="flex items-center gap-2">
-      <span class="text-xs text-gray-500">FPS</span>
-      <div class="relative">
-        <input
-          ref="fpsInputRef"
-          :aria-label="t('player.fps')"
-          :value="playbackFps"
-          type="number"
-          min="1"
-          max="120"
-          class="w-20 bg-dark-surface border border-dark-border rounded px-2 py-1 pr-5 text-sm text-gray-300 text-center focus:outline-none focus:ring-1 focus:ring-primary"
-          @input="onFpsInput"
-          @blur="onFpsBlur"
-          @keydown="onFpsKeydown"
-        >
-        <div class="absolute inset-y-1 right-1 w-4 flex flex-col border-l border-dark-border">
-          <button
-            type="button"
-            class="control-tooltip flex-1 flex items-center justify-center hover:bg-dark-border rounded-tr text-gray-400 hover:text-white transition-colors"
-            :aria-label="t('common.increase', { label: t('player.fps') })"
-            @mousedown.prevent
-            @click="stepFps(1)"
-          >
-            <ChevronUp class="w-3 h-3" />
-          </button>
-          <button
-            type="button"
-            class="control-tooltip flex-1 flex items-center justify-center hover:bg-dark-border rounded-br text-gray-400 hover:text-white transition-colors"
-            :aria-label="t('common.decrease', { label: t('player.fps') })"
-            @mousedown.prevent
-            @click="stepFps(-1)"
-          >
-            <ChevronDown class="w-3 h-3" />
-          </button>
-        </div>
-      </div>
-    </div>
-    <div class="flex items-center gap-1.5">
-      <button
-        v-if="processStore.currentStep === 1"
-        type="button"
-        data-test="audio-track-toggle"
-        :aria-expanded="showAudioTimeline"
-        :class="[
-          'flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors',
-          showAudioTimeline
-            ? 'border-primary bg-primary/15 text-primary'
-            : 'border-dark-border text-gray-400 hover:border-gray-500 hover:text-white'
-        ]"
-        @click="showAudioTimeline = !showAudioTimeline"
-      >
-        <span
-          class="audio-track-wave"
-          :class="{ 'audio-track-wave--active': showAudioTimeline }"
-          aria-hidden="true"
-        >
-          <span />
-          <span />
-          <span />
-          <span />
-        </span>
-        <span>{{ t('player.audioTrack') }}</span>
-        <ChevronDown
-          class="h-3.5 w-3.5 transition-transform duration-200"
-          :class="showAudioTimeline ? 'rotate-180' : ''"
-          aria-hidden="true"
+        <Play
+          v-if="!isPlaying"
+          class="w-5 h-5"
+        />
+        <Pause
+          v-else
+          class="w-5 h-5"
         />
       </button>
-      <button
-        type="button"
-        data-test="audio-mute-toggle"
-        :aria-label="audioPlaybackEnabled ? t('player.mute') : t('player.unmute')"
-        :aria-pressed="!audioPlaybackEnabled"
-        :class="[
-          'control-tooltip control-tooltip--end grid h-9 w-9 place-items-center rounded-lg border transition-colors',
-          audioPlaybackEnabled
-            ? 'border-dark-border text-gray-400 hover:border-gray-500 hover:text-white'
-            : 'border-primary bg-primary/15 text-primary'
-        ]"
-        @click="toggleAudioPlayback"
-      >
-        <Volume2 v-if="audioPlaybackEnabled" class="h-4 w-4" aria-hidden="true" />
-        <VolumeX v-else class="h-4 w-4" aria-hidden="true" />
-      </button>
-    </div>
+
+      <!-- Frame navigation -->
+      <div class="flex items-center gap-2">
+        <button
+          class="control-tooltip p-1.5 rounded hover:bg-dark-border text-gray-400 hover:text-white transition-colors"
+          :aria-label="t('player.previousFrame')"
+          :disabled="!canGoPrev"
+          @click="playerStore.prevFrame()"
+        >
+          <SkipBack class="w-5 h-5" />
+        </button>
+
+        <span class="text-sm text-gray-400 min-w-[80px] text-center">
+          {{ currentTimelineFrame }} / {{ timelineEndFrame }}
+        </span>
+
+        <button
+          class="control-tooltip p-1.5 rounded hover:bg-dark-border text-gray-400 hover:text-white transition-colors"
+          :aria-label="t('player.nextFrame')"
+          :disabled="!canGoNext"
+          @click="playerStore.nextFrame()"
+        >
+          <SkipForward class="w-5 h-5" />
+        </button>
+      </div>
+
+      <!-- Range slider (dual handle) — 音效轨展开时移入下方音效面板与波形对齐 -->
+      <div class="flex-1 mx-4 flex items-center">
+        <RangeSlider
+          v-if="!(processStore.currentStep === 1 && showAudioTimeline)"
+          :total-frames="timelineTotalFrames"
+          :start-frame="timelineStartFrame"
+          :end-frame="timelineEndFrame"
+          :current-frame="currentTimelineFrame"
+          :simple="processStore.currentStep > 1"
+          @update:start-frame="onStartFrameChange"
+          @update:end-frame="onEndFrameChange"
+          @update:current-frame="onCurrentFrameChange"
+        />
+      </div>
+
+      <!-- Playback settings -->
+      <div class="flex items-center gap-2">
+        <span class="text-xs text-gray-500">FPS</span>
+        <div class="relative">
+          <input
+            ref="fpsInputRef"
+            :aria-label="t('player.fps')"
+            :value="playbackFps"
+            type="number"
+            min="1"
+            max="120"
+            class="w-20 bg-dark-surface border border-dark-border rounded px-2 py-1 pr-5 text-sm text-gray-300 text-center focus:outline-none focus:ring-1 focus:ring-primary"
+            @input="onFpsInput"
+            @blur="onFpsBlur"
+            @keydown="onFpsKeydown"
+          >
+          <div class="absolute inset-y-1 right-1 w-4 flex flex-col border-l border-dark-border">
+            <button
+              type="button"
+              class="control-tooltip flex-1 flex items-center justify-center hover:bg-dark-border rounded-tr text-gray-400 hover:text-white transition-colors"
+              :aria-label="t('common.increase', { label: t('player.fps') })"
+              @mousedown.prevent
+              @click="stepFps(1)"
+            >
+              <ChevronUp class="w-3 h-3" />
+            </button>
+            <button
+              type="button"
+              class="control-tooltip flex-1 flex items-center justify-center hover:bg-dark-border rounded-br text-gray-400 hover:text-white transition-colors"
+              :aria-label="t('common.decrease', { label: t('player.fps') })"
+              @mousedown.prevent
+              @click="stepFps(-1)"
+            >
+              <ChevronDown class="w-3 h-3" />
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="flex items-center gap-1.5">
+        <button
+          v-if="processStore.currentStep === 1"
+          type="button"
+          data-test="audio-track-toggle"
+          :aria-expanded="showAudioTimeline"
+          :class="[
+            'flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors',
+            showAudioTimeline
+              ? 'border-primary bg-primary/15 text-primary'
+              : 'border-dark-border text-gray-400 hover:border-gray-500 hover:text-white'
+          ]"
+          @click="showAudioTimeline = !showAudioTimeline"
+        >
+          <span
+            class="audio-track-wave"
+            :class="{ 'audio-track-wave--active': showAudioTimeline }"
+            aria-hidden="true"
+          >
+            <span />
+            <span />
+            <span />
+            <span />
+          </span>
+          <span>{{ t('player.audioTrack') }}</span>
+          <ChevronDown
+            class="h-3.5 w-3.5 transition-transform duration-200"
+            :class="showAudioTimeline ? 'rotate-180' : ''"
+            aria-hidden="true"
+          />
+        </button>
+        <button
+          type="button"
+          data-test="audio-mute-toggle"
+          :aria-label="audioPlaybackEnabled ? t('player.mute') : t('player.unmute')"
+          :aria-pressed="!audioPlaybackEnabled"
+          :class="[
+            'control-tooltip control-tooltip--end grid h-9 w-9 place-items-center rounded-lg border transition-colors',
+            audioPlaybackEnabled
+              ? 'border-dark-border text-gray-400 hover:border-gray-500 hover:text-white'
+              : 'border-primary bg-primary/15 text-primary'
+          ]"
+          @click="toggleAudioPlayback"
+        >
+          <Volume2
+            v-if="audioPlaybackEnabled"
+            class="h-4 w-4"
+            aria-hidden="true"
+          />
+          <VolumeX
+            v-else
+            class="h-4 w-4"
+            aria-hidden="true"
+          />
+        </button>
+      </div>
     </div>
 
     <AudioTimeline

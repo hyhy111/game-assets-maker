@@ -1,9 +1,20 @@
 <template>
-  <SeedancePanel :title="t('seedance.create.summaryTitle')" :description="t('seedance.create.summaryDescription')">
+  <SeedancePanel
+    :title="t('seedance.create.summaryTitle')"
+    :description="t('seedance.create.summaryDescription')"
+  >
     <dl class="divide-y divide-[var(--seedance-border)] text-sm">
-      <div v-for="item in items" :key="item.label" class="flex items-center justify-between gap-4 py-3">
-        <dt class="text-[var(--seedance-muted)]">{{ item.label }}</dt>
-        <dd class="text-right font-medium text-gray-200">{{ item.value }}</dd>
+      <div
+        v-for="item in items"
+        :key="item.label"
+        class="flex items-center justify-between gap-4 py-3"
+      >
+        <dt class="text-[var(--seedance-muted)]">
+          {{ item.label }}
+        </dt>
+        <dd class="text-right font-medium text-gray-200">
+          {{ item.value }}
+        </dd>
       </div>
     </dl>
     <div class="mt-5">

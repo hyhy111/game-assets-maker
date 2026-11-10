@@ -3,7 +3,10 @@
     class="min-w-0"
     :data-test="`recent-prompt-group-${groupId}`"
   >
-    <div class="relative" :class="count > 1 ? 'pb-3 pr-3' : ''">
+    <div
+      class="relative"
+      :class="count > 1 ? 'pb-3 pr-3' : ''"
+    >
       <template v-if="count > 1">
         <span class="pointer-events-none absolute inset-x-3 bottom-0 top-3 rounded-xl border border-dark-border bg-[#151820]" />
         <span class="pointer-events-none absolute inset-x-1.5 bottom-1.5 top-1.5 rounded-xl border border-dark-border bg-[#242424]" />
@@ -14,7 +17,10 @@
     </div>
   </article>
 
-  <Teleport to="body" :disabled="teleportDisabled">
+  <Teleport
+    to="body"
+    :disabled="teleportDisabled"
+  >
     <div
       v-if="expanded && count > 1"
       ref="modalRoot"
@@ -31,7 +37,9 @@
         :aria-label="t('aiCreation.recent.promptTasksDialog')"
       >
         <header class="flex items-start justify-between gap-4 border-b border-dark-border bg-primary/5 px-5 py-4">
-          <p class="line-clamp-2 min-w-0 text-xs leading-5 text-gray-400">{{ prompt }}</p>
+          <p class="line-clamp-2 min-w-0 text-xs leading-5 text-gray-400">
+            {{ prompt }}
+          </p>
           <button
             ref="closeButton"
             type="button"
@@ -39,7 +47,10 @@
             :aria-label="t('aiCreation.recent.collapseTasks')"
             @click="requestClose"
           >
-            <X class="h-4 w-4" aria-hidden="true" />
+            <X
+              class="h-4 w-4"
+              aria-hidden="true"
+            />
           </button>
         </header>
         <div class="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-y-auto p-4 sm:p-5 md:grid-cols-2 xl:grid-cols-4">

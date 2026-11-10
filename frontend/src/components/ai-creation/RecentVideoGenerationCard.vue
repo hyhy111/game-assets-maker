@@ -32,20 +32,40 @@
         class="h-full w-full object-cover transition duration-300 group-hover:brightness-105"
         data-test="recent-video-poster"
       >
-      <div v-else class="grid h-full place-items-center text-gray-600"><Video :size="32" aria-hidden="true" /></div>
+      <div
+        v-else
+        class="grid h-full place-items-center text-gray-600"
+      >
+        <Video
+          :size="32"
+          aria-hidden="true"
+        />
+      </div>
       <div class="pointer-events-none absolute left-2 right-14 top-2 flex flex-wrap items-start gap-1">
-        <span class="media-overlay-badge media-overlay-status" :class="statusClass">
+        <span
+          class="media-overlay-badge media-overlay-status"
+          :class="statusClass"
+        >
           {{ statusText }}
         </span>
-        <PlatformSourceBadge :source="task.source" overlay />
+        <PlatformSourceBadge
+          :source="task.source"
+          overlay
+        />
       </div>
-      <div v-if="$slots['top-right']" class="absolute right-3 top-3 z-[2]">
+      <div
+        v-if="$slots['top-right']"
+        class="absolute right-3 top-3 z-[2]"
+      >
         <slot name="top-right" />
       </div>
     </div>
 
     <div class="p-4">
-      <div class="flex flex-nowrap gap-1.5 overflow-hidden whitespace-nowrap text-xs text-gray-400" data-test="recent-video-metadata">
+      <div
+        class="flex flex-nowrap gap-1.5 overflow-hidden whitespace-nowrap text-xs text-gray-400"
+        data-test="recent-video-metadata"
+      >
         <span class="shrink-0 rounded-md bg-black/20 px-2 py-1">{{ modelName(task.request.model, 'video') }}</span>
         <span class="shrink-0 rounded-md bg-black/20 px-2 py-1">{{ task.request.resolution }}</span>
         <span class="shrink-0 rounded-md bg-black/20 px-2 py-1">{{ ratio }}</span>
@@ -53,15 +73,26 @@
       </div>
       <dl class="mt-4 grid grid-cols-2 gap-3 border-t border-dark-border pt-4 text-xs">
         <div>
-          <dt class="text-gray-500">{{ t('aiCreation.recent.createdAt') }}</dt>
-          <dd class="mt-1 text-gray-300">{{ createdAt }}</dd>
+          <dt class="text-gray-500">
+            {{ t('aiCreation.recent.createdAt') }}
+          </dt>
+          <dd class="mt-1 text-gray-300">
+            {{ createdAt }}
+          </dd>
         </div>
         <div class="text-right">
-          <dt class="text-gray-500">{{ t('aiCreation.recent.elapsed') }}</dt>
-          <dd class="mt-1 text-gray-300">{{ active ? t('aiCreation.recent.generating') : formatElapsed(task.elapsed_seconds) }}</dd>
+          <dt class="text-gray-500">
+            {{ t('aiCreation.recent.elapsed') }}
+          </dt>
+          <dd class="mt-1 text-gray-300">
+            {{ active ? t('aiCreation.recent.generating') : formatElapsed(task.elapsed_seconds) }}
+          </dd>
         </div>
       </dl>
-      <div v-if="$slots['bottom-right']" class="mt-3 flex justify-end">
+      <div
+        v-if="$slots['bottom-right']"
+        class="mt-3 flex justify-end"
+      >
         <slot name="bottom-right" />
       </div>
     </div>

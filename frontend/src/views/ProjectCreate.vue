@@ -169,7 +169,10 @@
         <!-- Role name -->
         <div class="space-y-2 mt-6">
           <label class="block text-sm font-medium text-gray-300">{{ t('projectCreate.roleName') }}</label>
-          <div ref="roleMenuContainer" class="relative">
+          <div
+            ref="roleMenuContainer"
+            class="relative"
+          >
             <input
               v-model="form.role"
               type="text"

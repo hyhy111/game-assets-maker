@@ -15,13 +15,19 @@
         data-test="seedance-preview-back"
         @click="backToTasks"
       >
-        <ArrowLeft :size="22" aria-hidden="true" />
+        <ArrowLeft
+          :size="22"
+          aria-hidden="true"
+        />
         {{ t('aiCreation.backToWorkspace') }}
       </button>
     </div>
 
     <SeedancePanel v-if="store.loading && !task && !notFound">
-      <div class="flex min-h-72 items-center justify-center text-[var(--seedance-muted)]" role="status">
+      <div
+        class="flex min-h-72 items-center justify-center text-[var(--seedance-muted)]"
+        role="status"
+      >
         {{ t('common.loading') }}
       </div>
     </SeedancePanel>
@@ -33,7 +39,10 @@
         icon="error"
       >
         <template #actions>
-          <RouterLink to="/video-generation/create" class="btn-secondary">
+          <RouterLink
+            to="/video-generation/create"
+            class="btn-secondary"
+          >
             {{ t('seedance.nav.create') }}
           </RouterLink>
         </template>
@@ -127,11 +136,20 @@
           </div>
         </div>
 
-        <p v-if="downloadLinkMayBeExpired" class="mb-4 rounded-lg border border-warning/30 bg-warning/10 p-3 text-sm text-warning">
+        <p
+          v-if="downloadLinkMayBeExpired"
+          class="mb-4 rounded-lg border border-warning/30 bg-warning/10 p-3 text-sm text-warning"
+        >
           {{ t('seedance.ui.downloadUrlMayBeExpired') }}
         </p>
 
-        <p v-if="directoryError" class="mb-3 text-sm text-danger" role="alert">{{ directoryError }}</p>
+        <p
+          v-if="directoryError"
+          class="mb-3 text-sm text-danger"
+          role="alert"
+        >
+          {{ directoryError }}
+        </p>
         <div class="relative">
           <SeedanceVideoStage
             :phase="phase"
@@ -150,7 +168,10 @@
       <div class="mt-5 grid gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(340px,.95fr)]">
         <section class="space-y-5">
           <SeedanceMediaStrip :task="task" />
-          <SeedanceGenerationInfo :task="task" :output="output" />
+          <SeedanceGenerationInfo
+            :task="task"
+            :output="output"
+          />
         </section>
 
         <aside class="space-y-5 xl:sticky xl:top-24 xl:self-start">
@@ -160,7 +181,10 @@
             :roles="projectStore.roles"
             @handoff="handoff"
           />
-          <p v-if="handoffResult" class="rounded-lg border border-success/30 bg-success/10 p-3 text-sm text-success">
+          <p
+            v-if="handoffResult"
+            class="rounded-lg border border-success/30 bg-success/10 p-3 text-sm text-success"
+          >
             {{ t('seedance.handoff.success', { id: handoffResult }) }}
           </p>
         </aside>
@@ -205,13 +229,25 @@
       @click.self="closeConfirmation"
     >
       <div>
-        <h2 id="protected-title">{{ t('seedance.tasks.delete') }}</h2>
+        <h2 id="protected-title">
+          {{ t('seedance.tasks.delete') }}
+        </h2>
         <p id="protected-description">
           {{ task?.protected ? t('seedance.ui.protectedDeleteWarning') : t('seedance.tasks.deleteConfirmation') }}
         </p>
         <div class="mt-5 flex justify-end gap-2">
-          <Button variant="secondary" @click="closeConfirmation">{{ t('common.cancel') }}</Button>
-          <Button variant="danger" @click="deleteTask(!!task?.protected)">{{ t('seedance.tasks.delete') }}</Button>
+          <Button
+            variant="secondary"
+            @click="closeConfirmation"
+          >
+            {{ t('common.cancel') }}
+          </Button>
+          <Button
+            variant="danger"
+            @click="deleteTask(!!task?.protected)"
+          >
+            {{ t('seedance.tasks.delete') }}
+          </Button>
         </div>
       </div>
     </div>
@@ -235,8 +271,17 @@
           {{ t(pendingPaidAction === 'retry' ? 'seedance.ui.retryBillingWarning' : 'seedance.ui.continueBillingWarning') }}
         </p>
         <div class="mt-5 flex justify-end gap-2">
-          <Button variant="secondary" @click="closeConfirmation">{{ t('common.cancel') }}</Button>
-          <Button :loading="confirmingPaidAction" :disabled="confirmingPaidAction" @click="confirmPaidAction">
+          <Button
+            variant="secondary"
+            @click="closeConfirmation"
+          >
+            {{ t('common.cancel') }}
+          </Button>
+          <Button
+            :loading="confirmingPaidAction"
+            :disabled="confirmingPaidAction"
+            @click="confirmPaidAction"
+          >
             {{ t('common.confirm') }}
           </Button>
         </div>

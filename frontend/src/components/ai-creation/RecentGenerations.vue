@@ -1,8 +1,13 @@
 <template>
-  <section class="mt-10" data-test="recent-generations">
+  <section
+    class="mt-10"
+    data-test="recent-generations"
+  >
     <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
       <div class="flex items-center gap-3">
-        <h2 class="text-lg font-semibold text-white">{{ t('aiCreation.recent.title') }}</h2>
+        <h2 class="text-lg font-semibold text-white">
+          {{ t('aiCreation.recent.title') }}
+        </h2>
         <div class="flex rounded-lg border border-dark-border bg-dark-surface p-1">
           <button
             v-for="filter in filters"
@@ -37,14 +42,30 @@
       </div>
     </div>
 
-    <p v-if="error" class="mb-4 rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-danger">{{ error.message }}</p>
-    <div v-if="loading && !visibleItems.length" class="grid min-h-56 place-items-center rounded-xl border border-dark-border bg-dark-surface text-sm text-gray-400" role="status">
+    <p
+      v-if="error"
+      class="mb-4 rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-danger"
+    >
+      {{ error.message }}
+    </p>
+    <div
+      v-if="loading && !visibleItems.length"
+      class="grid min-h-56 place-items-center rounded-xl border border-dark-border bg-dark-surface text-sm text-gray-400"
+      role="status"
+    >
       {{ t('common.loading') }}
     </div>
-    <div v-else-if="!visibleItems.length" class="grid min-h-56 place-items-center rounded-xl border border-dark-border bg-dark-surface text-sm text-gray-400">
+    <div
+      v-else-if="!visibleItems.length"
+      class="grid min-h-56 place-items-center rounded-xl border border-dark-border bg-dark-surface text-sm text-gray-400"
+    >
       {{ t(workspace.recentFilter === 'image' ? 'aiCreation.recent.emptyImages' : 'aiCreation.recent.emptyVideos') }}
     </div>
-    <div v-else class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4" data-test="recent-generations-grid">
+    <div
+      v-else
+      class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4"
+      data-test="recent-generations-grid"
+    >
       <template v-if="workspace.recentFilter === 'image'">
         <RecentPromptGroup
           v-for="group in visibleImageGroups"
@@ -55,8 +76,14 @@
           :expanded="isExpanded('image', group.key)"
           @toggle-expanded="toggleExpanded('image', group.key)"
         >
-          <RecentImageGenerationCard :batch="group.items[0]" @open="openImageDetail">
-            <template v-if="group.items.length === 1" #top-right="{ attempt }">
+          <RecentImageGenerationCard
+            :batch="group.items[0]"
+            @open="openImageDetail"
+          >
+            <template
+              v-if="group.items.length === 1"
+              #top-right="{ attempt }"
+            >
               <RecentMediaFavoriteButton
                 v-if="attempt"
                 :favorite="isFavorite(imageMediaKey(group.items[0].local_id, attempt.local_id))"
@@ -64,7 +91,10 @@
                 @toggle="toggleFavorite(imageMediaKey(group.items[0].local_id, attempt.local_id))"
               />
             </template>
-            <template v-if="group.items.length > 1" #bottom-right>
+            <template
+              v-if="group.items.length > 1"
+              #bottom-right
+            >
               <button
                 type="button"
                 class="inline-flex items-center gap-1 text-xs font-medium text-primary transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
@@ -74,7 +104,11 @@
                 @keydown.stop
               >
                 {{ t(isExpanded('image', group.key) ? 'aiCreation.recent.collapseTasks' : 'aiCreation.recent.expandTasks') }}
-                <ChevronDown class="h-3.5 w-3.5 transition-transform" :class="isExpanded('image', group.key) ? 'rotate-180' : ''" aria-hidden="true" />
+                <ChevronDown
+                  class="h-3.5 w-3.5 transition-transform"
+                  :class="isExpanded('image', group.key) ? 'rotate-180' : ''"
+                  aria-hidden="true"
+                />
               </button>
             </template>
           </RecentImageGenerationCard>
@@ -107,15 +141,24 @@
           :expanded="isExpanded('video', group.key)"
           @toggle-expanded="toggleExpanded('video', group.key)"
         >
-          <RecentVideoGenerationCard :task="group.items[0]" @open="openVideoDetail">
-            <template v-if="group.items.length === 1" #top-right>
+          <RecentVideoGenerationCard
+            :task="group.items[0]"
+            @open="openVideoDetail"
+          >
+            <template
+              v-if="group.items.length === 1"
+              #top-right
+            >
               <RecentMediaFavoriteButton
                 :favorite="isFavorite(videoMediaKey(group.items[0].local_id))"
                 :data-test="`recent-media-favorite-${videoMediaKey(group.items[0].local_id)}`"
                 @toggle="toggleFavorite(videoMediaKey(group.items[0].local_id))"
               />
             </template>
-            <template v-if="group.items.length > 1" #bottom-right>
+            <template
+              v-if="group.items.length > 1"
+              #bottom-right
+            >
               <button
                 type="button"
                 class="inline-flex items-center gap-1 text-xs font-medium text-primary transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
@@ -125,7 +168,11 @@
                 @keydown.stop
               >
                 {{ t(isExpanded('video', group.key) ? 'aiCreation.recent.collapseTasks' : 'aiCreation.recent.expandTasks') }}
-                <ChevronDown class="h-3.5 w-3.5 transition-transform" :class="isExpanded('video', group.key) ? 'rotate-180' : ''" aria-hidden="true" />
+                <ChevronDown
+                  class="h-3.5 w-3.5 transition-transform"
+                  :class="isExpanded('video', group.key) ? 'rotate-180' : ''"
+                  aria-hidden="true"
+                />
               </button>
             </template>
           </RecentVideoGenerationCard>
@@ -149,7 +196,10 @@
       </template>
     </div>
 
-    <div v-if="hasMore" class="mt-5 flex justify-center">
+    <div
+      v-if="hasMore"
+      class="mt-5 flex justify-center"
+    >
       <button
         type="button"
         class="rounded-lg border border-dark-border bg-dark-surface px-5 py-2 text-sm text-gray-300 transition hover:border-gray-500 hover:text-white"

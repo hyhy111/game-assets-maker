@@ -1,8 +1,22 @@
 <template>
-  <section class="seedance-panel" :class="toneClass">
-    <header v-if="title || description" class="mb-4">
-      <h2 v-if="title" class="text-base font-semibold text-white">{{ title }}</h2>
-      <p v-if="description" class="mt-1 text-sm leading-6 text-[var(--seedance-muted)]">
+  <section
+    class="seedance-panel"
+    :class="toneClass"
+  >
+    <header
+      v-if="title || description"
+      class="mb-4"
+    >
+      <h2
+        v-if="title"
+        class="text-base font-semibold text-white"
+      >
+        {{ title }}
+      </h2>
+      <p
+        v-if="description"
+        class="mt-1 text-sm leading-6 text-[var(--seedance-muted)]"
+      >
         {{ description }}
       </p>
     </header>

@@ -9,8 +9,8 @@
     </label>
     <div class="relative">
       <input
-        ref="inputRef"
         :id="inputId"
+        ref="inputRef"
         :aria-label="ariaLabel"
         :type="type"
         :value="modelValue"

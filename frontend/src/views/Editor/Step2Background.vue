@@ -39,7 +39,10 @@
     <!-- Alpha Matting toggle -->
     <div class="flex items-center justify-between">
       <label class="text-sm font-medium text-gray-300">{{ t('step2.alphaMatting') }}</label>
-      <Switch v-model="s2Params.alpha_matting" :aria-label="t('step2.alphaMatting')" />
+      <Switch
+        v-model="s2Params.alpha_matting"
+        :aria-label="t('step2.alphaMatting')"
+      />
     </div>
 
     <!-- Alpha Matting settings (conditional) -->

@@ -29,19 +29,55 @@
     </div>
 
     <!-- A shared dark surface keeps controls legible over every preview background. -->
-    <div class="absolute bottom-4 right-4 z-20 flex flex-col gap-2 rounded-xl border border-white/20 bg-black/80 p-1.5 shadow-lg backdrop-blur-sm" @mousedown.stop @wheel.stop>
-      <Button class="control-tooltip control-tooltip--left" v-if="retouchEnabled" :variant="activeTool === 'wand' ? 'primary' : 'ghost'" size="sm" :disabled="toolsDisabled"
+    <div
+      class="absolute bottom-4 right-4 z-20 flex flex-col gap-2 rounded-xl border border-white/20 bg-black/80 p-1.5 shadow-lg backdrop-blur-sm"
+      @mousedown.stop
+      @wheel.stop
+    >
+      <Button
+        v-if="retouchEnabled"
+        class="control-tooltip control-tooltip--left"
+        :variant="activeTool === 'wand' ? 'primary' : 'ghost'"
+        size="sm"
+        :disabled="toolsDisabled"
         :class="activeTool === 'wand' ? '' : 'text-white hover:bg-white/10 hover:text-white'"
-        :data-tooltip="`${t('magicWand.wand')} (W)`" :aria-label="t('magicWand.wand')" :aria-pressed="activeTool === 'wand'"
-        data-test="frame-wand-tool" @click="emit('tool', 'wand')"><Wand2 class="h-5 w-5" /></Button>
-      <Button class="control-tooltip control-tooltip--left" v-if="retouchEnabled" :variant="activeTool === 'brush' ? 'primary' : 'ghost'" size="sm" :disabled="toolsDisabled"
+        :data-tooltip="`${t('magicWand.wand')} (W)`"
+        :aria-label="t('magicWand.wand')"
+        :aria-pressed="activeTool === 'wand'"
+        data-test="frame-wand-tool"
+        @click="emit('tool', 'wand')"
+      >
+        <Wand2 class="h-5 w-5" />
+      </Button>
+      <Button
+        v-if="retouchEnabled"
+        class="control-tooltip control-tooltip--left"
+        :variant="activeTool === 'brush' ? 'primary' : 'ghost'"
+        size="sm"
+        :disabled="toolsDisabled"
         :class="activeTool === 'brush' ? '' : 'text-white hover:bg-white/10 hover:text-white'"
-        :data-tooltip="`${t('magicWand.eraser')} (E)`" :aria-label="t('magicWand.eraser')" :aria-pressed="activeTool === 'brush'"
-        data-test="frame-eraser-tool" @click="emit('tool', 'brush')"><Eraser class="h-5 w-5" /></Button>
-      <Button class="control-tooltip control-tooltip--left" :variant="activeTool === 'browse' ? 'primary' : 'ghost'" size="sm" :disabled="toolsDisabled"
+        :data-tooltip="`${t('magicWand.eraser')} (E)`"
+        :aria-label="t('magicWand.eraser')"
+        :aria-pressed="activeTool === 'brush'"
+        data-test="frame-eraser-tool"
+        @click="emit('tool', 'brush')"
+      >
+        <Eraser class="h-5 w-5" />
+      </Button>
+      <Button
+        class="control-tooltip control-tooltip--left"
+        :variant="activeTool === 'browse' ? 'primary' : 'ghost'"
+        size="sm"
+        :disabled="toolsDisabled"
         :class="activeTool === 'browse' ? '' : 'text-white hover:bg-white/10 hover:text-white'"
-        :data-tooltip="retouchEnabled ? `${t('magicWand.browse')} (V)` : t('magicWand.browse')" :aria-label="t('magicWand.browse')" :aria-pressed="activeTool === 'browse'"
-        data-test="frame-browse-tool" @click="emit('tool', 'browse')"><Move class="h-5 w-5" /></Button>
+        :data-tooltip="retouchEnabled ? `${t('magicWand.browse')} (V)` : t('magicWand.browse')"
+        :aria-label="t('magicWand.browse')"
+        :aria-pressed="activeTool === 'browse'"
+        data-test="frame-browse-tool"
+        @click="emit('tool', 'browse')"
+      >
+        <Move class="h-5 w-5" />
+      </Button>
       <Button
         v-for="control in zoomControls"
         :key="control.action"

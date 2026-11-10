@@ -21,8 +21,14 @@
       </button>
     </div>
 
-    <form class="mt-4 space-y-4" @submit.prevent="submit">
-      <label v-if="mode === 'existing' && roles.length" class="block text-sm text-gray-300">
+    <form
+      class="mt-4 space-y-4"
+      @submit.prevent="submit"
+    >
+      <label
+        v-if="mode === 'existing' && roles.length"
+        class="block text-sm text-gray-300"
+      >
         <span class="flex items-center justify-between gap-3">
           <span>{{ t('seedance.ui.role') }}</span>
           <span class="text-xs text-[var(--seedance-muted)]">
@@ -39,14 +45,26 @@
         />
       </label>
 
-      <div v-else-if="mode === 'existing'" class="rounded-lg border border-[var(--seedance-border)] p-4 text-sm">
-        <p class="text-[var(--seedance-muted)]">{{ t('seedance.handoff.noRoles') }}</p>
-        <button type="button" class="mt-3 text-primary hover:text-primary-300" @click="mode = 'new'">
+      <div
+        v-else-if="mode === 'existing'"
+        class="rounded-lg border border-[var(--seedance-border)] p-4 text-sm"
+      >
+        <p class="text-[var(--seedance-muted)]">
+          {{ t('seedance.handoff.noRoles') }}
+        </p>
+        <button
+          type="button"
+          class="mt-3 text-primary hover:text-primary-300"
+          @click="mode = 'new'"
+        >
           {{ t('seedance.handoff.createRole') }}
         </button>
       </div>
 
-      <label v-else class="block text-sm text-gray-300">
+      <label
+        v-else
+        class="block text-sm text-gray-300"
+      >
         {{ t('seedance.handoff.roleName') }}
         <input
           v-model="role"

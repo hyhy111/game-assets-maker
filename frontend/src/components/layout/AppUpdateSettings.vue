@@ -84,11 +84,21 @@
           class="inline-flex cursor-pointer list-none items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-gray-200 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary [&::-webkit-details-marker]:hidden"
           data-test="app-update-details-toggle"
         >
-          <ChevronDown class="h-4 w-4 transition-transform group-open:rotate-180" aria-hidden="true" />
+          <ChevronDown
+            class="h-4 w-4 transition-transform group-open:rotate-180"
+            aria-hidden="true"
+          />
           <span class="group-open:hidden">{{ t('updates.showDetails') }}</span>
           <span class="hidden group-open:inline">{{ t('updates.hideDetails') }}</span>
         </summary>
-        <div class="release-notes" data-test="app-update-release-notes" v-html="releaseNotesHtml" />
+        <!-- Raw HTML is disabled and link protocols are validated by renderReleaseNotes. -->
+        <!-- eslint-disable vue/no-v-html -->
+        <div
+          class="release-notes"
+          data-test="app-update-release-notes"
+          v-html="releaseNotesHtml"
+        />
+        <!-- eslint-enable vue/no-v-html -->
       </details>
     </div>
     <p

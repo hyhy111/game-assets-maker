@@ -151,26 +151,51 @@ const remainLabel = computed(() => {
         {{ remainLabel }}
       </span>
     </div>
-    <div v-if="scope" class="mt-2 flex min-w-0 items-center gap-1.5 border-t border-dark-border/60 pt-2 text-[11px] text-gray-400" data-test="bucket-model-scope">
+    <div
+      v-if="scope"
+      class="mt-2 flex min-w-0 items-center gap-1.5 border-t border-dark-border/60 pt-2 text-[11px] text-gray-400"
+      data-test="bucket-model-scope"
+    >
       <span class="min-w-0 flex-1 truncate">{{ t('creditUsage.availableModels') }}{{ scopeSummary }}</span>
       <button
         type="button"
         class="shrink-0 rounded text-gray-500 hover:text-gray-300 focus-visible:outline focus-visible:outline-1 focus-visible:outline-primary"
         :aria-label="t('creditUsage.viewModels')"
         :aria-describedby="scopeOpen ? `bucket-scope-${bucket.bucketId}` : undefined"
-        @mouseenter="showScope" @mouseleave="closeScope"
-        @focus="showScope" @blur="closeScope" @keydown.esc="scopeOpen = false"
-      ><HelpCircle class="h-3.5 w-3.5" /></button>
+        @mouseenter="showScope"
+        @mouseleave="closeScope"
+        @focus="showScope"
+        @blur="closeScope"
+        @keydown.esc="scopeOpen = false"
+      >
+        <HelpCircle class="h-3.5 w-3.5" />
+      </button>
     </div>
-    <p v-if="scopeMessage" class="mt-1 text-[11px] text-warning">{{ scopeMessage }}</p>
+    <p
+      v-if="scopeMessage"
+      class="mt-1 text-[11px] text-warning"
+    >
+      {{ scopeMessage }}
+    </p>
     <Teleport to="body">
-      <div v-if="scopeOpen" :id="`bucket-scope-${bucket.bucketId}`" role="tooltip"
+      <div
+        v-if="scopeOpen"
+        :id="`bucket-scope-${bucket.bucketId}`"
+        role="tooltip"
         class="fixed z-[100] w-[304px] max-w-[calc(100vw-24px)] rounded-lg border border-dark-border bg-dark-surface p-3 text-xs text-gray-200 shadow-xl"
-        @mouseenter="keepScope" @mouseleave="closeScope"
-        :style="scopePosition">
-        <p class="mb-2 font-semibold">{{ t('creditUsage.availableModels') }}</p>
+        :style="scopePosition"
+        @mouseenter="keepScope"
+        @mouseleave="closeScope"
+      >
+        <p class="mb-2 font-semibold">
+          {{ t('creditUsage.availableModels') }}
+        </p>
         <ul class="max-h-72 space-y-2 overflow-y-auto">
-          <li v-for="line in scopeLines" :key="line.model" class="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-3 border-b border-dark-border/50 pb-2 last:border-0 last:pb-0">
+          <li
+            v-for="line in scopeLines"
+            :key="line.model"
+            class="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-3 border-b border-dark-border/50 pb-2 last:border-0 last:pb-0"
+          >
             <span class="break-words font-medium">{{ line.label }}</span>
             <span class="break-words text-gray-400">{{ line.specs }}</span>
           </li>

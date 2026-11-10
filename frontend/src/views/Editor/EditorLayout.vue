@@ -24,22 +24,49 @@
 
         <!-- Player container -->
         <div class="flex flex-1 min-h-0 flex-col bg-black rounded-xl overflow-hidden border border-dark-border">
-          <div v-if="frameRetouchEnabled" ref="frameToolbar" class="h-32 shrink-0 bg-dark-surface" data-test="frame-retouch-toolbar">
-            <p v-if="!frameEditor" class="flex h-full items-center px-4 text-sm text-gray-400">{{ t('magicWand.idleHint') }}</p>
+          <div
+            v-if="frameRetouchEnabled"
+            ref="frameToolbar"
+            class="h-32 shrink-0 bg-dark-surface"
+            data-test="frame-retouch-toolbar"
+          >
+            <p
+              v-if="!frameEditor"
+              class="flex h-full items-center px-4 text-sm text-gray-400"
+            >
+              {{ t('magicWand.idleHint') }}
+            </p>
           </div>
           <div class="relative min-h-0 flex-1">
-            <FramePlayer v-if="playerStore.frames.length > 0"
+            <FramePlayer
+              v-if="playerStore.frames.length > 0"
               :keyboard-disabled="frameEditorLoading || frameEditorSaving || navigationPending"
-              :editing="!!frameEditor" :retouch-enabled="frameRetouchEnabled"
+              :editing="!!frameEditor"
+              :retouch-enabled="frameRetouchEnabled"
               :tools-disabled="frameEditorLoading || frameEditorSaving || navigationPending || processStore.isProcessing"
-              :active-tool="frameEditor ? frameEditorTool : 'browse'" @tool="selectFrameTool">
-              <SeedreamImageEraser v-if="frameEditor" ref="frameEditorRef"
-                :image-url="frameEditor.imageUrl" :original-image-url="frameEditor.originalImageUrl" :initial-restore-unsupported="frameEditor.initialRestoreUnsupported" :saving="frameEditorSaving" :magic-wand-enabled="true"
-                :embedded="true" :toolbar-target="frameToolbar" :active-tool="frameEditorTool"
-                :view-zoom="playerStore.zoom" :view-pan-x="playerStore.panX" :view-pan-y="playerStore.panY"
-                :suspended="navigationPending || processStore.isProcessing" :error="frameEditorError"
+              :active-tool="frameEditor ? frameEditorTool : 'browse'"
+              @tool="selectFrameTool"
+            >
+              <SeedreamImageEraser
+                v-if="frameEditor"
+                ref="frameEditorRef"
+                :image-url="frameEditor.imageUrl"
+                :original-image-url="frameEditor.originalImageUrl"
+                :initial-restore-unsupported="frameEditor.initialRestoreUnsupported"
+                :saving="frameEditorSaving"
+                :magic-wand-enabled="true"
+                :embedded="true"
+                :toolbar-target="frameToolbar"
+                :active-tool="frameEditorTool"
+                :view-zoom="playerStore.zoom"
+                :view-pan-x="playerStore.panX"
+                :view-pan-y="playerStore.panY"
+                :suspended="navigationPending || processStore.isProcessing"
+                :error="frameEditorError"
                 :title="t('magicWand.title', { filename: frameEditor.filename })"
-                @cancel="closeFrameEditor" @apply="saveCurrentFrameEdit" />
+                @cancel="closeFrameEditor"
+                @apply="saveCurrentFrameEdit"
+              />
             </FramePlayer>
             <div
               v-else
@@ -101,21 +128,71 @@
             </Button>
           </div>
         </div>
-        <p v-if="frameEditorError && !frameEditor" class="mt-2 text-sm text-danger" role="alert">{{ frameEditorError }}</p>
+        <p
+          v-if="frameEditorError && !frameEditor"
+          class="mt-2 text-sm text-danger"
+          role="alert"
+        >
+          {{ frameEditorError }}
+        </p>
       </div>
     </main>
-    <div v-if="navigationPending" class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+    <div
+      v-if="navigationPending"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
       @keydown.esc.prevent="resolveFrameNavigation('stay')"
-      @keydown="trapModalTab($event, $event.currentTarget as HTMLElement)">
-      <section role="alertdialog" aria-modal="true" aria-labelledby="frame-unsaved-title" aria-describedby="frame-unsaved-hint"
-        class="w-full max-w-lg rounded-xl border border-dark-border bg-dark-surface p-6 shadow-xl" data-test="frame-unsaved-dialog">
-        <h2 id="frame-unsaved-title" class="text-lg font-semibold text-white">{{ t('magicWand.unsavedTitle') }}</h2>
-        <p id="frame-unsaved-hint" class="mt-3 text-sm text-gray-400">{{ t('magicWand.unsavedHint') }}</p>
-        <p v-if="frameEditorError" class="mt-3 text-sm text-danger" role="alert">{{ frameEditorError }}</p>
+      @keydown="trapModalTab($event, $event.currentTarget as HTMLElement)"
+    >
+      <section
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="frame-unsaved-title"
+        aria-describedby="frame-unsaved-hint"
+        class="w-full max-w-lg rounded-xl border border-dark-border bg-dark-surface p-6 shadow-xl"
+        data-test="frame-unsaved-dialog"
+      >
+        <h2
+          id="frame-unsaved-title"
+          class="text-lg font-semibold text-white"
+        >
+          {{ t('magicWand.unsavedTitle') }}
+        </h2>
+        <p
+          id="frame-unsaved-hint"
+          class="mt-3 text-sm text-gray-400"
+        >
+          {{ t('magicWand.unsavedHint') }}
+        </p>
+        <p
+          v-if="frameEditorError"
+          class="mt-3 text-sm text-danger"
+          role="alert"
+        >
+          {{ frameEditorError }}
+        </p>
         <div class="mt-5 flex flex-wrap justify-end gap-2">
-          <Button variant="primary" :loading="frameEditorSaving" @click="resolveFrameNavigation('save')">{{ t('magicWand.saveContinue') }}</Button>
-          <Button ref="stayButton" variant="secondary" :disabled="frameEditorSaving" @click="resolveFrameNavigation('stay')">{{ t('magicWand.stay') }}</Button>
-          <Button variant="danger" :disabled="frameEditorSaving" @click="resolveFrameNavigation('discard')">{{ t('magicWand.discard') }}</Button>
+          <Button
+            variant="primary"
+            :loading="frameEditorSaving"
+            @click="resolveFrameNavigation('save')"
+          >
+            {{ t('magicWand.saveContinue') }}
+          </Button>
+          <Button
+            ref="stayButton"
+            variant="secondary"
+            :disabled="frameEditorSaving"
+            @click="resolveFrameNavigation('stay')"
+          >
+            {{ t('magicWand.stay') }}
+          </Button>
+          <Button
+            variant="danger"
+            :disabled="frameEditorSaving"
+            @click="resolveFrameNavigation('discard')"
+          >
+            {{ t('magicWand.discard') }}
+          </Button>
         </div>
       </section>
     </div>

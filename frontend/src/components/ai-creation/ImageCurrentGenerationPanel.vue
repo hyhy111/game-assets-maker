@@ -5,8 +5,13 @@
   >
     <div class="flex min-h-14 items-center gap-3 px-4 py-3">
       <div class="min-w-0 flex-1">
-        <p class="text-sm font-medium text-white">{{ t('aiCreation.currentGeneration') }}</p>
-        <p class="mt-0.5 flex items-center gap-1.5 text-xs text-gray-400" data-test="image-current-summary">
+        <p class="text-sm font-medium text-white">
+          {{ t('aiCreation.currentGeneration') }}
+        </p>
+        <p
+          class="mt-0.5 flex items-center gap-1.5 text-xs text-gray-400"
+          data-test="image-current-summary"
+        >
           <span>{{ batchStatusLabel }} · {{ succeededAttempts.length }}/{{ batch.attempts.length }}</span>
           <PlatformSourceBadge :source="batch.request.source" />
         </p>
@@ -18,7 +23,15 @@
         data-test="image-current-close"
         @click="emit('close')"
       >
-        <svg class="h-4 w-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+        <svg
+          class="h-4 w-4"
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+          stroke-linecap="round"
+          aria-hidden="true"
+        >
           <path d="M3 3l10 10M13 3L3 13" />
         </svg>
       </button>
@@ -42,8 +55,11 @@
             :src="attemptImageUrl(attempt)"
             :alt="`${t('seedream.detail.candidateImage')} ${attempt.index + 1}`"
             class="h-full w-full object-cover"
-          />
-          <span v-else class="m-auto px-2 text-center text-xs text-gray-400">
+          >
+          <span
+            v-else
+            class="m-auto px-2 text-center text-xs text-gray-400"
+          >
             {{ attemptStatusLabel(attempt) }}
           </span>
           <span class="absolute left-2 top-2 rounded-md bg-black/60 px-1.5 py-0.5 text-[11px] text-white">
@@ -63,7 +79,11 @@
         {{ t('aiCreation.useImageForVideo') }}
       </button>
 
-      <p v-if="handoffError" class="mt-2 text-sm text-danger" role="alert">
+      <p
+        v-if="handoffError"
+        class="mt-2 text-sm text-danger"
+        role="alert"
+      >
         {{ handoffError }}
       </p>
 

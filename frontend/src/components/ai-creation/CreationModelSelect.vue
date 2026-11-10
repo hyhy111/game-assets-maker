@@ -50,7 +50,10 @@
                   ? 'bg-[#303030] text-white'
                   : 'text-gray-400'"
             >
-              <span :class="option.disabled ? 'opacity-50' : ''">{{ option.label }}<small v-if="option.reason" class="block max-w-64 whitespace-normal text-gray-400">{{ option.reason }}</small></span>
+              <span :class="option.disabled ? 'opacity-50' : ''">{{ option.label }}<small
+                v-if="option.reason"
+                class="block max-w-64 whitespace-normal text-gray-400"
+              >{{ option.reason }}</small></span>
               <Check
                 v-if="selected"
                 :size="14"

@@ -10,7 +10,11 @@
     @click.stop="emit('toggle')"
     @keydown.stop
   >
-    <Star class="h-[18px] w-[18px]" :fill="favorite ? 'currentColor' : 'none'" aria-hidden="true" />
+    <Star
+      class="h-[18px] w-[18px]"
+      :fill="favorite ? 'currentColor' : 'none'"
+      aria-hidden="true"
+    />
   </button>
 </template>
 

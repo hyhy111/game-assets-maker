@@ -14,23 +14,49 @@
             :disabled="!task.request.prompt"
             @click="copyPrompt"
           >
-            <Check v-if="copied" :size="15" aria-hidden="true" />
-            <Copy v-else :size="15" aria-hidden="true" />
+            <Check
+              v-if="copied"
+              :size="15"
+              aria-hidden="true"
+            />
+            <Copy
+              v-else
+              :size="15"
+              aria-hidden="true"
+            />
           </button>
-          <span v-if="copied" class="text-xs text-success" role="status">{{ t('seedance.preview.promptCopied') }}</span>
-          <span v-else-if="copyFailed" class="text-xs text-danger" role="status">{{ t('seedance.preview.copyFailed') }}</span>
+          <span
+            v-if="copied"
+            class="text-xs text-success"
+            role="status"
+          >{{ t('seedance.preview.promptCopied') }}</span>
+          <span
+            v-else-if="copyFailed"
+            class="text-xs text-danger"
+            role="status"
+          >{{ t('seedance.preview.copyFailed') }}</span>
         </div>
         <p class="mt-2 whitespace-pre-wrap text-sm leading-6 text-gray-200">
           {{ task.request.prompt || t('seedance.ui.noPrompt') }}
         </p>
-        <p v-if="safeError" class="mt-4 rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-danger">
+        <p
+          v-if="safeError"
+          class="mt-4 rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-danger"
+        >
           {{ safeError }}
         </p>
       </div>
       <dl class="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
-        <template v-for="item in items" :key="item.label">
-          <dt class="text-[var(--seedance-muted)]">{{ item.label }}</dt>
-          <dd class="break-all text-right text-gray-200">{{ item.value }}</dd>
+        <template
+          v-for="item in items"
+          :key="item.label"
+        >
+          <dt class="text-[var(--seedance-muted)]">
+            {{ item.label }}
+          </dt>
+          <dd class="break-all text-right text-gray-200">
+            {{ item.value }}
+          </dd>
         </template>
       </dl>
     </div>
