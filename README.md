@@ -90,6 +90,8 @@ Game Assets Maker（GAM）是一款开源桌面工具，面向独立游戏开发
 
 两种方式分别鉴权和结算。仅做本地处理无需配置；Key 连接检查通过不代表每个模型都已开通。模型、规格和费用以当前生成页面及服务方信息为准。
 
+忘记 ForFuner AI 密码时，可在登录页点击「忘记密码？」，通过邮箱验证码重置。
+
 ### Agent 与 Godot
 
 六个 [GAM Skills](https://github.com/hyhy111/gam-skills) 可帮助 Agent 编写提示词、操作客户端、处理素材，并将动画导入 Godot 4。安装工具需要 Node.js/npm；选择对应命令安装全部六个 Skills：
@@ -114,7 +116,7 @@ npx skills add hyhy111/gam-skills -g --skill "*"
 | `gam-cli` | 通过 `gam-agent` 填写草稿、查询任务和操作客户端。 |
 | `gam-export` | 将 PNG 动画帧、裁剪偏移和音效导入 Godot 4。 |
 
-也可以在 GAM「设置 → GAM Skills 安装」中选择工具并一键安装，需要 Node.js 22.20 或更新版本及 npm。仅对有 `npx skills` 安装记录的 GAM Skills 检测和提示更新；启动时确认有新版本后，首页的 Skills 入口会显示黄色小角标，点击可进入对应工具的安装设置。手动复制、Git 克隆或其他工具管理的同名 Skills 不会被覆盖，请通过原安装方式维护。
+也可以在 GAM「设置 → GAM Skills 安装」中选择工具并一键安装，需要 Node.js 22.20 或更新版本及 npm。通过 `npx skills` 安装后，可选择对应工具并点击「检查更新」。有新版本时点击「更新」即可。启动时检测到更新，首页的 Skills 入口会显示黄色小角标，点击可进入对应工具的安装设置。手动复制、Git 克隆或其他工具管理的同名 Skills 请通过原安装方式维护。
 
 安装后可直接描述需求，例如“用 gam-pic-prompt，帮我写一个侧视剑士的图片提示词”，或“用 gam-export，把这个素材目录导入我的 Godot 4 项目”。
 
@@ -208,6 +210,8 @@ Open the output directory from the results to get the PNG sequence and related J
 
 The two sources have separate authentication and billing. Neither is required for local processing. A successful key check does not prove access to every model. Available models, options, and costs follow the current generation page and provider information.
 
+If you forget your ForFuner AI password, choose **Forgot password?** on the sign-in page and reset it with an email verification code.
+
 ### Agents and Godot
 
 The six [GAM Skills](https://github.com/hyhy111/gam-skills) help agents write prompts, control the desktop app, process assets, and export animations to Godot 4. The installer requires Node.js/npm. Choose a command to install all six skills:
@@ -232,7 +236,7 @@ npx skills add hyhy111/gam-skills -g --skill "*"
 | `gam-cli` | Use `gam-agent` to fill drafts, query tasks, and control the desktop app. |
 | `gam-export` | Import PNG animation frames, trim offsets, and audio into Godot 4. |
 
-You can also select an agent and install from **Settings → Install GAM Skills** in GAM, with Node.js 22.20 or later and npm available. Update checks and alerts apply only to GAM Skills recorded by `npx skills`. A confirmed startup update adds a small yellow badge to the home-page Skills link, which opens the matching agent's installation settings. Copies installed manually, cloned with Git, or managed by other tools are left untouched; maintain them with their original installer.
+You can also select an agent and install from **Settings → Install GAM Skills** in GAM, with Node.js 22.20 or later and npm available. For GAM Skills installed with `npx skills`, select the agent and click **Check for updates**. Click **Update** when a newer version is available. If GAM finds an update at startup, a yellow badge appears on the home-page Skills link, which opens the matching agent's installation settings. Maintain manually copied, Git-cloned, or externally managed Skills through their original installer.
 
 After installation, describe your request, for example: “Use gam-pic-prompt to write an image prompt for a side-view swordsman,” or “Use gam-export to import this asset directory into my Godot 4 project.”
 
