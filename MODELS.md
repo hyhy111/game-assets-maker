@@ -1,8 +1,16 @@
 # 去背模型下载与存储
 
-本说明适用于 Game Assets Maker 的本地背景移除功能。当前仅支持 **U2Net**，模型文件为 `u2net.onnx`，约 176 MB。它与 Seedream／Seedance 云端生成模型无关，本地去背不需要登录、积分或 API Key。
+本说明适用于 Game Assets Maker 的本地背景移除功能。步骤 02 可选择 **U²-Net（rembg）** 或 **BiRefNet（Comfy-Org）**。它与 Seedream／Seedance 云端生成模型无关，本地去背不需要登录、积分或 API Key。
 
 仓库和当前发布包均不包含模型权重。模型下载到本地后可重复使用，不必每次处理都下载。
+
+## BiRefNet（Comfy-Org）
+
+在「背景移除」选择 **BiRefNet (Comfy-Org)**，首次使用时点击下载。权重来自 [魔搭 ModelScope](https://modelscope.cn/models/Comfy-Org/BiRefNet)，约 424 MiB。GAM 使用 PyTorch 在本地推理，Apple Silicon 使用可用的 MPS 加速，Windows x64 使用 CPU。BiRefNet 的 macOS 运行时要求 macOS 14 或更新版本。
+
+已下载的权重也可复制到模型目录并命名为 `birefnet.safetensors`。安装版默认路径是 `~/.gam/models/birefnet-comfy/birefnet.safetensors`，设置 `GAM_DATA_ROOT` 时使用该数据根。源码开发模式使用仓库的 `models/birefnet-comfy/`。应用校验 Comfy-Org 权重的 SHA-256，校验通过后可离线使用。推理代码沿用 [ZhengPeng7 的 BiRefNet](https://huggingface.co/ZhengPeng7/BiRefNet)，按 MIT 许可随应用分发。
+
+## U²-Net（rembg）
 
 ## 安装版：在应用中下载
 
@@ -38,7 +46,7 @@ uv run python scripts/download_models.py u2net
 uv run python scripts/download_models.py
 ```
 
-此脚本使用 ModelScope，始终保存到仓库内的 `models/rembg/`，不会按安装版数据根选择目录。它用于本地开发准备，不代替安装版界面的下载流程；当前不支持下载其他模型。
+此脚本使用 ModelScope，始终保存到仓库内的 `models/rembg/`，不会按安装版数据根选择目录。它用于本地开发准备，不代替安装版界面的下载流程；该脚本用于准备 U²-Net 权重。
 
 ## 离线使用与手动准备
 

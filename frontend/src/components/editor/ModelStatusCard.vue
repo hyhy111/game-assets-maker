@@ -20,7 +20,7 @@
 
       <div class="min-w-0 flex-1">
         <p class="text-sm font-medium">
-          {{ t(presentation.messageKey, { model: status.model }) }}
+          {{ t(presentation.messageKey, { model: backgroundModelName(status.model) }) }}
         </p>
         <p class="mt-1 text-xs text-gray-400">
           {{ detailText }}
@@ -42,7 +42,7 @@
         </div>
 
         <label
-          v-if="status.phase === 'needs_download' || presentation.retryable"
+          v-if="status.model === 'u2net' && (status.phase === 'needs_download' || presentation.retryable)"
           class="mt-3 block text-xs"
         >
           {{ t('modelStatus.downloadSource') }}
@@ -57,7 +57,7 @@
           class="mt-3"
           size="sm"
           variant="secondary"
-          @click="$emit('retry', source)"
+          @click="$emit('retry', status.model === 'u2net' ? source : 'modelscope')"
         >
           {{ t(status.phase === 'needs_download' ? 'modelStatus.download' : 'modelStatus.retry') }}
         </Button>
@@ -70,7 +70,7 @@
 import { computed, ref } from 'vue';
 import { AlertCircle, CheckCircle, Loader2 } from 'lucide-vue-next';
 import { useI18n } from 'vue-i18n';
-import { modelApproximateSizeMb, modelProgressPercent, modelStatusPresentation } from '@/model-status';
+import { backgroundModelName, modelApproximateSizeMb, modelProgressPercent, modelStatusPresentation } from '@/model-status';
 import type { ModelStatus } from '@/types';
 import Button from '@/components/common/Button.vue';
 import Select from '@/components/common/Select.vue';
@@ -94,6 +94,7 @@ const toneClasses = computed(() => ({
 const detailText = computed(() => {
   if (props.status.phase === 'needs_download') {
     const size = modelApproximateSizeMb(props.status.model);
+    if (props.status.model === 'birefnet-comfy') return t('modelStatus.birefnetDownloadHint', { size });
     return size === null
       ? t('modelStatus.firstUseHintUnknownSize')
       : t('modelStatus.firstUseHint', { size });

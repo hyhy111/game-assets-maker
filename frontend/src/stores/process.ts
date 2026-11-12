@@ -7,7 +7,7 @@ import { api } from '@/api';
 import { useProjectStore } from './project';
 import { usePlayerStore } from './player';
 import { createNavigationGuard } from '@/utils/navigation-guard';
-import type { ModelStatus, Step1Params, Step2Params, Step3Params, TaskStatus } from '@/types';
+import type { BackgroundRemovalModel, ModelStatus, Step1Params, Step2Params, Step3Params, TaskStatus } from '@/types';
 import { logEvent } from '@/debug/request-log';
 
 export const useProcessStore = defineStore('process', () => {
@@ -26,8 +26,7 @@ export const useProcessStore = defineStore('process', () => {
     processed: false
   });
 
-  // Step 2: Background removal only (rembg parameters)
-  const s2Params = ref<Step2Params>({
+  const step2Defaults: Step2Params = {
     model: 'u2net',
     alpha_matting: true,
     alpha_matting_erode_size: 5,
@@ -36,14 +35,17 @@ export const useProcessStore = defineStore('process', () => {
     fps: 10,
     processed: false,
     processing_time: 0
-  });
+  };
+  const s2Params = ref({ ...step2Defaults });
 
-  // Step 3: Post-processing (hole punching + alignment)
-  const s3Params = ref<Step3Params>({
+  const step3Defaults: Step3Params = {
     enabled: true,  // Hole punching enabled
     green_intensity: 3,  // 1=bright green, 5=dark green
     feather_radius: 3,
     min_hole_size: 5,
+    edge_shrink_enabled: false,
+    edge_shrink_px: 0,
+    edge_feather_px: 0,
     align_enabled: false,  // Alignment disabled by default
     align_h: false,        // Horizontal centering (default off)
     align_v: false,        // Vertical bottom alignment (default off)
@@ -52,17 +54,19 @@ export const useProcessStore = defineStore('process', () => {
     fps: 10,
     processed: false,
     processing_time: 0
-  });
+  };
+  const s3Params = ref({ ...step3Defaults });
 
   // Task tracking
   const currentTask = ref<string | null>(null);
   const taskStatus = ref<TaskStatus | null>(null);
   const isPolling = ref(false);
 
-  // Shared Step 1/Step 2 model state
-  const modelStatus = ref<ModelStatus>({
-    model: 'u2net',
-    phase: 'needs_download',
+  const selectedModel = computed(() => s2Params.value.model ?? 'u2net');
+  const modelStatuses = ref<Record<string, ModelStatus>>({});
+  const modelStatus = computed<ModelStatus>(() => modelStatuses.value[selectedModel.value] ?? {
+    model: selectedModel.value,
+    phase: 'initializing',
     downloaded_bytes: null,
     total_bytes: null,
     error: null,
@@ -82,7 +86,7 @@ export const useProcessStore = defineStore('process', () => {
     return currentStep.value < maxStep.value;
   });
   const canGoPrev = computed(() => currentStep.value > 1);
-  const isProcessing = computed(() => taskStatus.value?.status === 'running');
+  const isProcessing = computed(() => taskStatus.value?.status === 'running' || taskStatus.value?.status === 'pending');
   const progress = computed(() => taskStatus.value?.progress ?? 0);
   const stepStatus = computed(() => {
     const projectStore = useProjectStore();
@@ -128,7 +132,7 @@ export const useProcessStore = defineStore('process', () => {
 
   function applyStepParams(step: number, params: Partial<Step1Params | Step2Params | Step3Params>) {
     if (step === 1) s1Params.value = { ...s1Params.value, ...params } as Step1Params;
-    else if (step === 2) s2Params.value = { ...s2Params.value, ...params, model: 'u2net' } as Step2Params;
+    else if (step === 2) s2Params.value = { ...s2Params.value, ...params } as Step2Params;
     else if (step === 3) s3Params.value = { ...s3Params.value, ...params } as Step3Params;
     else throw new Error('INVALID_STEP');
     const saved = step === 1 ? s1Params.value : step === 2 ? s2Params.value : s3Params.value;
@@ -137,7 +141,8 @@ export const useProcessStore = defineStore('process', () => {
 
   async function loadStepParams(projectId: string, step: number) {
     try {
-      applyStepParams(step, await api.process.getStepParams(projectId, step));
+      const defaults = step === 2 ? step2Defaults : step === 3 ? step3Defaults : {};
+      applyStepParams(step, { ...defaults, ...await api.process.getStepParams(projectId, step) });
       return true;
     } catch (e) {
       logEvent([`Failed to load step ${step} params:`, e].join(' '), 'error');
@@ -177,6 +182,7 @@ export const useProcessStore = defineStore('process', () => {
       success: true,
       task_id: '',
       status: 'pending',
+      step,
       progress: 0,
       current: 0,
       total: 0
@@ -192,7 +198,9 @@ export const useProcessStore = defineStore('process', () => {
       return taskId;
     } catch (e) {
       logEvent(['Failed to start processing:', e].join(' '), 'error');
-      throw e;
+      taskStatus.value = { success: false, task_id: '', status: 'failed', step, progress: 0, current: 0, total: 0, error: String(e) };
+      return;
+
     }
   }
 
@@ -262,9 +270,9 @@ export const useProcessStore = defineStore('process', () => {
         taskStatus.value = {
           ...taskStatus.value,
           taskId: detail.taskId,
-          status: detail.success ? 'completed' : 'failed',
+          status: detail.success ? 'completed' : detail.error === 'Task cancelled' ? 'cancelled' : 'failed',
           progress: detail.success ? 100 : (taskStatus.value?.progress ?? 0),
-          error: detail.error,
+          error: detail.error === 'Task cancelled' ? undefined : detail.error,
           processing_time: detail.processing_time
         } as TaskStatus;
 
@@ -292,9 +300,7 @@ export const useProcessStore = defineStore('process', () => {
 
     window.addEventListener('model-status', ((event: CustomEvent<ModelStatus>) => {
       const detail = event.detail;
-      if (detail.model === s2Params.value.model) {
-        modelStatus.value = detail;
-      }
+      modelStatuses.value[detail.model] = detail;
     }) as EventListener);
   }
 
@@ -302,39 +308,41 @@ export const useProcessStore = defineStore('process', () => {
     if (currentTask.value) {
       try {
         await api.process.cancelTask(currentTask.value);
-        stopPolling();
-        currentTask.value = null;
-        taskStatus.value = null;
       } catch (e) {
         logEvent(['Failed to cancel task:', e].join(' '), 'error');
       }
     }
   }
 
-  async function preloadModel(model: string = 'u2net') {
+  async function prepareModel(
+    model: BackgroundRemovalModel,
+    retry: boolean,
+    source?: 'modelscope' | 'github',
+  ) {
+    const previous = modelStatuses.value[model];
     try {
-      modelStatus.value = await api.process.getModelStatus(model);
-      if (modelStatus.value.phase === 'ready' || modelStatus.value.phase === 'failed') return;
-      modelStatus.value = await api.process.preloadModel(model);
+      const status = retry ? await api.process.retryModel(model, source) : await api.process.preloadModel(model);
+      if (modelStatuses.value[model] === previous) modelStatuses.value[model] = status;
     } catch (e) {
-      logEvent(['Failed to trigger preload:', e].join(' '), 'error');
-      modelStatus.value = {
-        model,
-        phase: 'failed',
-        downloaded_bytes: null,
-        total_bytes: null,
-        error: { code: 'MODEL_INITIALIZATION_FAILED', message: 'Model initialization failed' },
-      };
+      logEvent(['Failed to prepare model:', e].join(' '), 'error');
+      if (modelStatuses.value[model] === previous) {
+        modelStatuses.value[model] = {
+          model,
+          phase: 'failed',
+          downloaded_bytes: null,
+          total_bytes: null,
+          error: { code: 'MODEL_INITIALIZATION_FAILED', message: 'Model preparation failed' },
+        };
+      }
     }
   }
 
-  async function retryModel(source?: 'modelscope' | 'github') {
-    try {
-      modelStatus.value = await api.process.retryModel('u2net', source);
-    } catch (e) {
-      logEvent(['Failed to prepare model:', e].join(' '), 'error');
-      modelStatus.value = { ...modelStatus.value, phase: 'failed', error: { code: 'MODEL_DOWNLOAD_FAILED', message: 'Model preparation failed' } };
-    }
+  function preloadModel(model: BackgroundRemovalModel = 'u2net') {
+    return prepareModel(model, false);
+  }
+
+  function retryModel(source?: 'modelscope' | 'github') {
+    return prepareModel(selectedModel.value, true, source);
   }
 
   return {
@@ -348,6 +356,7 @@ export const useProcessStore = defineStore('process', () => {
     taskStatus,
     isPolling,
     modelStatus,
+    selectedModel,
     // Getters
     canGoNext,
     canGoPrev,

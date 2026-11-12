@@ -4,6 +4,9 @@ from contextlib import nullcontext
 from pathlib import Path
 from typing import Any
 
+from backend.core.edge_shrink import validate_edge_shrink_params
+from backend.core.model_preloader import validate_background_model
+
 FIELDS = {
     1: {"frame_interval": (1, None), "start_frame": (0, None), "end_frame": (-1, None)},
     2: {
@@ -17,21 +20,30 @@ FIELDS = {
         "green_intensity": (1, 5),
         "feather_radius": (0, 10),
         "min_hole_size": (0, 500),
+        "edge_shrink_enabled": bool,
         "align_enabled": bool,
         "align_h": bool,
         "align_v": bool,
     },
 }
+EXTRA_FIELDS = {1: set(), 2: {"model"}, 3: {"edge_shrink_px", "edge_feather_px"}}
 
 
 def merge_params(saved: dict[str, Any], step: int, patch: dict[str, Any]) -> dict[str, Any]:
     if type(step) is not int or step not in FIELDS or not isinstance(patch, dict):
         raise ValueError("INPUT_INVALID")
-    if set(patch) - (FIELDS[step].keys() | {"fps"}):
+    if set(patch) - (FIELDS[step].keys() | EXTRA_FIELDS[step] | {"fps"}):
         raise ValueError("Unsupported step parameter")
     merged = {**saved, **patch}
     if "fps" in patch and (type(patch["fps"]) is not int or not 1 <= patch["fps"] <= 60):
         raise ValueError("fps must be between 1 and 60")
+    if step == 2:
+        validate_background_model(merged.setdefault("model", "u2net"))
+    if step == 3:
+        merged.setdefault("edge_shrink_enabled", False)
+        merged.setdefault("edge_shrink_px", 0)
+        merged.setdefault("edge_feather_px", 0)
+        validate_edge_shrink_params(merged)
     for name, rule in FIELDS[step].items():
         value = merged.get(name)
         if rule is bool:
@@ -43,7 +55,11 @@ def merge_params(saved: dict[str, Any], step: int, patch: dict[str, Any]) -> dic
             raise ValueError(f"Invalid step parameter: {name}")
     if step == 1 and merged["end_frame"] != -1 and merged["end_frame"] < merged["start_frame"]:
         raise ValueError("end_frame must not precede start_frame")
-    if step == 2 and merged["alpha_matting_background_threshold"] >= merged["alpha_matting_foreground_threshold"]:
+    if (
+        step == 2
+        and merged["model"] == "u2net"
+        and merged["alpha_matting_background_threshold"] >= merged["alpha_matting_foreground_threshold"]
+    ):
         raise ValueError("background threshold must be smaller than foreground threshold")
     return merged
 
@@ -106,7 +122,7 @@ class StepControl:
                 raise ValueError("STEP_INPUT_MISSING")
             if step == 2 and self.process.get_model_status(params.get("model", "u2net"))["phase"] != "ready":
                 raise ValueError("MODEL_NOT_READY")
-            if not self.process.save_step_params(project_id, step, params):
+            if step == 1 and not self.process.save_step_params(project_id, step, params):
                 raise ValueError("SAVE_FAILED")
             execution = {**params, "processed": True}
             if step == 1:
@@ -118,5 +134,5 @@ class StepControl:
                 raise ValueError("SAVE_FAILED")
         else:
             raise ValueError("INPUT_INVALID")
-        data["persisted"] = True
+        data["persisted"] = operation == "step.set" or step == 1
         return data

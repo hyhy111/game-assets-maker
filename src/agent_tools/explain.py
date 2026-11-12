@@ -42,20 +42,20 @@ STEP_EXPLANATIONS: dict[int, dict[str, Any]] = {
     },
     2: {
         "step": 2,
-        "name": "背景去除",
-        "purpose": "使用本地模型输出带透明通道的 PNG。",
+        "name": "背景移除",
+        "purpose": "使用所选本地模型生成透明 PNG，整批成功后替换当前结果。",
         "requires_review": True,
         "parameters": [
             {
                 "name": "model",
-                "effect": "选择本地分割模型，目前支持 u2net。",
+                "effect": "选择 u2net（rembg）或 birefnet-comfy（BiRefNet，Comfy-Org）。",
                 "default": "u2net",
                 "recommended": "默认值：u2net",
-                "risk": "执行前模型必须就绪。",
+                "risk": "模型须就绪。重新去背成功后会清除步骤 03 结果和逐帧修整。",
             },
             {
                 "name": "alpha_matting",
-                "effect": "优化半透明边缘。",
+                "effect": "在 u2net 路径中优化半透明边缘。",
                 "default": True,
                 "recommended": "默认值：True",
                 "risk": "可能增加处理时间。",
@@ -99,8 +99,8 @@ STEP_EXPLANATIONS: dict[int, dict[str, Any]] = {
     },
     3: {
         "step": 3,
-        "name": "挖空与对齐",
-        "purpose": "清理主体内部背景，并可对齐动画帧。",
+        "name": "后处理",
+        "purpose": "按挖孔、缩减边缘、对齐的顺序运行已启用的工具。",
         "requires_review": True,
         "parameters": [
             {
@@ -130,6 +130,27 @@ STEP_EXPLANATIONS: dict[int, dict[str, Any]] = {
                 "default": 5,
                 "recommended": "默认值：5",
                 "risk": "过大可能保留细小背景区域。",
+            },
+            {
+                "name": "edge_shrink_enabled",
+                "effect": "开启缩减边缘。",
+                "default": False,
+                "recommended": "默认值：False",
+                "risk": "仅在需要收紧轮廓时开启。",
+            },
+            {
+                "name": "edge_shrink_px",
+                "effect": "轮廓向内收缩的像素数，范围 0–100，须为整数。",
+                "default": 0,
+                "recommended": "默认值：0",
+                "risk": "过大可能移除细小结构。",
+            },
+            {
+                "name": "edge_feather_px",
+                "effect": "新轮廓向内羽化的宽度，范围 0–100 像素。",
+                "default": 0,
+                "recommended": "默认值：0",
+                "risk": "过大可能使轮廓变淡。",
             },
             {
                 "name": "align_enabled",

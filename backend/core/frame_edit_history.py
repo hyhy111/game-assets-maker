@@ -4,6 +4,7 @@ import hashlib
 import os
 import re
 import tempfile
+from contextlib import contextmanager
 from pathlib import Path
 from uuid import uuid4
 
@@ -40,6 +41,22 @@ def _atomic_write(path: Path, content: bytes) -> None:
 def start_frame_edit_generation(project: Path, step: int) -> None:
     """Start a new initial-frame namespace after successful processing; retain older backups."""
     _atomic_write(_base(project, step) / "current", uuid4().hex.encode("ascii"))
+
+
+@contextmanager
+def new_frame_edit_generation(project: Path, step: int):
+    """Restore the old baseline if publishing a replacement sequence fails."""
+    marker = _safe(_base(project, step) / "current")
+    previous = marker.read_bytes() if marker.is_file() else None
+    start_frame_edit_generation(project, step)
+    try:
+        yield
+    except BaseException:
+        if previous is None:
+            marker.unlink(missing_ok=True)
+        else:
+            _atomic_write(marker, previous)
+        raise
 
 
 def _generation(frame: Path, step: int) -> tuple[Path, bool]:

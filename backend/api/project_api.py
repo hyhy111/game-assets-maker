@@ -176,6 +176,8 @@ class ProjectAPI:
             if not steps["2"]["completed"]:
                 steps["2"]["completed"] = len(frames) > 0
             steps["2"]["count"] = len(frames)
+            if frames:
+                steps["2"]["result_model"] = config.get("step2", {}).get("result_model", "u2net")
 
         # Step 3: Check output/03_hole_punched (new location)
         step3_output = project_path / "output" / "03_hole_punched"

@@ -274,7 +274,7 @@ def batch_remove_background(
     progress_callback: Callable[[int, int], None] | None = None,
 ) -> dict:
     """
-    Step 2: Remove background from all frames in a directory using rembg (NO hole punching)
+    Step 2: Remove backgrounds from all frames with the selected local model.
 
     Args:
         input_dir: Directory containing input frames
@@ -307,10 +307,16 @@ def batch_remove_background(
         "background_color": None,  # Will store the first frame's bg color
     }
 
-    # Process each frame
+    from backend.core import birefnet
+
+    use_birefnet = (params or {}).get("model") == birefnet.MODEL_ID
+    # Process each frame.
     for i, frame_path in enumerate(frames):
         try:
-            result, bg_hsv = remove_background_single_rembg(str(frame_path), params=params)
+            if use_birefnet:
+                result, bg_hsv = birefnet.remove_background(frame_path), None
+            else:
+                result, bg_hsv = remove_background_single_rembg(str(frame_path), params=params)
 
             if result:
                 output_file = output_path / frame_path.name

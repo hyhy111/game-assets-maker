@@ -2,14 +2,15 @@
 
 import datetime
 import json
-import os
 import queue
+import shutil
 import sys
+import tempfile
 import threading
 import time
 import traceback
 import uuid
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
@@ -20,8 +21,15 @@ from filelock import FileLock
 
 from backend.api.project_paths import resolve_project_path
 from backend.core.background_color import batch_punch_holes_color, validate_color_params
-from backend.core.frame_edit_history import start_frame_edit_generation
-from backend.core.model_preloader import ModelLoader, ModelPreloader, ModelStatus, RembgModelLoader
+from backend.core.edge_shrink import shrink_frame, validate_edge_shrink_params
+from backend.core.frame_edit_history import new_frame_edit_generation
+from backend.core.model_preloader import (
+    BackgroundModelLoader,
+    ModelLoader,
+    ModelPreloader,
+    ModelStatus,
+    validate_background_model,
+)
 from backend.core.smart_remove_background import batch_remove_background
 
 # Import core processing modules from backend
@@ -29,9 +37,9 @@ from backend.core.video_utils import (
     detect_background_color_from_frames,
     export_frames_step1,
 )
-from src.core.rembg_model import validate_model
 from src.utils.app_config import default_projects_root
 from src.utils.data_paths import data_root
+from src.utils.file_operations import rename_path
 
 
 def _write_debug_log(msg: str):
@@ -64,6 +72,8 @@ class Task:
         self.error = None
         self.result = None
         self.cancelled = False
+        self.committed = False
+        self.future: Future | None = None
         self.start_time = None
         self.processing_time = 0.0
 
@@ -79,7 +89,7 @@ class ProcessAPI:
         self.executor = ThreadPoolExecutor(max_workers=2)
         self._projects_root = projects_root if projects_root is not None else default_projects_root()
         self._window = window  # PyWebView window instance
-        self._model_preloader = ModelPreloader(model_loader or RembgModelLoader(), self._emit_model_status)
+        self._model_preloader = ModelPreloader(model_loader or BackgroundModelLoader(), self._emit_model_status)
         # JS events are dispatched by one daemon thread: Cocoa's evaluate_js
         # blocks on a semaphore until the main run loop services it, which
         # never happens once the window is destroyed. Executor workers must
@@ -126,7 +136,7 @@ class ProcessAPI:
 
     def _emit_complete(self, task_id: str, success: bool = True, error: str = None, processing_time: float = 0):
         """Emit task completion to frontend via evaluate_js"""
-        error_str = f"'{error}'" if error else "null"
+        error_str = json.dumps(error)
         time_str = f"{processing_time}" if processing_time > 0 else "null"
         js_code = f"""
             window.dispatchEvent(new CustomEvent('task-complete', {{
@@ -146,13 +156,19 @@ class ProcessAPI:
             return self._start_processing(project_id, step, params)
 
     def _start_processing(self, project_id: str, step: int, params: dict[str, Any]) -> str:
+        if any(task.project_id == project_id and task.status in ("pending", "running") for task in self.tasks.values()):
+            raise ValueError("PROCESSING_ACTIVE")
         if step == 2:
             model = params.get("model", "u2net")
             if self.get_model_status(model)["phase"] != "ready":
                 raise RuntimeError("MODEL_NOT_READY")
+            params = {**params, "model": model}
 
-        if step == 3 and params.get("enabled", True):
-            validate_color_params(params)
+        if step == 3:
+            if params.get("enabled", True):
+                validate_color_params(params)
+            if params.get("edge_shrink_enabled", False):
+                validate_edge_shrink_params(params)
 
         task_id = str(uuid.uuid4())
         task = Task(task_id, project_id, step, params)
@@ -181,14 +197,14 @@ class ProcessAPI:
             elif task.step == 3:
                 self._run_step3(task)
 
-            if not task.cancelled:
-                task.processing_time = time.time() - task.start_time
-                task.status = "completed"
-                task.progress = 100
-                self._emit_progress(task.task_id, 100, task.current, task.total, "completed")
-                # Save params (without processing_time)
-                self.save_step_params(task.project_id, task.step, task.params)
-                self._emit_complete(task.task_id, success=True, processing_time=task.processing_time)
+            if task.cancelled:
+                raise InterruptedError("Task cancelled")
+            task.processing_time = time.time() - task.start_time
+            task.status = "completed"
+            task.progress = 100
+            task.current = task.total
+            self._emit_progress(task.task_id, 100, task.current, task.total, "completed")
+            self._emit_complete(task.task_id, success=True, processing_time=task.processing_time)
 
         except InterruptedError:
             task.status = "cancelled"
@@ -270,166 +286,138 @@ class ProcessAPI:
 
         # 重新抽取后，下游步骤的输出已失效：清空 02/03 输出并重置 processed=False。
         # 否则 _get_step_status 会因旧输出文件存在而仍标记 completed，导致 Step 2/3 加载到旧帧。
-        import shutil
-
         for sub, step_num in [("02_no_bg", 2), ("03_hole_punched", 3)]:
             stale_dir = project_path / "output" / sub
             if stale_dir.exists():
                 shutil.rmtree(stale_dir)
             self.save_step_params(task.project_id, step_num, {"processed": False})
 
-    def _run_step2(self, task: Task):
-        """Run Step 2: Background removal using rembg (NO hole punching)"""
-        project_path = self._get_project_path(task.project_id)
-        input_dir = project_path / "output" / "01_frames"
-        output_dir = project_path / "output" / "02_no_bg"
+    def _progress(self, task: Task, current: int, total: int, phase: int = 0, phases: int = 1) -> None:
+        if task.cancelled:
+            raise InterruptedError("Task cancelled")
+        task.current = current
+        task.total = total
+        task.progress = int((phase + current / max(total, 1)) * 99 / phases)
+        self._emit_progress(task.task_id, task.progress, current, total, "running")
 
-        if not input_dir.exists():
+    def _run_step2(self, task: Task):
+        """Process all extracted frames before replacing the published sequence."""
+        project = self._get_project_path(task.project_id)
+        input_dir = project / "output" / "01_frames"
+        if not input_dir.is_dir():
             raise ValueError("Step 1 frames not found. Please run Step 1 first.")
 
-        _write_debug_log(f"[_run_step2] Starting step 2 for project {task.project_id}")
-        _write_debug_log(f"[_run_step2] Input dir: {input_dir}, Output dir: {output_dir}")
-        _write_debug_log(f"[_run_step2] CWD: {os.getcwd()}, MEIPASS: {getattr(sys, '_MEIPASS', 'N/A')}")
-
-        # Get rembg parameters (no hole punching params)
-        params = {
-            "model": "u2net",
-            "post_process_mask": task.params.get("post_process_mask", False),
-            "alpha_matting": task.params.get("alpha_matting", True),
-            "alpha_matting_erode_size": task.params.get("alpha_matting_erode_size", 5),
-            "alpha_matting_background_threshold": task.params.get("alpha_matting_background_threshold", 120),
-            "alpha_matting_foreground_threshold": task.params.get("alpha_matting_foreground_threshold", 240),
-            "edge_erode": task.params.get("edge_erode", 1),
-        }
-        _write_debug_log(f"[_run_step2] rembg params: {params}")
-
-        def progress_callback(current, total):
-            if task.cancelled:
-                raise InterruptedError("Task cancelled")
-            task.current = current
-            task.total = total
-            task.progress = int((current / total) * 100)
-            # Push progress to frontend via evaluate_js
-            self._emit_progress(task.task_id, task.progress, current, total, "running")
-
-        result = batch_remove_background(
-            str(input_dir), str(output_dir), params=params, progress_callback=progress_callback
-        )
-
-        _write_debug_log(f"[_run_step2] batch_remove_background result: {result}")
-
-        if result["total"] > 0 and result["success"] == 0:
-            raise RuntimeError(
-                f"背景移除失败：所有 {result['total']} 帧都处理失败。请查看 logs/debug_process.log 了解详细原因。"
+        params = {**self.DEFAULT_STEP_PARAMS[2], **task.params}
+        with tempfile.TemporaryDirectory(dir=input_dir.parent, prefix=".step2-") as staging:
+            result = batch_remove_background(
+                str(input_dir),
+                staging,
+                params=params,
+                progress_callback=lambda current, total: self._progress(task, current, total),
             )
-
-        # Save the background color detected during step 2 if not already saved
-        if result.get("background_color"):
-            self._save_background_color(task.project_id, result["background_color"])
-
-        # Save params
-        start_frame_edit_generation(project_path, 2)
-        self.save_step_params(task.project_id, 2, task.params)
+            if not result["total"] or result["success"] != result["total"]:
+                raise RuntimeError(f"Background removal failed ({result['success']}/{result['total']} frames).")
+            self._publish_processed_frames(task, Path(staging), result.get("background_color"))
 
     def _run_step3(self, task: Task):
-        """Run Step 3: Post-processing (hole punching + alignment)"""
-        import shutil
+        """Apply enabled operations in order, keeping Step 2 intact."""
+        from src.core.image_aligning import align_sprites
 
-        project_path = self._get_project_path(task.project_id)
-        input_dir = project_path / "output" / "02_no_bg"
-        output_dir = project_path / "output" / "03_hole_punched"
-
-        if not input_dir.exists():
+        project = self._get_project_path(task.project_id)
+        input_dir = project / "output" / "02_no_bg"
+        frames = sorted(input_dir.glob("*.png"))
+        if not frames:
             raise ValueError("Step 2 output not found. Please run Step 2 first.")
 
-        # Color processing validates its source inputs before replacing prior output.
-        # Check if hole punching is enabled
-        enabled = task.params.get("enabled", True)
+        params = task.params
+        shrink, feather = validate_edge_shrink_params(params) if params.get("edge_shrink_enabled") else (0, 0)
+        align = params.get("align_enabled", False)
+        phases = 1 + bool(shrink or feather) + bool(align)
+        total = len(frames)
+        with tempfile.TemporaryDirectory(dir=input_dir.parent, prefix=".step3-") as staging:
+            output = Path(staging)
+            if params.get("enabled", True):
+                batch_punch_holes_color(
+                    str(input_dir),
+                    staging,
+                    str(input_dir.with_name("01_frames")),
+                    params=params,
+                    progress_callback=lambda current, total: self._progress(task, current, total, phases=phases),
+                )
+            else:
+                for index, frame in enumerate(frames, 1):
+                    self._progress(task, index - 1, total, phases=phases)
+                    shutil.copy2(frame, output / frame.name)
 
-        def progress_callback(current, total):
+            if shrink or feather:
+                for index, frame in enumerate(frames, 1):
+                    self._progress(task, index - 1, total, phase=1, phases=phases)
+                    shrink_frame(output / frame.name, shrink, feather)
+
+            if align:
+                for index, frame in enumerate(frames, 1):
+                    self._progress(task, index - 1, total, phase=phases - 1, phases=phases)
+                    path = output / frame.name
+                    aligned = output / f"aligned_{frame.name}"
+                    align_sprites(
+                        str(path),
+                        str(aligned),
+                        rows=1,
+                        cols=1,
+                        align_h=params.get("align_h", True),
+                        align_v=params.get("align_v", True),
+                        use_padding=params.get("use_padding", True),
+                        padding_bottom=params.get("padding_bottom", 10),
+                    )
+                    rename_path(aligned, path, replace=True)
+
+            self._publish_processed_frames(task, output)
+
+    def _publish_processed_frames(self, task: Task, staged: Path, background_color=None) -> None:
+        """Replace the active result, restoring the old files if publishing fails."""
+        project = self._get_project_path(task.project_id)
+        step2 = task.step == 2
+        output = project / "output" / ("02_no_bg" if step2 else "03_hole_punched")
+        replaced = [output, output.with_name("03_hole_punched")] if step2 else [output]
+        backups: list[tuple[Path, Path]] = []
+        published = False
+        with self.parameter_transaction(task.project_id):
             if task.cancelled:
                 raise InterruptedError("Task cancelled")
-            task.current = current
-            task.total = total
-            task.progress = int((current / total) * 100)
-            # Push progress to frontend via evaluate_js
-            self._emit_progress(task.task_id, task.progress, current, total, "running")
 
-        if enabled:
-            # Keep the saved intensity field compatible with existing projects.
-            params = {
-                "green_intensity": task.params.get("green_intensity", 3),
-                "feather_radius": task.params.get("feather_radius", 3),
-                "min_hole_size": task.params.get("min_hole_size", 5),
-            }
+            config_path = self._get_steps_config_path(task.project_id)
+            config = self._migrate_legacy_params(project)
+            if config_path.is_file():
+                with config_path.open(encoding="utf-8") as stream:
+                    config.update(json.load(stream))
+            config.setdefault(f"step{task.step}", {}).update(task.params, processed=True)
+            if step2:
+                config["step2"]["result_model"] = task.params.get("model", "u2net")
+                config.setdefault("step3", {})["processed"] = False
+                if background_color:
+                    config["background_color"] = self._background_color_entry(background_color)
 
-            batch_punch_holes_color(
-                str(input_dir),
-                str(output_dir),
-                str(project_path / "output" / "01_frames"),
-                params=params,
-                progress_callback=progress_callback,
-            )
-        else:
-            # Hole punching disabled, just copy files.
-            if output_dir.exists():
-                shutil.rmtree(output_dir)
-            output_dir.mkdir(parents=True, exist_ok=True)
-            frames = sorted(input_dir.glob("*.png"))
-            total = len(frames)
-            for i, frame_path in enumerate(frames):
-                output_file = output_dir / frame_path.name
-                shutil.copy2(str(frame_path), str(output_file))
-                if progress_callback:
-                    progress_callback(i + 1, total)
+            try:
+                with new_frame_edit_generation(project, task.step):
+                    for old in replaced:
+                        if old.exists():
+                            backup = old.with_name(f".{old.name}-backup-{task.task_id}")
+                            rename_path(old, backup)
+                            backups.append((old, backup))
+                    rename_path(staged, output)
+                    published = True
+                    if not self._save_steps_config(task.project_id, config):
+                        raise OSError("Could not save processing settings")
+            except BaseException:
+                if published:
+                    rename_path(output, staged)
+                for old, backup in reversed(backups):
+                    rename_path(backup, old)
+                raise
+            task.committed = True
 
-        # Check if alignment is enabled
-        align_enabled = task.params.get("align_enabled", False)
-        if align_enabled:
-            # Get alignment parameters
-            align_params = {
-                "align_h": task.params.get("align_h", True),
-                "align_v": task.params.get("align_v", True),
-                "use_padding": task.params.get("use_padding", True),
-                "padding_bottom": task.params.get("padding_bottom", 10),
-            }
-
-            # Process each frame with alignment
-            from src.core.image_aligning import align_sprites
-
-            frames = sorted(output_dir.glob("*.png"))
-            total = len(frames)
-
-            for i, frame_path in enumerate(frames):
-                if task.cancelled:
-                    raise InterruptedError("Task cancelled")
-
-                # Create a temporary file for the aligned output
-                temp_output = output_dir / f"aligned_{frame_path.name}"
-
-                # Align the sprite (rows=1, cols=1 for single frame)
-                align_sprites(
-                    str(frame_path),
-                    str(temp_output),
-                    rows=1,
-                    cols=1,
-                    align_h=align_params["align_h"],
-                    align_v=align_params["align_v"],
-                    use_padding=align_params["use_padding"],
-                    padding_bottom=align_params["padding_bottom"],
-                )
-
-                # Replace original with aligned version
-                if temp_output.exists():
-                    shutil.move(str(temp_output), str(frame_path))
-
-                # Update progress (50-100% for alignment phase)
-                if progress_callback:
-                    progress_callback(50 + int((i + 1) / total * 50), 100)
-
-        # Save params
-        start_frame_edit_generation(project_path, 3)
-        self.save_step_params(task.project_id, 3, task.params)
+        for _, backup in backups:
+            shutil.rmtree(backup, ignore_errors=True)
 
     def _get_background_color(self, project_id: str) -> tuple | None:
         """Get background color from steps_config.json"""
@@ -467,27 +455,18 @@ class ProcessAPI:
         else:
             print("[WARNING] Config file does not exist!")
 
-        # Convert HSV to RGB for display
+        config["background_color"] = self._background_color_entry(bg_hsv)
+        self._save_steps_config(project_id, config)
+
+    @staticmethod
+    def _background_color_entry(bg_hsv: tuple) -> dict[str, Any]:
         hsv_array = np.uint8([[list(bg_hsv)]])
         rgb_array = cv2.cvtColor(hsv_array, cv2.COLOR_HSV2RGB)[0][0]
-        rgb = tuple(int(x) for x in rgb_array)
-
-        config["background_color"] = {
+        return {
             "hsv": [int(x) for x in bg_hsv],
-            "rgb": [int(x) for x in rgb],
+            "rgb": [int(x) for x in rgb_array],
             "sampled_from": "edge_patches",
         }
-        print(f"[DEBUG] Updated background_color in config: {config['background_color']}")
-
-        try:
-            with open(config_path, "w", encoding="utf-8") as f:
-                json.dump(config, f, ensure_ascii=False, indent=2)
-            print("[DEBUG] Background color saved successfully")
-        except Exception as e:
-            print(f"[Error] Error saving background color: {e}")
-            import traceback
-
-            traceback.print_exc()
 
     def get_task_status(self, task_id: str) -> dict[str, Any]:
         """Get task status and progress"""
@@ -518,27 +497,19 @@ class ProcessAPI:
 
     def cancel_task(self, task_id: str) -> bool:
         """Cancel a running task"""
-        task = self.tasks.get(task_id)
-        if not task:
-            return False
-
-        task.cancelled = True
-        task.status = "cancelled"
-
-        if hasattr(task, "future"):
-            task.future.cancel()
-
-        return True
+        with self._control_lock:
+            task = self.tasks.get(task_id)
+            if not task or task.committed or task.status not in ("pending", "running"):
+                return False
+            task.cancelled = True
+            if task.future is None or task.future.cancel():
+                task.status = "cancelled"
+            return True
 
     def shutdown(self):
         """Shutdown the process API - cancel all tasks and stop executor"""
-        # Cancel all running tasks
-        for task in self.tasks.values():
-            if task.status == "running":
-                task.cancelled = True
-                task.status = "cancelled"
-                if hasattr(task, "future"):
-                    task.future.cancel()
+        for task_id in list(self.tasks):
+            self.cancel_task(task_id)
 
         self._model_preloader.shutdown()
 
@@ -553,8 +524,8 @@ class ProcessAPI:
     DEFAULT_STEP_PARAMS = {
         1: {"frame_interval": 1, "start_frame": 0, "end_frame": -1, "fps": 30, "processed": False},
         2: {
-            # Step 2: Background removal only (rembg parameters)
-            "model": "u2net",  # rembg model selection
+            # Step 2: Background removal
+            "model": "u2net",
             "post_process_mask": False,  # apply mask post-processing
             "alpha_matting": True,
             "alpha_matting_erode_size": 5,
@@ -565,11 +536,14 @@ class ProcessAPI:
             "processed": False,
         },
         3: {
-            # Step 3: Post-processing (hole punching + alignment)
+            # Step 3: Post-processing
             "enabled": True,  # Hole punching enabled
             "green_intensity": 3,
             "feather_radius": 3,  # 0-10 pixels
             "min_hole_size": 5,  # Minimum hole area in pixels
+            "edge_shrink_enabled": False,
+            "edge_shrink_px": 0,
+            "edge_feather_px": 0,
             "align_enabled": False,  # Alignment disabled by default
             "align_h": False,  # Horizontal centering (default off)
             "align_v": False,  # Vertical bottom alignment (default off)
@@ -643,7 +617,7 @@ class ProcessAPI:
             # Save migrated config
             self._save_steps_config(project_id, config)
             step_key = f"step{step}"
-            return config.get(step_key, self.DEFAULT_STEP_PARAMS.get(step, {}).copy())
+            return {**self.DEFAULT_STEP_PARAMS.get(step, {}), **config.get(step_key, {})}
 
         # Return defaults
         return self.DEFAULT_STEP_PARAMS.get(step, {}).copy()
@@ -685,13 +659,21 @@ class ProcessAPI:
         """Save the entire steps config"""
         config_path = self._get_steps_config_path(project_id)
 
+        temporary = None
         try:
-            with open(config_path, "w", encoding="utf-8") as f:
-                json.dump(config, f, ensure_ascii=False, indent=2)
+            with tempfile.NamedTemporaryFile(
+                dir=config_path.parent, prefix=".steps-", mode="w", encoding="utf-8", delete=False
+            ) as stream:
+                temporary = Path(stream.name)
+                json.dump(config, stream, ensure_ascii=False, indent=2)
+            rename_path(temporary, config_path, replace=True)
             return True
         except Exception as e:
             print(f"Error saving steps config: {e}")
             return False
+        finally:
+            if temporary is not None:
+                temporary.unlink(missing_ok=True)
 
     def get_all_steps_params(self, project_id: str) -> dict[str, Any]:
         """Get all steps parameters from unified config"""
@@ -723,16 +705,16 @@ class ProcessAPI:
         return {}
 
     def get_model_status(self, model: str = "u2net") -> ModelStatus:
-        validate_model(model)
+        validate_background_model(model)
         return self._model_preloader.get_status(model)
 
     def preload_model(self, model: str = "u2net", source: str | None = None) -> ModelStatus:
         """Start model preparation once and return its current observable state."""
-        validate_model(model)
+        validate_background_model(model)
         return self._model_preloader.preload(model, source=source)
 
     def retry_model(self, model: str = "u2net", source: str | None = None) -> ModelStatus:
-        validate_model(model)
+        validate_background_model(model)
         return self._model_preloader.retry(model, source=source)
 
     def _emit_model_status(self, status: ModelStatus) -> None:

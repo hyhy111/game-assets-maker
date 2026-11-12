@@ -42,6 +42,7 @@ const PRESENTATION: Record<ModelStatus['phase'], ModelStatusPresentation> = {
 
 const APPROXIMATE_MODEL_SIZE_MB: Record<string, number> = {
   u2net: 176,
+  'birefnet-comfy': 424,
 };
 
 export function modelStatusPresentation(status: ModelStatus): ModelStatusPresentation {
@@ -66,4 +67,10 @@ export function modelApproximateSizeMb(model: string): number | null {
 
 export function canStartStep2(step1Completed: boolean, status: ModelStatus, selectedModel: string): boolean {
   return step1Completed && status.model === selectedModel && status.phase === 'ready';
+}
+
+export function backgroundModelName(model: string): string {
+  if (model === 'u2net') return 'U²-Net (rembg)';
+  if (model === 'birefnet-comfy') return 'BiRefNet (Comfy-Org)';
+  return model;
 }

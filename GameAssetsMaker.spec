@@ -13,7 +13,7 @@ Model weights and user configuration are not bundled.
 
 from PyInstaller.building.build_main import Analysis
 from PyInstaller.building.api import COLLECT, EXE, PYZ
-from PyInstaller.utils.hooks import collect_data_files, copy_metadata
+from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs, copy_metadata
 
 if sys.platform == 'darwin':
     from PyInstaller.building.osx import BUNDLE
@@ -25,7 +25,7 @@ with (Path(SPECPATH) / 'pyproject.toml').open('rb') as stream:
 a = Analysis(
     ['backend/__main__.py'],
     pathex=['.'],
-    binaries=[],
+    binaries=collect_dynamic_libs('torchvision', search_patterns=['*.dll', '*.dylib', '*.so', '*.pyd']),
     datas=[
         ('pyproject.toml', '.'),
         ('frontend/dist', 'frontend/dist'),
@@ -43,6 +43,7 @@ a = Analysis(
         'PIL',
         'numpy',
         'psd_tools',
+        'safetensors._safetensors_rust',
         'src.core.image_aligning',
         'src.utils.logger',
     ],
@@ -50,8 +51,6 @@ a = Analysis(
     hooksconfig={},
     runtime_hooks=[],
     excludes=[
-        'torch',
-        'torchvision',
         'torchaudio',
         'pytest',
         'matplotlib',

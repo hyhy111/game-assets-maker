@@ -1,4 +1,4 @@
-"""Observable rembg model preparation state."""
+"""Observable background-removal model preparation state."""
 
 from __future__ import annotations
 
@@ -7,6 +7,17 @@ from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
 from contextlib import suppress
 from typing import Literal, Protocol, TypedDict
+
+from backend.core import birefnet
+from src.core.rembg_model import U2NET_SOURCES
+
+MODEL_SOURCES = {"u2net": U2NET_SOURCES.keys(), birefnet.MODEL_ID: {"modelscope"}}
+
+
+def validate_background_model(model: str) -> None:
+    if not isinstance(model, str) or model not in MODEL_SOURCES:
+        raise ValueError("Unsupported background-removal model")
+
 
 ModelPhase = Literal["needs_download", "downloading", "initializing", "ready", "failed"]
 
@@ -58,6 +69,25 @@ class RembgModelLoader:
         get_rembg_session(model)
 
 
+class BackgroundModelLoader(RembgModelLoader):
+    def is_available(self, model: str) -> bool:
+        if model == birefnet.MODEL_ID:
+            return birefnet.weights_available()
+        return super().is_available(model)
+
+    def download(self, model: str, progress: Callable[[int, int | None], None], source: str) -> None:
+        if model == birefnet.MODEL_ID:
+            birefnet.download_weights(progress)
+        else:
+            super().download(model, progress, source)
+
+    def initialize(self, model: str) -> None:
+        if model == birefnet.MODEL_ID:
+            birefnet.get_session()
+        else:
+            super().initialize(model)
+
+
 class ModelPreloader:
     def __init__(
         self,
@@ -66,7 +96,7 @@ class ModelPreloader:
     ) -> None:
         self._loader = loader
         self._on_status = on_status
-        self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="rembg-model")
+        self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="background-model")
         self._lock = threading.RLock()
         self._statuses: dict[str, ModelStatus] = {}
         self._active: dict[str, Future[None]] = {}
@@ -85,9 +115,7 @@ class ModelPreloader:
             return self._statuses[model].copy()
 
     def preload(self, model: str, *, retry: bool = False, source: str | None = None) -> ModelStatus:
-        from src.core.rembg_model import U2NET_SOURCES
-
-        if source is not None and source not in U2NET_SOURCES:
+        if source is not None and source not in MODEL_SOURCES.get(model, ()):
             raise ValueError("Unsupported model download source")
         with self._lock:
             status = self.get_status(model)

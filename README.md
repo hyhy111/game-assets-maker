@@ -30,7 +30,7 @@ Game Assets Maker（GAM）是一款开源桌面工具，面向独立游戏开发
 
 ### 实际能做什么
 
-- **视频变动画帧**：抽帧 → 去背景 → 挖孔与对齐，逐步预览结果。
+- **视频变动画帧**：抽帧 → 去背景 → 后处理，逐步预览结果。
 - **批量裁剪**：统一包围盒，或逐帧紧致裁剪并保存偏移 JSON。
 - **细节修整**：描边、孤立像素清理、边缘优化、颜色替换；支持隐藏异常帧。
 - **角色与动作管理**：按角色整理待机、行走、跳跃、攻击等动画，保存每步参数。
@@ -65,10 +65,10 @@ Game Assets Maker（GAM）是一款开源桌面工具，面向独立游戏开发
 | 步骤 | 怎么操作 | 重点检查 |
 | --- | --- | --- |
 | **01 帧提取** | 选择起止帧、帧提取间隔，点击“开始提取”。 | 起势和收招是否完整，循环是否顺畅。 |
-| **02 背景移除** | 首次按提示选择来源并下载 U2Net 模型（约 176 MB），再运行去背景。 | 头发、武器、细线和半透明边缘。 |
-| **03 挖孔与对齐** | 清理手臂、武器之间的残留背景色；按动作需要启用水平居中或底部对齐。 | 是否误删主体绿色、跳跃高度或有意位移是否被改变。 |
+| **02 背景移除** | 选择 U²-Net（rembg）或 BiRefNet（Comfy-Org），首次使用时按提示下载权重。 | 头发、武器、细线和半透明边缘。 |
+| **03 后处理** | 按需启用挖孔、缩减边缘和帧对齐。 | 轮廓细节、跳跃高度和有意位移。 |
 
-每步完成后先播放检查。步骤 02 / 03 可隐藏异常帧，也可恢复；重新抽帧会使下游旧处理结果失效。模型就绪后，本地处理可以离线进行。
+每步完成后先播放检查。步骤 02 / 03 可隐藏异常帧，也可恢复；重新抽帧会使下游旧处理结果失效。模型就绪后，本地处理可以离线进行。重新去背整批成功后会替换当前结果，并清除步骤 03 的结果和手修。
 
 步骤 02 完成后，切换到步骤 03 页面即可点击 **预览右下角的魔棒或橡皮擦**，自动暂停并在当前预览中修整，无需先运行步骤 03；顶部显示工具参数，预览窗内显示简要操作提示。魔棒点击选区、Shift 点击追加、Delete 删除；橡皮擦用左键拖动擦除。滚轮缩放、中键拖动画布，空格仍控制播放。保留当前预览背景、缩放和平移，背景仍可切换。点击“保存当前帧”后标记为已完成处理，动画卡片的第三个状态图标变绿，并保持工具选中，撤销记录以此次保存为起点；切回浏览工具保留未保存修改。播放、切帧、切步骤或离开页面前，未保存修改会提示保存、放弃或留在当前帧。取消丢弃本次未保存修改。修整只修改步骤 03 的这一帧，重新运行步骤 03 会覆盖修整。W / E / V 分别切换魔棒、橡皮擦和移动工具；选中魔棒或橡皮擦时，⌘S / Ctrl+S 保存当前帧；+ / - 调整当前工具的颜色容差或橡皮擦大小。橡皮擦默认大小 5px、羽化 0px；魔棒删除会完全清除选区，并向选区外侧羽化；羽化为 0 时仅清除选区。工具栏的“恢复初始版本”会恢复本轮人工修整前的当前帧（未运行步骤 03 时以步骤 02 结果为基准），跨保存和重启保留；恢复可撤销，点击保存才写入结果。旧备份没有步骤标记、无法确认初始版本时，恢复按钮会禁用并提示重新处理步骤 03。
 
@@ -150,7 +150,7 @@ Game Assets Maker (GAM) is an open-source desktop tool for indie game developers
 
 ### What you can make
 
-- **Video to animation frames**: extract → remove backgrounds → clean holes and align, with previews at each step.
+- **Video to animation frames**: extract → remove backgrounds → post-process, with previews at each step.
 - **Batch trim**: use a shared bounding box, or tight per-frame crops with offset JSON.
 - **Clean up details**: outlines, isolated-pixel cleanup, edge optimization, color replacement, and reversible frame hiding.
 - **Organize characters and actions**: keep idle, walk, jump, and attack animations together with per-step settings.
@@ -185,10 +185,10 @@ If you need source material, create a character in Image Generation, then use th
 | Step | Action | Check |
 | --- | --- | --- |
 | **01 Extract frames** | Choose the start, end, and extraction interval, then start extraction. | Complete motion and a clean loop. |
-| **02 Remove background** | On first use, select a source and download U2Net (~176 MB), then process the frames. | Hair, weapons, thin lines, and soft edges. |
-| **03 Clean holes and align** | Remove residual background colors between limbs and weapons; enable horizontal centering or bottom alignment when needed. | Green character details, jump height, and intentional movement. |
+| **02 Remove background** | Choose U²-Net (rembg) or BiRefNet (Comfy-Org) and download the weights on first use. | Hair, weapons, thin lines, and soft edges. |
+| **03 Post-process** | Enable hole punching, edge shrink, and frame alignment as needed. | Outline detail, jump height, and intentional movement. |
 
-Play the result after each step. You can hide and restore unwanted frames in steps 02 / 03. Re-extracting frames invalidates older downstream results. Once the model is ready, local processing works offline.
+Play the result after each step. You can hide and restore unwanted frames in steps 02 / 03. Re-extracting frames invalidates older downstream results. Once the model is ready, local processing works offline. A successful background removal run replaces the current result and clears Step 03 results and manual edits.
 
 After Step 02, switch to the Step 03 page and choose the **magic wand or eraser at the preview’s bottom right** to pause and retouch the current frame in place, without first running Step 03. Tool settings appear at the top, with brief instructions inside the preview. Click to select, Shift-click to add, and Delete to remove; left-drag to erase. Scroll to zoom, middle-drag to pan, and use Space for playback. The preview keeps its background, zoom and pan; background switching remains available. Saving marks processing complete, turns the animation card’s third status icon green, keeps the tool selected and starts a new undo history. Browse mode keeps unsaved edits. Before playback, frame/step navigation or leaving the page, choose to save, discard or stay. Cancel discards unsaved changes. Edits affect only this frame in Step 03. Re-running Step 03 replaces manual edits. W / E / V select the wand, eraser and pan tools; Cmd+S / Ctrl+S save the current frame while the wand or eraser is selected; + / - adjust the active tool’s color tolerance or eraser size. The eraser defaults to 5px with 0px feathering. Wand deletion fully clears the selection and feathers outward into neighboring pixels; with feathering set to 0, only selected pixels are cleared. Restore Initial Version restores the current frame’s appearance before manual edits in this run (using Step 02 output when Step 03 has not been run), across saves and restarts. Restoration can be undone and requires Save to update the output. If older backups do not identify their processing step, restoration stays disabled until Step 03 is reprocessed to establish a verified baseline.
 

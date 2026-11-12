@@ -556,15 +556,9 @@ onMounted(async () => {
   // Refresh project status from backend (important for steps state)
   await projectStore.loadProject(currentProject.value.id);
 
-  // Load saved step parameters for all steps
-  // Only load params if the step has been processed, otherwise use frontend defaults
-  await processStore.loadStepParams(currentProject.value.id, 1);
-  if (projectStore.isStepCompleted(2)) {
-    await processStore.loadStepParams(currentProject.value.id, 2);
-  }
-  if (projectStore.isStepCompleted(3)) {
-    await processStore.loadStepParams(currentProject.value.id, 3);
-  }
+  // Load parameters even when a project has no published result yet.
+  const projectId = currentProject.value.id;
+  await Promise.all([1, 2, 3].map((step) => processStore.loadStepParams(projectId, step)));
 
   // Mark params as loaded so child components can render
   paramsLoaded.value = true;

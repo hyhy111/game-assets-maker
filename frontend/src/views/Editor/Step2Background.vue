@@ -9,6 +9,17 @@
       </p>
     </div>
 
+    <label class="block space-y-2 text-sm font-medium text-gray-300">
+      <span>{{ t('step2.model') }}</span>
+      <Select
+        :model-value="selectedModel"
+        :aria-label="t('step2.model')"
+        :disabled="isProcessing"
+        :options="modelOptions"
+        @update:model-value="setModel"
+      />
+    </label>
+
     <ModelStatusCard
       v-if="shouldShowModelStatus"
       :status="modelStatus"
@@ -37,7 +48,10 @@
     </div>
 
     <!-- Alpha Matting toggle -->
-    <div class="flex items-center justify-between">
+    <div
+      v-if="selectedModel === 'u2net'"
+      class="flex items-center justify-between"
+    >
       <label class="text-sm font-medium text-gray-300">{{ t('step2.alphaMatting') }}</label>
       <Switch
         v-model="s2Params.alpha_matting"
@@ -47,7 +61,7 @@
 
     <!-- Alpha Matting settings (conditional) -->
     <div
-      v-if="s2Params.alpha_matting"
+      v-if="selectedModel === 'u2net' && s2Params.alpha_matting"
       class="space-y-4 pl-4 border-l-2 border-dark-border"
     >
       <!-- Reset button -->
@@ -167,7 +181,7 @@
 
     <!-- Error Message -->
     <div
-      v-if="taskStatus?.error"
+      v-if="taskStatus?.step === 2 && taskStatus.error"
       class="p-3 bg-danger-500/10 border border-danger-500/30 rounded-lg"
     >
       <div class="flex items-start gap-2 text-danger-500">
@@ -188,12 +202,18 @@
         <span class="text-sm">{{ t('step2.completed') }}</span>
       </div>
       <p class="text-xs text-gray-500 mt-1">
-        {{ t('step2.processedCount', { count: stepStatus?.count ?? 0 }) }}{{ processingTimeText }}
+        {{ t('step2.resultCount', { count: stepStatus?.count ?? 0, model: backgroundModelName(stepStatus?.result_model ?? 'u2net') }) }}{{ processingTimeText }}
       </p>
     </div>
 
     <!-- Action buttons -->
     <div class="space-y-3 pt-4">
+      <p
+        v-if="isStepCompleted && !isProcessing"
+        class="text-xs text-gray-400"
+      >
+        {{ t(projectStore.isStepCompleted(3) ? 'step2.replaceWithPostProcess' : 'step2.replaceResult') }}
+      </p>
       <Button
         block
         :loading="isProcessing"
@@ -204,7 +224,7 @@
         {{ isStepCompleted ? t('step2.reProcess') : t('step2.startProcessing') }}
       </Button>
       <p
-        v-if="step1Completed && !canProcess"
+        v-if="step1Completed && !canProcess && !isProcessing"
         class="text-center text-xs text-gray-500"
       >
         {{ t('modelStatus.step2Blocked') }}
@@ -224,7 +244,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, watch } from 'vue';
+import { computed, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useI18n } from 'vue-i18n';
 import { Wand2, CheckCircle, X, RefreshCw } from 'lucide-vue-next';
@@ -235,31 +255,35 @@ import Button from '@/components/common/Button.vue';
 import Switch from '@/components/common/Switch.vue';
 import Input from '@/components/common/Input.vue';
 import ModelStatusCard from '@/components/editor/ModelStatusCard.vue';
-import { canStartStep2 } from '@/model-status';
+import Select from '@/components/common/Select.vue';
+import { backgroundModelName, canStartStep2 } from '@/model-status';
 
 const projectStore = useProjectStore();
 const processStore = useProcessStore();
 const { t } = useI18n();
 const playerStore = usePlayerStore();
 
-const { s2Params, isProcessing, progress, taskStatus, modelStatus } = storeToRefs(processStore);
+const { s2Params, isProcessing, progress, taskStatus, modelStatus, selectedModel } = storeToRefs(processStore);
 
 const isStepCompleted = computed(() => projectStore.isStepCompleted(2));
 
 const step1Completed = computed(() => projectStore.isStepCompleted(1));
 const stepStatus = computed(() => projectStore.currentProject?.steps?.['2']);
-const selectedModel = computed(() => s2Params.value.model ?? 'u2net');
+const modelOptions = (['u2net', 'birefnet-comfy'] as const).map((value) => ({
+  value,
+  label: backgroundModelName(value),
+}));
 
-const canProcess = computed(() => canStartStep2(step1Completed.value, modelStatus.value, selectedModel.value));
+function setModel(value: string | number) {
+  if (value === 'u2net' || value === 'birefnet-comfy') s2Params.value.model = value;
+}
+
+const canProcess = computed(() => !isProcessing.value && canStartStep2(step1Completed.value, modelStatus.value, selectedModel.value));
 const shouldShowModelStatus = computed(() => !isProcessing.value && modelStatus.value.phase !== 'ready');
-
-onMounted(() => {
-  void processStore.preloadModel(selectedModel.value);
-});
 
 watch(selectedModel, (model) => {
   void processStore.preloadModel(model);
-});
+}, { immediate: true });
 
 // Format processing time for display
 const processingTimeText = computed(() => {
@@ -277,12 +301,9 @@ async function startProcessing() {
   // Stop playback before processing
   playerStore.pause();
 
-  // Mark as processed
-  s2Params.value.processed = true;
-
   // Pass all step 2 parameters
   const params = {
-    model: s2Params.value.model,
+    model: selectedModel.value,
     alpha_matting: s2Params.value.alpha_matting,
     alpha_matting_erode_size: s2Params.value.alpha_matting_erode_size,
     alpha_matting_background_threshold: s2Params.value.alpha_matting_background_threshold,

@@ -223,7 +223,7 @@ def test_process_api_rejects_unsupported_model(tmp_path, monkeypatch) -> None:
             time.sleep(0.01)
         assert api.get_model_status("u2net")["phase"] == "ready"
 
-        with pytest.raises(ValueError, match="Only u2net"):
+        with pytest.raises(ValueError, match="Unsupported background-removal model"):
             api.start_processing("unused", 2, {"model": "isnet-anime"})
     finally:
         api.shutdown()
@@ -233,7 +233,7 @@ def test_process_api_rejects_unsupported_model(tmp_path, monkeypatch) -> None:
 def test_model_api_rejects_other_models(method):
     api = ProcessAPI(model_loader=FakeModelLoader(available=True))
     try:
-        with pytest.raises(ValueError, match="Only u2net"):
+        with pytest.raises(ValueError, match="Unsupported background-removal model"):
             getattr(api, method)("isnet-anime")
     finally:
         api.shutdown()

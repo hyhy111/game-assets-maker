@@ -21,6 +21,7 @@ export interface StepStatus {
   completed: boolean;
   data_ready: boolean;
   count: number;
+  result_model?: BackgroundRemovalModel;
 }
 
 export interface StepStatusMap {
@@ -169,6 +170,8 @@ export interface AudioSaveResult {
   error?: string;
 }
 
+export type BackgroundRemovalModel = 'u2net' | 'birefnet-comfy';
+
 export type ModelPhase = 'needs_download' | 'downloading' | 'initializing' | 'ready' | 'failed';
 
 export interface ModelStatusError {
@@ -197,9 +200,9 @@ export interface Step1Params {
   processing_time?: number;  // Processing time in seconds (not persisted)
 }
 
-// Step 2: Background removal only (rembg parameters)
+// Step 2: Background removal
 export interface Step2Params {
-  model?: 'u2net';  // Only supported rembg model
+  model?: BackgroundRemovalModel;
   alpha_matting: boolean;        // default true
   alpha_matting_erode_size: number;      // 0-20, default 5
   alpha_matting_background_threshold: number;  // 0-255, default 12
@@ -223,13 +226,16 @@ export interface SavedFrameEdit {
   revision: string;
 }
 
-// Step 3: Post-processing (hole punching + alignment)
+// Step 3: Post-processing
 export interface Step3Params {
   enabled: boolean;              // whether hole punching is enabled, default true
   // Background color tolerance (1-5); legacy field name retained for saved projects.
   green_intensity: number;       // 1-5, default 3
   feather_radius: number;        // Feather radius (0-10 pixels), default 3
   min_hole_size: number;         // Minimum hole area in pixels (0-500), default 5
+  edge_shrink_enabled: boolean;
+  edge_shrink_px: number;
+  edge_feather_px: number;
   // Alignment parameters
   align_enabled: boolean;        // whether alignment is enabled, default false
   align_h: boolean;              // horizontal centering, default true

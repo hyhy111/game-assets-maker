@@ -35,6 +35,9 @@ webview_profile/
 seedance-cache/
 seedream-cache/
 docs/
+!/docs/
+/docs/*
+!/docs/adr/
 tmp/
 
 # Runtime config (may contain local preferences or credentials)
