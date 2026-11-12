@@ -159,6 +159,78 @@
       </div>
     </div>
 
+    <!-- Alpha Refinement (debug/tuning for local models) -->
+    <div class="space-y-3">
+      <div>
+        <label class="block text-sm font-medium text-gray-300">{{ t('step2.alphaRefine') }}</label>
+        <p class="text-xs text-gray-500">
+          {{ t('step2.alphaRefineHint') }}
+        </p>
+      </div>
+      <div class="space-y-4 pl-4 border-l-2 border-dark-border">
+        <div
+          v-for="field in refineFields"
+          :key="field.key"
+          class="space-y-1"
+        >
+          <label class="flex items-center justify-between gap-3 text-sm text-gray-400">
+            <span>{{ t(field.label) }}</span>
+            <input
+              v-model.number="s2Params[field.key]"
+              type="number"
+              :min="field.min"
+              :max="field.max"
+              :step="field.step"
+              class="w-20 rounded-lg border border-dark-border bg-dark-surface px-2 py-1.5 text-center text-gray-100"
+              @keydown="onInputKeydown"
+            >
+          </label>
+          <input
+            v-model.number="s2Params[field.key]"
+            type="range"
+            :min="field.min"
+            :max="field.max"
+            :step="field.step"
+            :aria-label="t(field.label)"
+            class="w-full h-2 bg-dark-border rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-primary [&::-webkit-slider-thumb]:rounded-full"
+          >
+          <p class="text-xs text-gray-500">
+            {{ t(field.hint) }}
+          </p>
+        </div>
+
+        <!-- Defringe Toggle -->
+        <div class="flex items-center justify-between">
+          <span class="text-sm text-gray-400">{{ t('step2.defringe') }}</span>
+          <Switch
+            v-model="s2Params.defringe_enabled"
+            :aria-label="t('step2.defringe')"
+          />
+        </div>
+        <template v-if="s2Params.defringe_enabled">
+          <label
+            v-for="field in defringeFields"
+            :key="field.key"
+            class="flex items-center justify-between gap-3 text-sm text-gray-400"
+          >
+            <span>{{ t(field.label) }}</span>
+            <input
+              v-model.number="s2Params[field.key]"
+              type="number"
+              :min="field.min"
+              :max="field.max"
+              :step="field.step"
+              class="w-20 rounded-lg border border-dark-border bg-dark-surface px-2 py-1.5 text-center text-gray-100"
+              @keydown="onInputKeydown"
+            >
+          </label>
+        </template>
+        <p class="text-xs text-gray-500">
+          {{ t('step2.defringeHint') }}
+        </p>
+      </div>
+    </div>
+
     <!-- Processing Progress -->
     <div
       v-if="isProcessing"
@@ -278,8 +350,59 @@ function setModel(value: string | number) {
   if (value === 'u2net' || value === 'birefnet-comfy') s2Params.value.model = value;
 }
 
-const canProcess = computed(() => !isProcessing.value && canStartStep2(step1Completed.value, modelStatus.value, selectedModel.value));
+const canProcess = computed(() => !isProcessing.value && refineValid.value
+  && canStartStep2(step1Completed.value, modelStatus.value, selectedModel.value));
 const shouldShowModelStatus = computed(() => !isProcessing.value && modelStatus.value.phase !== 'ready');
+
+const refineFields = [
+  {
+    key: 'alpha_contrast',
+    label: 'step2.alphaContrast',
+    hint: 'step2.alphaContrastHint',
+    min: 0.5,
+    max: 3,
+    step: 0.1,
+  },
+  {
+    key: 'alpha_threshold',
+    label: 'step2.alphaThreshold',
+    hint: 'step2.alphaThresholdHint',
+    min: 0,
+    max: 254,
+    step: 1,
+  },
+  {
+    key: 'min_foreground_area',
+    label: 'step2.minForegroundArea',
+    hint: 'step2.minForegroundAreaHint',
+    min: 0,
+    max: 10000,
+    step: 10,
+  },
+  {
+    key: 'fill_holes_max_size',
+    label: 'step2.fillHolesMaxSize',
+    hint: 'step2.fillHolesMaxSizeHint',
+    min: 0,
+    max: 10000,
+    step: 10,
+  },
+] as const;
+
+const defringeFields = [
+  { key: 'defringe_px', label: 'step2.defringePx', min: 0, max: 20, step: 1 },
+  { key: 'defringe_amount', label: 'step2.defringeAmount', min: 0, max: 1, step: 0.05 },
+] as const;
+
+const refineValid = computed(() => {
+  const p = s2Params.value;
+  return p.alpha_contrast >= 0.5 && p.alpha_contrast <= 3
+    && Number.isInteger(p.alpha_threshold) && p.alpha_threshold >= 0 && p.alpha_threshold <= 254
+    && Number.isInteger(p.defringe_px) && p.defringe_px >= 0 && p.defringe_px <= 20
+    && Number.isFinite(p.defringe_amount) && p.defringe_amount >= 0 && p.defringe_amount <= 1
+    && Number.isInteger(p.min_foreground_area) && p.min_foreground_area >= 0 && p.min_foreground_area <= 10000
+    && Number.isInteger(p.fill_holes_max_size) && p.fill_holes_max_size >= 0 && p.fill_holes_max_size <= 10000;
+});
 
 watch(selectedModel, (model) => {
   void processStore.preloadModel(model);
@@ -308,6 +431,13 @@ async function startProcessing() {
     alpha_matting_erode_size: s2Params.value.alpha_matting_erode_size,
     alpha_matting_background_threshold: s2Params.value.alpha_matting_background_threshold,
     alpha_matting_foreground_threshold: s2Params.value.alpha_matting_foreground_threshold,
+    alpha_contrast: s2Params.value.alpha_contrast,
+    alpha_threshold: s2Params.value.alpha_threshold,
+    defringe_enabled: s2Params.value.defringe_enabled,
+    defringe_px: s2Params.value.defringe_px,
+    defringe_amount: s2Params.value.defringe_amount,
+    min_foreground_area: s2Params.value.min_foreground_area,
+    fill_holes_max_size: s2Params.value.fill_holes_max_size,
     fps: s2Params.value.fps,
     processed: true
   };

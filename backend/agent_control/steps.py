@@ -29,10 +29,8 @@ FIELDS = {
 }
 EXTRA_FIELDS = {
     1: set(),
-    2: {"model"},
-    3: {
-        "edge_shrink_px",
-        "edge_feather_px",
+    2: {
+        "model",
         "alpha_contrast",
         "alpha_threshold",
         "defringe_enabled",
@@ -41,6 +39,7 @@ EXTRA_FIELDS = {
         "min_foreground_area",
         "fill_holes_max_size",
     },
+    3: {"edge_shrink_px", "edge_feather_px"},
 }
 
 
@@ -54,12 +53,12 @@ def merge_params(saved: dict[str, Any], step: int, patch: dict[str, Any]) -> dic
         raise ValueError("fps must be between 1 and 60")
     if step == 2:
         validate_background_model(merged.setdefault("model", "u2net"))
+        merged.update(validate_alpha_refine_params(merged))
     if step == 3:
         merged.setdefault("edge_shrink_enabled", False)
         merged.setdefault("edge_shrink_px", 0)
         merged.setdefault("edge_feather_px", 0)
         validate_edge_shrink_params(merged)
-        merged.update(validate_alpha_refine_params(merged))
     for name, rule in FIELDS[step].items():
         value = merged.get(name)
         if rule is bool:

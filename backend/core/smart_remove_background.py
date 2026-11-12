@@ -308,8 +308,16 @@ def batch_remove_background(
     }
 
     from backend.core import birefnet
+    from backend.core.alpha_refine import (
+        defringe_rgba,
+        needs_refinement,
+        refine_alpha,
+        validate_alpha_refine_params,
+    )
 
     use_birefnet = (params or {}).get("model") == birefnet.MODEL_ID
+    refine_settings = validate_alpha_refine_params(params or {})
+    do_refine = needs_refinement(refine_settings)
     # Process each frame.
     for i, frame_path in enumerate(frames):
         try:
@@ -319,6 +327,16 @@ def batch_remove_background(
                 result, bg_hsv = remove_background_single_rembg(str(frame_path), params=params)
 
             if result:
+                if do_refine:
+                    rgba = np.asarray(result.convert("RGBA")).copy()
+                    rgba[..., 3] = refine_alpha(rgba[..., 3], refine_settings)
+                    if refine_settings["defringe_enabled"]:
+                        rgba = defringe_rgba(
+                            rgba,
+                            int(refine_settings["defringe_px"]),
+                            float(refine_settings["defringe_amount"]),
+                        )
+                    result = Image.fromarray(rgba, "RGBA")
                 output_file = output_path / frame_path.name
                 result.save(output_file, "PNG")
                 results["success"] += 1

@@ -142,42 +142,47 @@ def test_refine_frame_end_to_end(tmp_path):
     assert result[2, 2, 3] == 255  # opaque interior untouched by threshold
 
 
-def test_step3_applies_refinement(tmp_path, monkeypatch):
+def test_step2_applies_refinement_after_model_cutout(tmp_path, monkeypatch):
+    """Refinement runs inside Step 2, right after the local model produces each frame."""
     from backend.api.process_api import ProcessAPI
 
     monkeypatch.setenv("GAM_DATA_ROOT", str(tmp_path))
     project = tmp_path / "角色/动作"
     (project / "cache").mkdir(parents=True)
-    frames = project / "output" / "02_no_bg"
+    frames = project / "output" / "01_frames"
     frames.mkdir(parents=True)
-    frame = np.zeros((8, 8, 4), dtype=np.uint8)
-    frame[:, :, 3] = 120  # weak semi-transparent residue
-    Image.fromarray(frame, "RGBA").save(frames / "frame_000001.png")
+    Image.new("RGBA", (8, 8), (0, 0, 0, 0)).save(frames / "frame_000001.png")
 
+    def fake_birefnet(frame):
+        assert frame == frames / "frame_000001.png"
+        weak = np.zeros((8, 8, 4), dtype=np.uint8)
+        weak[..., 3] = 120  # weak semi-transparent residue
+        return Image.fromarray(weak, "RGBA")
+
+    monkeypatch.setattr("backend.core.birefnet.remove_background", fake_birefnet)
     api = ProcessAPI(projects_root=tmp_path)
+    monkeypatch.setattr(api, "get_model_status", lambda _: {"phase": "ready"})
     task = api.start_processing(
         "角色/动作",
-        3,
-        {"enabled": False, "processed": True, "alpha_threshold": 200},
+        2,
+        {"model": "birefnet-comfy", "alpha_threshold": 200, "processed": True},
     )
     api.tasks[task].future.result(timeout=10)
     status = api.get_task_status(task)
     assert status["status"] == "completed", status.get("error")
-    # Step 3 publishes to 03_hole_punched while keeping the Step 2 output intact.
-    with Image.open(project / "output" / "03_hole_punched" / "frame_000001.png") as source:
+    with Image.open(project / "output" / "02_no_bg" / "frame_000001.png") as source:
         assert np.asarray(source.convert("RGBA"))[..., 3].max() == 0
-    with Image.open(frames / "frame_000001.png") as source:
-        assert np.asarray(source.convert("RGBA"))[..., 3].max() == 120
     api.shutdown()
 
 
-def test_step3_rejects_invalid_refine_params(tmp_path, monkeypatch):
+def test_step2_rejects_invalid_refine_params(tmp_path, monkeypatch):
     from backend.api.process_api import ProcessAPI
 
     monkeypatch.setenv("GAM_DATA_ROOT", str(tmp_path))
     api = ProcessAPI(projects_root=tmp_path)
+    monkeypatch.setattr(api, "get_model_status", lambda _: {"phase": "ready"})
     with pytest.raises(ValueError):
-        api.start_processing("角色/动作", 3, {"enabled": False, "alpha_contrast": 9})
+        api.start_processing("角色/动作", 2, {"model": "birefnet-comfy", "alpha_contrast": 9})
     api.shutdown()
 
 
@@ -185,26 +190,22 @@ def test_agent_merge_accepts_and_validates_refine_fields():
     from backend.agent_control.steps import merge_params
 
     saved = {
-        "enabled": True,
-        "green_intensity": 3,
-        "feather_radius": 3,
-        "min_hole_size": 5,
-        "edge_shrink_enabled": False,
-        "align_enabled": False,
-        "align_h": False,
-        "align_v": False,
+        "alpha_matting": True,
+        "alpha_matting_erode_size": 5,
+        "alpha_matting_background_threshold": 120,
+        "alpha_matting_foreground_threshold": 240,
     }
-    merged = merge_params(saved, 3, {"alpha_contrast": 1.5, "defringe_enabled": True})
+    merged = merge_params(saved, 2, {"alpha_contrast": 1.5, "defringe_enabled": True})
     assert merged["alpha_contrast"] == 1.5
     assert merged["fill_holes_max_size"] == 0
     with pytest.raises(ValueError):
-        merge_params(saved, 3, {"alpha_threshold": 300})
+        merge_params(saved, 2, {"alpha_threshold": 300})
     with pytest.raises(ValueError):
-        merge_params(saved, 3, {"unknown_field": 1})
+        merge_params(saved, 2, {"unknown_field": 1})
 
 
 def test_step_params_defaults_include_refine_fields(tmp_path, monkeypatch):
-    """Legacy saved step 3 params (missing the new fields) get safe defaults."""
+    """Legacy saved step 2 params (missing the new fields) get safe defaults."""
     from backend.api.process_api import ProcessAPI
 
     monkeypatch.setenv("GAM_DATA_ROOT", str(tmp_path))
@@ -212,10 +213,10 @@ def test_step_params_defaults_include_refine_fields(tmp_path, monkeypatch):
     cache = project / "cache"
     cache.mkdir(parents=True)
     (cache / "steps_config.json").write_text(
-        json.dumps({"step3": {"processed": True, "green_intensity": 4}}), encoding="utf-8"
+        json.dumps({"step2": {"processed": True, "model": "u2net"}}), encoding="utf-8"
     )
     api = ProcessAPI(projects_root=tmp_path)
-    params = api.get_step_params("角色/动作", 3)
+    params = api.get_step_params("角色/动作", 2)
     assert params["alpha_contrast"] == 1.0
     assert params["defringe_enabled"] is False
     api.shutdown()

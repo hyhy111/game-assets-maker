@@ -32,6 +32,13 @@ export const useProcessStore = defineStore('process', () => {
     alpha_matting_erode_size: 5,
     alpha_matting_background_threshold: 120,
     alpha_matting_foreground_threshold: 240,
+    alpha_contrast: 1.0,
+    alpha_threshold: 0,
+    defringe_enabled: false,
+    defringe_px: 2,
+    defringe_amount: 0.5,
+    min_foreground_area: 0,
+    fill_holes_max_size: 0,
     fps: 10,
     processed: false,
     processing_time: 0
@@ -46,13 +53,6 @@ export const useProcessStore = defineStore('process', () => {
     edge_shrink_enabled: false,
     edge_shrink_px: 0,
     edge_feather_px: 0,
-    alpha_contrast: 1.0,
-    alpha_threshold: 0,
-    defringe_enabled: false,
-    defringe_px: 2,
-    defringe_amount: 0.5,
-    min_foreground_area: 0,
-    fill_holes_max_size: 0,
     align_enabled: false,  // Alignment disabled by default
     align_h: false,        // Horizontal centering (default off)
     align_v: false,        // Vertical bottom alignment (default off)
