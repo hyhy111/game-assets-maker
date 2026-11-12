@@ -20,6 +20,7 @@ import numpy as np
 from filelock import FileLock
 
 from backend.api.project_paths import resolve_project_path
+from backend.core.alpha_refine import needs_refinement, refine_frame, validate_alpha_refine_params
 from backend.core.background_color import batch_punch_holes_color, validate_color_params
 from backend.core.edge_shrink import shrink_frame, validate_edge_shrink_params
 from backend.core.frame_edit_history import new_frame_edit_generation
@@ -169,6 +170,7 @@ class ProcessAPI:
                 validate_color_params(params)
             if params.get("edge_shrink_enabled", False):
                 validate_edge_shrink_params(params)
+            validate_alpha_refine_params(params)
 
         task_id = str(uuid.uuid4())
         task = Task(task_id, project_id, step, params)
@@ -331,8 +333,10 @@ class ProcessAPI:
 
         params = task.params
         shrink, feather = validate_edge_shrink_params(params) if params.get("edge_shrink_enabled") else (0, 0)
+        refine = validate_alpha_refine_params(params)
+        do_refine = needs_refinement(refine)
         align = params.get("align_enabled", False)
-        phases = 1 + bool(shrink or feather) + bool(align)
+        phases = 1 + bool(shrink or feather) + bool(align) + bool(do_refine)
         total = len(frames)
         with tempfile.TemporaryDirectory(dir=input_dir.parent, prefix=".step3-") as staging:
             output = Path(staging)
@@ -349,9 +353,14 @@ class ProcessAPI:
                     self._progress(task, index - 1, total, phases=phases)
                     shutil.copy2(frame, output / frame.name)
 
-            if shrink or feather:
+            if do_refine:
                 for index, frame in enumerate(frames, 1):
                     self._progress(task, index - 1, total, phase=1, phases=phases)
+                    refine_frame(output / frame.name, refine)
+
+            if shrink or feather:
+                for index, frame in enumerate(frames, 1):
+                    self._progress(task, index - 1, total, phase=1 + bool(do_refine), phases=phases)
                     shrink_frame(output / frame.name, shrink, feather)
 
             if align:
@@ -544,6 +553,13 @@ class ProcessAPI:
             "edge_shrink_enabled": False,
             "edge_shrink_px": 0,
             "edge_feather_px": 0,
+            "alpha_contrast": 1.0,
+            "alpha_threshold": 0,
+            "defringe_enabled": False,
+            "defringe_px": 2,
+            "defringe_amount": 0.5,
+            "min_foreground_area": 0,
+            "fill_holes_max_size": 0,
             "align_enabled": False,  # Alignment disabled by default
             "align_h": False,  # Horizontal centering (default off)
             "align_v": False,  # Vertical bottom alignment (default off)

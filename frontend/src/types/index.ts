@@ -236,6 +236,14 @@ export interface Step3Params {
   edge_shrink_enabled: boolean;
   edge_shrink_px: number;
   edge_feather_px: number;
+  // Alpha refinement (debug/tuning for local models such as BiRefNet)
+  alpha_contrast: number;         // 0.5-3.0, 1.0 = model output unchanged
+  alpha_threshold: number;        // 0-254, 0 = off
+  defringe_enabled: boolean;      // pull edge colors toward opaque interior color
+  defringe_px: number;            // defringe band width (0-20 px), default 2
+  defringe_amount: number;        // defringe strength (0.0-1.0), default 0.5
+  min_foreground_area: number;    // delete smaller isolated blobs (0 = off)
+  fill_holes_max_size: number;    // fill interior holes up to this area (0 = off)
   // Alignment parameters
   align_enabled: boolean;        // whether alignment is enabled, default false
   align_h: boolean;              // horizontal centering, default true

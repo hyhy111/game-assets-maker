@@ -169,6 +169,78 @@
       </label>
     </div>
 
+    <!-- Alpha Refinement (debug/tuning for local models) -->
+    <div class="pt-2 border-t border-dark-border space-y-3">
+      <div>
+        <label class="block text-sm font-medium text-gray-300">{{ t('step3.alphaRefine') }}</label>
+        <p class="text-xs text-gray-500">
+          {{ t('step3.alphaRefineHint') }}
+        </p>
+      </div>
+      <div class="space-y-4 pl-4 border-l-2 border-dark-border">
+        <div
+          v-for="field in refineFields"
+          :key="field.key"
+          class="space-y-1"
+        >
+          <label class="flex items-center justify-between gap-3 text-sm text-gray-400">
+            <span>{{ t(field.label) }}</span>
+            <input
+              v-model.number="s3Params[field.key]"
+              type="number"
+              :min="field.min"
+              :max="field.max"
+              :step="field.step"
+              class="w-20 rounded-lg border border-dark-border bg-dark-surface px-2 py-1.5 text-center text-gray-100"
+              @keydown="onInputKeydown"
+            >
+          </label>
+          <input
+            v-model.number="s3Params[field.key]"
+            type="range"
+            :min="field.min"
+            :max="field.max"
+            :step="field.step"
+            :aria-label="t(field.label)"
+            class="w-full h-2 bg-dark-border rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-primary [&::-webkit-slider-thumb]:rounded-full"
+          >
+          <p class="text-xs text-gray-500">
+            {{ t(field.hint) }}
+          </p>
+        </div>
+
+        <!-- Defringe Toggle -->
+        <div class="flex items-center justify-between">
+          <span class="text-sm text-gray-400">{{ t('step3.defringe') }}</span>
+          <Switch
+            v-model="s3Params.defringe_enabled"
+            :aria-label="t('step3.defringe')"
+          />
+        </div>
+        <template v-if="s3Params.defringe_enabled">
+          <label
+            v-for="field in defringeFields"
+            :key="field.key"
+            class="flex items-center justify-between gap-3 text-sm text-gray-400"
+          >
+            <span>{{ t(field.label) }}</span>
+            <input
+              v-model.number="s3Params[field.key]"
+              type="number"
+              :min="field.min"
+              :max="field.max"
+              :step="field.step"
+              class="w-20 rounded-lg border border-dark-border bg-dark-surface px-2 py-1.5 text-center text-gray-100"
+              @keydown="onInputKeydown"
+            >
+          </label>
+        </template>
+        <p class="text-xs text-gray-500">
+          {{ t('step3.defringeHint') }}
+        </p>
+      </div>
+    </div>
+
     <!-- Alignment Settings Toggle -->
     <div class="flex items-center justify-between pt-2 border-t border-dark-border">
       <label class="text-sm font-medium text-gray-300">{{ t('step3.frameAlignment') }}</label>
@@ -281,8 +353,60 @@ const edgeFields = [
   { key: 'edge_shrink_px', label: 'step3.edgeShrinkPx', step: 1 },
   { key: 'edge_feather_px', label: 'step3.edgeFeatherPx', step: 0.5 },
 ] as const;
+
+const refineFields = [
+  {
+    key: 'alpha_contrast',
+    label: 'step3.alphaContrast',
+    hint: 'step3.alphaContrastHint',
+    min: 0.5,
+    max: 3,
+    step: 0.1,
+  },
+  {
+    key: 'alpha_threshold',
+    label: 'step3.alphaThreshold',
+    hint: 'step3.alphaThresholdHint',
+    min: 0,
+    max: 254,
+    step: 1,
+  },
+  {
+    key: 'min_foreground_area',
+    label: 'step3.minForegroundArea',
+    hint: 'step3.minForegroundAreaHint',
+    min: 0,
+    max: 10000,
+    step: 10,
+  },
+  {
+    key: 'fill_holes_max_size',
+    label: 'step3.fillHolesMaxSize',
+    hint: 'step3.fillHolesMaxSizeHint',
+    min: 0,
+    max: 10000,
+    step: 10,
+  },
+] as const;
+
+const defringeFields = [
+  { key: 'defringe_px', label: 'step3.defringePx', min: 0, max: 20, step: 1 },
+  { key: 'defringe_amount', label: 'step3.defringeAmount', min: 0, max: 1, step: 0.05 },
+] as const;
+
+const refineValid = computed(() => {
+  const p = s3Params.value;
+  return p.alpha_contrast >= 0.5 && p.alpha_contrast <= 3
+    && Number.isInteger(p.alpha_threshold) && p.alpha_threshold >= 0 && p.alpha_threshold <= 254
+    && Number.isInteger(p.defringe_px) && p.defringe_px >= 0 && p.defringe_px <= 20
+    && Number.isFinite(p.defringe_amount) && p.defringe_amount >= 0 && p.defringe_amount <= 1
+    && Number.isInteger(p.min_foreground_area) && p.min_foreground_area >= 0 && p.min_foreground_area <= 10000
+    && Number.isInteger(p.fill_holes_max_size) && p.fill_holes_max_size >= 0 && p.fill_holes_max_size <= 10000;
+});
+
 const canProcess = computed(() => {
   if (!step2Completed.value || isProcessing.value) return false;
+  if (!refineValid.value) return false;
   if (!s3Params.value.edge_shrink_enabled) return true;
   const { edge_shrink_px: shrink, edge_feather_px: feather } = s3Params.value;
   return Number.isInteger(shrink) && shrink >= 0 && shrink <= 100

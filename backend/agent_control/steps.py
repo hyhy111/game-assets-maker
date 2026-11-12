@@ -4,6 +4,7 @@ from contextlib import nullcontext
 from pathlib import Path
 from typing import Any
 
+from backend.core.alpha_refine import validate_alpha_refine_params
 from backend.core.edge_shrink import validate_edge_shrink_params
 from backend.core.model_preloader import validate_background_model
 
@@ -26,7 +27,21 @@ FIELDS = {
         "align_v": bool,
     },
 }
-EXTRA_FIELDS = {1: set(), 2: {"model"}, 3: {"edge_shrink_px", "edge_feather_px"}}
+EXTRA_FIELDS = {
+    1: set(),
+    2: {"model"},
+    3: {
+        "edge_shrink_px",
+        "edge_feather_px",
+        "alpha_contrast",
+        "alpha_threshold",
+        "defringe_enabled",
+        "defringe_px",
+        "defringe_amount",
+        "min_foreground_area",
+        "fill_holes_max_size",
+    },
+}
 
 
 def merge_params(saved: dict[str, Any], step: int, patch: dict[str, Any]) -> dict[str, Any]:
@@ -44,6 +59,7 @@ def merge_params(saved: dict[str, Any], step: int, patch: dict[str, Any]) -> dic
         merged.setdefault("edge_shrink_px", 0)
         merged.setdefault("edge_feather_px", 0)
         validate_edge_shrink_params(merged)
+        merged.update(validate_alpha_refine_params(merged))
     for name, rule in FIELDS[step].items():
         value = merged.get(name)
         if rule is bool:
