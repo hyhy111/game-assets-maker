@@ -122,6 +122,24 @@ def test_defringe_pulls_edge_toward_interior_color():
     assert after_dist < before_dist
 
 
+def test_defringe_corrects_opaque_halo_band():
+    """The visible BiRefNet fringe is opaque (alpha 255) — the band must include it."""
+    rgba = np.zeros((20, 20, 4), dtype=np.uint8)
+    rgba[5:15, 5:15] = (200, 30, 30, 255)  # interior block
+    rgba[3:5, 3:15] = (250, 250, 250, 255)  # 2px opaque white halo ring, alpha 255
+    rgba[3:5, 3:15, 3] = 255
+    rgba[15:17, 5:15] = (250, 250, 250, 255)
+    result = defringe_rgba(rgba.copy(), px=3, amount=1.0)
+    # Opaque halo pixels are pulled strongly toward the interior red.
+    assert result[3, 9, 0] < 250
+    assert result[3, 9, 0] > result[3, 9, 1]  # red now dominates green/blue
+    assert result[3, 9, 3] == 255  # alpha untouched
+    # Deep interior is untouched.
+    assert np.array_equal(result[8, 8], (200, 30, 30, 255))
+    # Transparent surroundings stay transparent.
+    assert result[0, 0, 3] == 0
+
+
 def test_refine_frame_end_to_end(tmp_path):
     frame = np.zeros((12, 12, 4), dtype=np.uint8)
     frame[2:10, 2:10] = (200, 30, 30, 255)

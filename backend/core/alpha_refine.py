@@ -113,23 +113,42 @@ def refine_alpha(alpha: np.ndarray, settings: dict | None = None, **overrides) -
 
 
 def defringe_rgba(rgba: np.ndarray, px: int, amount: float) -> np.ndarray:
-    """Pull semi-transparent edge colors toward the estimated opaque interior color.
+    """Pull edge-band colors toward the estimated opaque interior color.
 
-    The interior color is estimated by inpainting from fully opaque pixels, so the
-    background tint that bleeds into cutout edges gets replaced without touching alpha.
+    BiRefNet-style cutouts show the visible fringe mostly in *opaque* halo pixels
+    (alpha = 255 within a few px of the edge), where the RGB still holds background
+    color. The band is therefore defined by distance to the nearest transparent
+    pixel, not by alpha: opaque rim pixels are corrected most aggressively,
+    semi-transparent pixels are blended by their background fraction, and the
+    interior (farther than px from any edge) is never touched.
     """
     if not px or not amount:
         return rgba
     alpha = rgba[..., 3]
-    semi = (alpha > 0) & (alpha < 250)
-    if not semi.any():
+    solid = (alpha >= 250).astype(np.uint8)
+    if not (alpha > 0).any() or not solid.any():
         return rgba
     rgb = rgba[..., :3]
-    mask = np.where(alpha < 250, 255, 0).astype(np.uint8)
+    # Distance of each pixel to the nearest transparent region; semi/transparent
+    # pixels sit on the source mask boundary, so their distance is 0 and any
+    # positive-alpha pixel within px of an edge lands in the band.
+    distance = cv2.distanceTransform(solid, cv2.DIST_L2, cv2.DIST_MASK_PRECISE)
+    interior = solid.astype(bool) & (distance > px)
+    targets = (alpha > 0) & (distance <= px)
+    if not targets.any():
+        return rgba
+    # Estimate the true foreground color under edge pixels by inpainting from
+    # definitely-interior pixels only.
+    mask = np.where(interior, 0, 255).astype(np.uint8)
     estimated_fg = cv2.inpaint(rgb, mask, max(int(px), 1), cv2.INPAINT_TELEA)
-    weight = (amount * (1.0 - alpha[semi].astype(np.float32) / 255.0))[:, None]
-    blended = np.rint(rgb[semi] * (1.0 - weight) + estimated_fg[semi] * weight)
-    rgba[..., :3][semi] = blended.astype(np.uint8)
+    weights = np.zeros(alpha.shape, dtype=np.float32)
+    band = targets & solid.astype(bool)
+    weights[band] = amount * (1.0 - distance[band] / (px + 1))
+    semi = targets & ~solid.astype(bool)
+    weights[semi] = amount * (1.0 - alpha[semi].astype(np.float32) / 255.0)
+    weight = weights[targets][:, None]
+    blended = np.rint(rgb[targets] * (1.0 - weight) + estimated_fg[targets] * weight)
+    rgba[..., :3][targets] = blended.astype(np.uint8)
     return rgba
 
 
