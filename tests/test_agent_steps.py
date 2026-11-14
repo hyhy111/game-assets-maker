@@ -82,6 +82,115 @@ def test_actual_extraction_uses_saved_range_and_reports_task(controller, tmp_pat
     assert result["output_dir"] == str(project / "output" / "01_frames")
 
 
+def test_manual_selection_is_saved_reopened_and_used_by_actual_extraction(controller, tmp_path):
+    from PIL import Image
+
+    from backend.api.process_api import Task
+
+    project = tmp_path / "hero" / "idle"
+    video = tmp_path / "source.mp4"
+    video.write_bytes(b"Cached source frames")
+    cache = project / "cache" / "01_frames_cache"
+    cache.mkdir()
+    for index in range(12):
+        Image.new("RGB", (16, 16), (index * 20, 100, 40)).save(cache / f"frame_{index:06d}.png")
+    params = controller.apply(
+        "step.set",
+        {
+            "project_id": "hero/idle",
+            "step": 1,
+            "patch": {
+                "start_frame": 1,
+                "end_frame": 10,
+                "frame_interval": 3,
+                "frame_overrides": {"4": 5, "7": 6},
+            },
+        },
+    )["params_used"]
+    reopened = ProcessAPI(projects_root=tmp_path)
+    try:
+        assert reopened.get_step_params("hero/idle", 1)["frame_overrides"] == {"4": 5, "7": 6}
+        reopened._run_step1(Task("custom-selection", "hero/idle", 1, {**params, "video_path": str(video)}))
+    finally:
+        reopened.shutdown()
+    output = project / "output" / "01_frames"
+    for slot, source_index in enumerate([1, 5, 6, 10]):
+        assert (output / f"frame_{slot:06d}.png").read_bytes() == (cache / f"frame_{source_index:06d}.png").read_bytes()
+    assert len(list(output.glob("*.png"))) == 4
+    controller.apply("step.set", {"project_id": "hero/idle", "step": 1, "patch": {"frame_interval": 2}})
+    assert controller.process.get_step_params("hero/idle", 1)["frame_overrides"] == {}
+
+
+@pytest.mark.parametrize("overrides", [{"3": 2}, {"4": True}, {"4": 11}, {"4": 7}, {"4": 8}, [5]])
+def test_invalid_manual_selection_preserves_previous_output(tmp_path, overrides):
+    from PIL import Image
+
+    from backend.core.video_utils import export_frames_step1
+
+    cache = tmp_path / "原始帧"
+    output = tmp_path / "已提取帧"
+    cache.mkdir()
+    output.mkdir()
+    previous = output / "frame_000000.png"
+    previous.write_bytes(b"previous output")
+    for index in range(12):
+        Image.new("RGB", (2, 2)).save(cache / f"frame_{index:06d}.png")
+    with pytest.raises(ValueError):
+        export_frames_step1(str(cache), str(output), 1, 10, 3, frame_overrides=overrides)
+    assert previous.read_bytes() == b"previous output"
+
+
+def test_audio_export_uses_replaced_source_frames_and_skips_hidden_slots(tmp_path):
+    import wave
+
+    from backend.api.batch_trim_api import BatchTrimAPI
+
+    project = tmp_path / "hero" / "idle"
+    cache = project / "cache"
+    audio_dir = cache / "01_audio"
+    audio_dir.mkdir(parents=True)
+    (cache / "steps_config.json").write_text(
+        json.dumps(
+            {
+                "step1": {
+                    "start_frame": 1,
+                    "end_frame": 10,
+                    "frame_interval": 3,
+                    "frame_overrides": {"4": 5, "7": 6},
+                }
+            }
+        )
+    )
+    (cache / "audio_timeline.json").write_text(
+        json.dumps(
+            {
+                "source_fps": 10,
+                "clips": [{"srcStartFrame": 0, "srcEndFrame": 2, "placementFrame": 5}],
+            }
+        )
+    )
+    with wave.open(str(audio_dir / "source.wav"), "wb") as audio:
+        audio.setnchannels(1)
+        audio.setsampwidth(2)
+        audio.setframerate(10)
+        audio.writeframes(b"\x00\x00" * 20)
+    source = project / "output" / "02_no_bg"
+    source.mkdir(parents=True)
+    for slot in range(4):
+        (source / f"frame_{slot:06d}.png").touch()
+    output = tmp_path / "export"
+    output.mkdir()
+    result = BatchTrimAPI(tmp_path)._export_audio_clips(
+        "hero/idle",
+        source,
+        output,
+        ["frame_000000.png", "frame_000001.png", "frame_000003.png"],
+    )
+    assert result == {"count": 1, "skipped": 0, "errors": []}
+    manifest = json.loads((output / "_audio_timeline.json").read_text())
+    assert manifest["clips"][0]["placement_frame"] == 1
+
+
 def test_online_control_accepts_step_and_artifact_families(tmp_path, monkeypatch):
     from test_agent_navigation import BrowserWindow
 

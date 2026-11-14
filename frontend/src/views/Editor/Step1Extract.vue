@@ -20,6 +20,7 @@
           min="1"
           :max="maxFrame"
           class="w-20"
+          @update:model-value="s1Params.frame_overrides = {}"
           @blur="clampFrameInterval"
         />
         <Button
@@ -50,6 +51,7 @@
               :min="0"
               :max="Math.min(maxFrame, s1Params.end_frame)"
               class="w-20"
+              @update:model-value="s1Params.frame_overrides = {}"
               @change="clampStartFrame"
               @blur="clampStartFrame"
             />
@@ -74,6 +76,7 @@
               :min="s1Params.start_frame"
               :max="maxFrame"
               class="w-20"
+              @update:model-value="s1Params.frame_overrides = {}"
               @change="clampEndFrame"
               @blur="clampEndFrame"
             />
@@ -285,6 +288,7 @@ function autoCalculateInterval() {
 
   // Take the middle value
   const idx = Math.floor(divisors.length / 2);
+  s1Params.value.frame_overrides = {};
   s1Params.value.frame_interval = divisors[idx];
   // Sync to player
   playerStore.frameInterval = divisors[idx];
@@ -318,6 +322,7 @@ async function startProcessing() {
     start_frame: s1Params.value.start_frame,
     end_frame: s1Params.value.end_frame,
     frame_interval: s1Params.value.frame_interval,
+    frame_overrides: s1Params.value.frame_overrides ?? {},
     fps: s1Params.value.fps,
     processed: true
   };
@@ -330,6 +335,7 @@ async function cancelProcessing() {
 }
 
 function setStartToCurrent() {
+  s1Params.value.frame_overrides = {};
   const frame = currentIndex.value;
   if (frame >= 0 && frame <= maxFrame.value) {
     s1Params.value.start_frame = frame;
@@ -339,6 +345,7 @@ function setStartToCurrent() {
 }
 
 function setEndToCurrent() {
+  s1Params.value.frame_overrides = {};
   const frame = currentIndex.value;
   if (frame >= 0 && frame <= maxFrame.value) {
     s1Params.value.end_frame = frame;

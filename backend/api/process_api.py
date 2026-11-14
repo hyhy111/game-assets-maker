@@ -37,6 +37,7 @@ from backend.core.smart_remove_background import batch_remove_background
 from backend.core.video_utils import (
     detect_background_color_from_frames,
     export_frames_step1,
+    selected_frame_indices,
 )
 from src.utils.app_config import default_projects_root
 from src.utils.data_paths import data_root
@@ -264,6 +265,7 @@ class ProcessAPI:
             end=end_frame,
             step=frame_interval,
             progress_callback=progress_callback,
+            frame_overrides=task.params.get("frame_overrides"),
         )
 
         # Detect and save background color from exported frames
@@ -524,7 +526,14 @@ class ProcessAPI:
 
     # Default parameters for each step
     DEFAULT_STEP_PARAMS = {
-        1: {"frame_interval": 1, "start_frame": 0, "end_frame": -1, "fps": 30, "processed": False},
+        1: {
+            "frame_interval": 1,
+            "start_frame": 0,
+            "end_frame": -1,
+            "fps": 30,
+            "processed": False,
+            "frame_overrides": {},
+        },
         2: {
             # Step 2: Background removal
             "model": "u2net",
@@ -656,6 +665,23 @@ class ProcessAPI:
 
         # Update the specific step
         step_key = f"step{step}"
+        if step == 1:
+            params = dict(params)
+            saved = config[step_key]
+            if "frame_overrides" not in params and any(
+                name in params and params[name] != saved.get(name)
+                for name in ("start_frame", "end_frame", "frame_interval")
+            ):
+                params["frame_overrides"] = {}
+            merged = {**saved, **params}
+            cache_dir = self._get_project_path(project_id) / "cache" / "01_frames_cache"
+            selected_frame_indices(
+                len(list(cache_dir.glob("frame_*.png"))),
+                merged.get("start_frame", 0),
+                merged.get("end_frame", -1),
+                merged.get("frame_interval", 1),
+                merged.get("frame_overrides"),
+            )
         print(f"[DEBUG] Saving step {step} params: {params}")  # Debug log
         config[step_key].update(params)
         print(f"[DEBUG] Updated config for step {step}: {config[step_key]}")  # Debug log

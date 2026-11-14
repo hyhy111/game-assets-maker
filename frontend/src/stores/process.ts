@@ -22,6 +22,7 @@ export const useProcessStore = defineStore('process', () => {
     frame_interval: 1,
     start_frame: 0,
     end_frame: -1,
+    frame_overrides: {},
     fps: 30,
     processed: false
   });
@@ -148,7 +149,7 @@ export const useProcessStore = defineStore('process', () => {
 
   async function loadStepParams(projectId: string, step: number) {
     try {
-      const defaults = step === 2 ? step2Defaults : step === 3 ? step3Defaults : {};
+      const defaults = step === 2 ? step2Defaults : step === 3 ? step3Defaults : { frame_overrides: {} };
       applyStepParams(step, { ...defaults, ...await api.process.getStepParams(projectId, step) });
       return true;
     } catch (e) {

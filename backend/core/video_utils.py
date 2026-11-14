@@ -84,6 +84,38 @@ def process_video_to_cache(
     return {"total_frames": saved_count, "video_fps": video_fps, "target_fps": fps, "duration": duration}
 
 
+def selected_frame_indices(
+    total_frames: int,
+    start: int = 0,
+    end: int = -1,
+    step: int = 1,
+    frame_overrides: dict[str, int] | None = None,
+) -> list[int]:
+    """Resolve one ordered source frame per extraction slot before writing files."""
+    if type(start) is not int or start < 0 or type(end) is not int or end < -1:
+        raise ValueError("Invalid extraction range")
+    if type(step) is not int or step < 1:
+        raise ValueError("Invalid frame interval")
+    overrides = {} if frame_overrides is None else frame_overrides
+    if not isinstance(overrides, dict):
+        raise ValueError("frame_overrides must be an object")
+    if total_frames <= 0:
+        if overrides:
+            raise ValueError("No source frames for frame_overrides")
+        return []
+    end = min(end, total_frames - 1) if end >= 0 else total_frames - 1
+    start = min(start, end)
+    base_frames = list(range(start, end + 1, step))
+    if overrides.keys() - {str(frame) for frame in base_frames}:
+        raise ValueError("frame_overrides contains an unknown extraction slot")
+    selected = [overrides.get(str(frame), frame) for frame in base_frames]
+    if any(type(frame) is not int or not start <= frame <= end for frame in selected):
+        raise ValueError("Selected frames must be integer indices within the extraction range")
+    if any(left >= right for left, right in zip(selected, selected[1:], strict=False)):
+        raise ValueError("Selected frames must be distinct and remain in chronological order")
+    return selected
+
+
 def export_frames_step1(
     cache_dir: str,
     output_dir: str,
@@ -91,6 +123,7 @@ def export_frames_step1(
     end: int = -1,
     step: int = 1,
     progress_callback: Callable[[int, int], None] | None = None,
+    frame_overrides: dict[str, int] | None = None,
 ) -> list:
     """
     Export frames from cache to output directory (Step 1)
@@ -103,6 +136,7 @@ def export_frames_step1(
         end: End frame index (-1 means last frame)
         step: Frame interval (1 = every frame, 2 = every 2nd frame, etc.)
         progress_callback: Called with (current, total) progress
+        frame_overrides: Replacement source indices keyed by original sampled frame index
 
     Returns:
         List of exported frame paths
@@ -113,36 +147,22 @@ def export_frames_step1(
     cache_path = Path(cache_dir)
     output_path = Path(output_dir)
 
-    # Clear output directory if exists, then recreate
+    # Get all frame files sorted
+    all_frames = sorted(cache_path.glob("frame_*.png"))
+    selected = selected_frame_indices(len(all_frames), start, end, step, frame_overrides)
+
+    # Validate the complete selection before replacing existing output.
     if output_path.exists():
         shutil.rmtree(output_path)
     output_path.mkdir(parents=True, exist_ok=True)
 
-    # Get all frame files sorted
-    all_frames = sorted(cache_path.glob("frame_*.png"))
-
     if not all_frames:
         return []
 
-    # Determine end index
-    if end < 0 or end >= len(all_frames):
-        end = len(all_frames) - 1
-
-    # Clamp start to valid range
-    start = max(0, min(start, len(all_frames) - 1))
-
-    # Ensure start <= end
-    if start > end:
-        start = end
-
     exported = []
-    output_index = 0
-    total_to_export = len(range(start, end + 1, step))
+    total_to_export = len(selected)
 
-    for output_index, i in enumerate(range(start, end + 1, step)):
-        if i >= len(all_frames):
-            break
-
+    for output_index, i in enumerate(selected):
         frame_file = all_frames[i]
         # Use sequential naming for output
         dest = output_path / f"frame_{output_index:06d}.png"

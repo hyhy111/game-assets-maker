@@ -333,6 +333,37 @@ test('manual frame stepping stays at one frame when frame_interval is greater th
   assert.equal(store.currentIndex, 5);
 });
 
+test('continuous playback visits the manually substituted source frames in order', async (context) => {
+  const { store } = await setupPlayerStore();
+  const { useProcessStore } = await loadFrontendModule('/src/stores/process.ts');
+  useProcessStore().s1Params.frame_overrides = { 4: 5, 7: 6 };
+  store.setPlaybackRange(1, 10, 3);
+  store.setPlaybackFps(10);
+  for (const frame of store.frames) store.imageElementCache.set(frame.path, {});
+  let now = 0;
+  let scheduled;
+  const previousRaf = globalThis.requestAnimationFrame;
+  const previousCancel = globalThis.cancelAnimationFrame;
+  globalThis.requestAnimationFrame = (callback) => { scheduled = callback; return 1; };
+  globalThis.cancelAnimationFrame = () => {};
+  context.mock.method(performance, 'now', () => now);
+  try {
+    await store.play();
+    assert.equal(store.currentIndex, 1);
+    for (const [time, frame] of [[100, 5], [200, 6], [300, 10], [400, 1]]) {
+      now = time;
+      scheduled();
+      assert.equal(store.currentIndex, frame);
+    }
+  } finally {
+    store.pause();
+    if (previousRaf === undefined) delete globalThis.requestAnimationFrame;
+    else globalThis.requestAnimationFrame = previousRaf;
+    if (previousCancel === undefined) delete globalThis.cancelAnimationFrame;
+    else globalThis.cancelAnimationFrame = previousCancel;
+  }
+});
+
 test('setFrameAdvanceHook(null) unregisters without throwing', async () => {
   const { store } = await setupPlayerStore();
   store.setFrameAdvanceHook(() => {});
@@ -366,4 +397,18 @@ test('loop restart stops old sources and plays the clip on the loop start frame'
   assert.deepEqual(engine.calls.map((c) => c.type), ['stop', 'play']);
   ctrl.onFrameChanged(5);
   assert.equal(engine.calls.length, 2);
+});
+
+test('a shifted first frame triggers clips from the original range start on play and loop', () => {
+  const engine = mockEngine();
+  const clip = { name: 'start', srcStartFrame: 0, srcEndFrame: 3, placementFrame: 14 };
+  const ctrl = createAudioSyncController({
+    audioStore: { loaded: true, sourceFps: 24, clips: [clip] },
+    engine,
+    getPlaybackStartFrame: (current) => current === 15 ? 14 : current,
+  });
+  ctrl.onPlaybackStart(15);
+  assert.equal(engine.calls.filter((call) => call.type === 'play').length, 1);
+  ctrl.onFrameAdvance(90, 15);
+  assert.equal(engine.calls.filter((call) => call.type === 'play').length, 2);
 });

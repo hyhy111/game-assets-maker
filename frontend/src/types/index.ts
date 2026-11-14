@@ -195,6 +195,7 @@ export interface Step1Params {
   frame_interval: number;
   start_frame: number;
   end_frame: number;
+  frame_overrides?: Record<string, number>;
   fps: number;
   processed?: boolean;
   processing_time?: number;  // Processing time in seconds (not persisted)

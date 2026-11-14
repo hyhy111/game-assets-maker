@@ -54,7 +54,11 @@
           :start-frame="timelineStartFrame"
           :end-frame="timelineEndFrame"
           :current-frame="currentTimelineFrame"
+          :frame-interval="s1Params.frame_interval"
+          :frame-overrides="s1Params.frame_overrides"
+          :editable="!processStore.isProcessing"
           :simple="processStore.currentStep > 1"
+          @edit-frame="openFramePicker"
           @update:start-frame="onStartFrameChange"
           @update:end-frame="onEndFrameChange"
           @update:current-frame="onCurrentFrameChange"
@@ -173,13 +177,25 @@
           :start-frame="timelineStartFrame"
           :end-frame="timelineEndFrame"
           :current-frame="currentTimelineFrame"
+          :frame-interval="s1Params.frame_interval"
+          :frame-overrides="s1Params.frame_overrides"
+          :editable="!processStore.isProcessing"
           :simple="processStore.currentStep > 1"
+          @edit-frame="openFramePicker"
           @update:start-frame="onStartFrameChange"
           @update:end-frame="onEndFrameChange"
           @update:current-frame="onCurrentFrameChange"
         />
       </template>
     </AudioTimeline>
+    <FramePicker
+      v-if="framePicker"
+      :key="framePicker.baseFrame"
+      v-bind="framePicker"
+      :frames="playerStore.frames"
+      @select="selectReplacementFrame"
+      @close="editingBaseFrame = null"
+    />
   </div>
 </template>
 
@@ -199,7 +215,9 @@ import {
 } from '@/composables/audioPeaks';
 import RangeSlider from './RangeSlider.vue';
 import AudioTimeline from './AudioTimeline.vue';
+import FramePicker from './FramePicker.vue';
 import {
+  extractionFrameIndices,
   nearestVisibleFrameIndex,
   sourceFrameFromTimelineFrame,
   timelineFrameForVisibleIndex,
@@ -223,11 +241,21 @@ const { playbackEnabled: audioPlaybackEnabled } = storeToRefs(audioStore);
 
 const fpsInputRef = ref<HTMLInputElement | null>(null);
 const showAudioTimeline = ref(false);
+const editingBaseFrame = ref<number | null>(null);
 
 // 音频运行时常驻在播放器控制层；折叠 AudioTimeline 只影响编辑 UI。
 const { peaks, audioBuffer, loading: wavLoading, error: wavError, load: loadWaveform } = useAudioWaveform();
 const audioEngine = createAudioPlaybackEngine();
-const syncController = createAudioSyncController({ audioStore, engine: audioEngine });
+const syncController = createAudioSyncController({
+  audioStore,
+  engine: audioEngine,
+  getPlaybackStartFrame(currentFrame) {
+    const first = processStore.currentStep === 1 ? playerStore.playbackFrameIndices[0] ?? 0 : 0;
+    return currentFrame === mapToSource(first)
+      ? Math.min(s1Params.value.start_frame, currentFrame)
+      : currentFrame;
+  },
+});
 const isAudioLoading = computed(() => audioStore.loading || wavLoading.value);
 const audioError = computed(() => audioStore.error || wavError.value);
 const audioPlaybackActive = computed(() => audioPlaybackEnabled.value);
@@ -248,12 +276,53 @@ const timelineEndFrame = computed(() => (
     : Math.max(0, timelineTotalFrames.value - 1)
 ));
 
+const selectedSourceFrames = computed(() => extractionFrameIndices(
+  totalFrames.value, timelineStartFrame.value, timelineEndFrame.value,
+  s1Params.value.frame_interval, s1Params.value.frame_overrides,
+));
+const framePicker = computed(() => {
+  const baseFrame = editingBaseFrame.value;
+  if (baseFrame === null || processStore.currentStep !== 1 || processStore.isProcessing) return null;
+  const slot = (baseFrame - timelineStartFrame.value) / s1Params.value.frame_interval;
+  const selected = selectedSourceFrames.value;
+  if (!Number.isInteger(slot) || slot < 0 || slot >= selected.length) return null;
+  return {
+    baseFrame,
+    currentFrame: selected[slot],
+    minFrame: slot > 0 ? selected[slot - 1] + 1 : timelineStartFrame.value,
+    maxFrame: slot + 1 < selected.length ? selected[slot + 1] - 1 : timelineEndFrame.value,
+  };
+});
+
+function openFramePicker(baseFrame: number) {
+  if (processStore.currentStep !== 1 || processStore.isProcessing) return;
+  playerStore.pause();
+  editingBaseFrame.value = baseFrame;
+}
+
+function selectReplacementFrame(frame: number) {
+  const selection = framePicker.value;
+  if (!selection || !Number.isInteger(frame) || frame < selection.minFrame || frame > selection.maxFrame) return;
+  const overrides = { ...s1Params.value.frame_overrides };
+  if (frame === selection.baseFrame) delete overrides[selection.baseFrame];
+  else overrides[selection.baseFrame] = frame;
+  s1Params.value.frame_overrides = overrides;
+  playerStore.goToFrame(frame);
+  editingBaseFrame.value = null;
+}
+
+watch(
+  () => [projectStore.projectId, processStore.currentStep, totalFrames.value,
+    timelineStartFrame.value, timelineEndFrame.value, s1Params.value.frame_interval, processStore.isProcessing],
+  () => { editingBaseFrame.value = null; },
+);
+
 function mapToSource(frame: number): number {
   if (processStore.currentStep === 1) return frame;
   const start = s1Params.value?.start_frame ?? 0;
   const interval = Math.max(1, s1Params.value?.frame_interval ?? 1);
   const timelineFrame = timelineFrameForVisibleIndex(playerStore.frames, frame);
-  return sourceFrameFromTimelineFrame(timelineFrame, start, interval);
+  return sourceFrameFromTimelineFrame(timelineFrame, start, interval, s1Params.value.frame_overrides);
 }
 
 watch(audioBuffer, (buffer) => audioEngine.setBuffer(buffer));
@@ -325,12 +394,14 @@ function stepFps(delta: number) {
 }
 
 function onStartFrameChange(value: number) {
+  if (processStore.currentStep === 1 && value !== playerStore.startFrame) s1Params.value.frame_overrides = {};
   playerStore.startFrame = value;
   // 仅 Step 1 同步到抽取参数；Step 2/3 的播放范围不是源帧抽取范围，写回会污染 s1Params
   if (processStore.currentStep === 1) s1Params.value.start_frame = value;
 }
 
 function onEndFrameChange(value: number) {
+  if (processStore.currentStep === 1 && value !== playerStore.endFrame) s1Params.value.frame_overrides = {};
   playerStore.endFrame = value;
   if (processStore.currentStep === 1) s1Params.value.end_frame = value;
 }

@@ -2,10 +2,10 @@
 
 import contextlib
 import json
-import math
 import os
 import threading
 import wave
+from bisect import bisect_left
 from pathlib import Path
 from typing import Any
 
@@ -198,12 +198,17 @@ class BatchTrimAPI:
             step1 = config.get("step1", {})
             start_frame = int(step1.get("start_frame", 0))
             frame_interval = max(1, int(step1.get("frame_interval", 1)))
+            frame_overrides = step1.get("frame_overrides") or {}
 
             all_source_files = sorted(
                 filename for filename in os.listdir(source_dir) if filename.lower().endswith((".png", ".jpg", ".jpeg"))
             )
             source_slots = {filename: index for index, filename in enumerate(all_source_files)}
             exported_slots = [source_slots[name] for name in exported_source_files if name in source_slots]
+            exported_frames = [
+                frame_overrides.get(str(start_frame + slot * frame_interval), start_frame + slot * frame_interval)
+                for slot in exported_slots
+            ]
 
             safe_action = sanitize_segment(action, "action")
             manifest_clips = []
@@ -220,12 +225,8 @@ class BatchTrimAPI:
 
                 for clip_index, clip in enumerate(clips, start=1):
                     source_placement = int(clip.get("placementFrame", 0))
-                    trigger_slot = math.ceil((source_placement - start_frame) / frame_interval)
-                    placement_frame = next(
-                        (index for index, slot in enumerate(exported_slots) if slot >= trigger_slot),
-                        None,
-                    )
-                    if placement_frame is None:
+                    placement_frame = bisect_left(exported_frames, source_placement)
+                    if placement_frame >= len(exported_frames):
                         skipped += 1
                         continue
 

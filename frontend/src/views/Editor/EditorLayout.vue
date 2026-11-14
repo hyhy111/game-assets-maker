@@ -459,13 +459,20 @@ async function loadFramesForStep(step: number) {
 
     if (!isCurrentRequest()) return false;
     if (response.success) {
-      playerStore.loadFrames(response.frames);
+      const frames = [...response.frames];
+      for (let page = 2; page <= response.total_pages; page++) {
+        const next = await api.frame.getFrames(project.id, sourceStep, page, 500, !(step === 2 && sourceStep === 1));
+        if (!isCurrentRequest()) return false;
+        if (!next.success) throw new Error('Failed to load frame page');
+        frames.push(...next.frames);
+      }
+      playerStore.loadFrames(frames);
       timelineFrameCount.value = response.timeline_total ?? response.total;
       
       if (step === 1 && s1Params.value) {
         // Sync playback range from Step1 params ONLY for Step 1.
         // s1Params.start_frame/end_frame 是源帧空间（cache 索引）。
-        const total = response.frames.length;
+        const total = frames.length;
         const startSrc = Math.max(0, s1Params.value.start_frame);
         if (total > startSrc) {
           // cache 已加载（帧数覆盖 start），按 s1Params 范围设置
@@ -478,7 +485,7 @@ async function loadFramesForStep(step: number) {
       } else {
         // For Step 2 and 3, play the entire sequence loop correctly
         // Response frames are already sequential from output dir
-        playerStore.setPlaybackRange(0, response.frames.length - 1, 1);
+        playerStore.setPlaybackRange(0, frames.length - 1, 1);
       }
       return isCurrentRequest();
     }

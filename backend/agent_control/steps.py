@@ -28,7 +28,7 @@ FIELDS = {
     },
 }
 EXTRA_FIELDS = {
-    1: set(),
+    1: {"frame_overrides"},
     2: {
         "model",
         "alpha_contrast",
@@ -49,6 +49,14 @@ def merge_params(saved: dict[str, Any], step: int, patch: dict[str, Any]) -> dic
     if set(patch) - (FIELDS[step].keys() | EXTRA_FIELDS[step] | {"fps"}):
         raise ValueError("Unsupported step parameter")
     merged = {**saved, **patch}
+    if (
+        step == 1
+        and "frame_overrides" not in patch
+        and any(
+            name in patch and patch[name] != saved.get(name) for name in ("start_frame", "end_frame", "frame_interval")
+        )
+    ):
+        merged["frame_overrides"] = {}
     if "fps" in patch and (type(patch["fps"]) is not int or not 1 <= patch["fps"] <= 60):
         raise ValueError("fps must be between 1 and 60")
     if step == 2:
