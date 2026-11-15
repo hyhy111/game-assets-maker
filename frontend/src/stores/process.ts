@@ -159,6 +159,17 @@ export const useProcessStore = defineStore('process', () => {
     }
   }
 
+  async function refreshHolePunchChoice(projectId: string) {
+    try {
+      const params = await api.process.getStepParams(projectId, 3) as Step3Params;
+      if (useProjectStore().currentProject?.id === projectId) {
+        applyStepParams(3, { enabled: params.enabled });
+      }
+    } catch (e) {
+      logEvent(['Failed to refresh hole-punch choice:', e].join(' '), 'error');
+    }
+  }
+
   async function startProcessing(projectId: string, step: number, customParams?: Partial<Step1Params | Step2Params | Step3Params>) {
     if (!await navigation.check()) return;
     const playerStore = usePlayerStore();
@@ -236,7 +247,11 @@ export const useProcessStore = defineStore('process', () => {
           // Refresh project to get updated step status
           const projectStore = useProjectStore();
           if (projectStore.currentProject) {
-            await projectStore.loadProject(projectStore.currentProject.id);
+            const projectId = projectStore.currentProject.id;
+            await projectStore.loadProject(projectId);
+            if (status.status === 'completed' && status.step === 2) {
+              await refreshHolePunchChoice(projectId);
+            }
           }
           stopPolling();
         }
