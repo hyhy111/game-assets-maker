@@ -121,12 +121,57 @@ test('magic wand UI is opt-in and includes selection preview, tolerance and dele
   assert.doesNotMatch(existing, /data-test="magic-wand-tool"/);
 });
 
-test('frame eraser exposes a 5px brush and a separate zero-default feather slider', async () => {
-  const html = await renderSfc('components/seedream/SeedreamImageEraser.vue', {
-    props: { imageUrl: '', saving: false, magicWandEnabled: true, activeTool: 'brush' },
+test('embedded frame eraser exposes a 3px brush and a separate 1px-default feather slider', async () => {
+  const ssrContext = {};
+  await renderSfc('components/seedream/SeedreamImageEraser.vue', {
+    props: { imageUrl: '', saving: false, magicWandEnabled: true, embedded: true, activeTool: 'brush' },
+    ssrContext,
   });
-  assert.match(html, /data-test="seedream-eraser-size"[\s\S]*?value="5"/);
-  assert.match(html, /data-test="seedream-eraser-feather"[\s\S]*?value="0"/);
+  const toolbar = ssrContext.teleports.body;
+  assert.match(toolbar, /data-test="frame-eraser-size"[\s\S]*?value="3"/);
+  assert.match(toolbar, /data-test="frame-eraser-feather"[\s\S]*?value="1"/);
+});
+
+test('wand and eraser tools align right and retain distinct active and inactive variants', async () => {
+  for (const activeTool of ['wand', 'brush']) {
+    const html = await renderSfc('components/seedream/SeedreamImageEraser.vue', {
+      props: { imageUrl: '', saving: false, magicWandEnabled: true, activeTool },
+    });
+    assert.match(html, /<div class="flex justify-end gap-2">/);
+    const wand = html.match(/<button([^>]*)data-test="magic-wand-tool"[^>]*>/);
+    const eraser = html.match(/<button([^>]*)aria-label="橡皮擦，擦除为透明（E）"[^>]*>/);
+    assert.ok(wand);
+    assert.ok(eraser);
+    assert.equal(/\bbg-primary\b/.test(wand[1]), activeTool === 'wand');
+    assert.equal(/\bbg-dark-surface\b/.test(wand[1]), activeTool !== 'wand');
+    assert.equal(/\bbg-primary\b/.test(eraser[1]), activeTool === 'brush');
+    assert.equal(/\bbg-dark-surface\b/.test(eraser[1]), activeTool !== 'brush');
+  }
+});
+
+test('embedded retouch header emphasizes the current frame and joins tool options without a divider', async () => {
+  const ssrContext = {};
+  await renderSfc('components/seedream/SeedreamImageEraser.vue', {
+    props: {
+      imageUrl: '',
+      saving: false,
+      magicWandEnabled: true,
+      embedded: true,
+      activeTool: 'brush',
+      title: '逐帧修整 · frame_0000xxx.png',
+    },
+    ssrContext,
+  });
+  const toolbar = ssrContext.teleports.body;
+  const title = toolbar.match(/<h2 class="([^"]*)">逐帧修整 · frame_0000xxx\.png<\/h2>/);
+  assert.ok(title);
+  assert.match(title[1], /\bfont-bold\b/);
+  assert.match(title[1], /\btext-primary\b/);
+  assert.match(title[1], /\bmin-w-0\b/);
+  assert.match(title[1], /\btruncate\b/);
+  const options = toolbar.match(/<fieldset([^>]*)data-test="frame-tool-options"/);
+  assert.ok(options);
+  assert.doesNotMatch(options[1], /\bborder-t\b/);
 });
 
 test('frame editor exposes initial-version restore and disables it when no verified baseline exists', async () => {
