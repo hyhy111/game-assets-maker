@@ -48,8 +48,8 @@ test('shared Seedance header removes section navigation and retains global actio
   assert.doesNotMatch(html, /创建任务|任务列表|结果预览/);
   assert.doesNotMatch(html, /href="\/video-generation\/(?:create|tasks|preview)"/);
   assert.match(html, /aria-label="设置"/);
-  assert.match(html, /aria-label="返回主界面"/);
-  assert.match(html, /lucide-globe/);
+  assert.match(html, /aria-label="返回动画库"/);
+  assert.match(html, /lucide-languages/);
   assert.match(html, /lucide-settings/);
   assert.match(html, /lucide-home-icon/);
   assert.match(html, /sticky top-0 z-30/);
@@ -86,7 +86,8 @@ test('Seedance create screen uses one compact composer with collapsed parameters
   assert.match(html, /aria-expanded="false"/);
   assert.match(html, /data-test="seedance-parameter-panel"[^>]*style="display:none;"/);
   assert.match(html, /data-test="seedance-submit"/);
-  assert.match(html, /class="[^"]*bg-\[#ffbd5c\][^"]*hover:bg-\[#ffc975\][^"]*disabled:bg-\[#4a4a4a\][^"]*"[^>]*data-test="seedance-submit"/);
+  assert.match(html, /aria-label="生成视频"/);
+  assert.match(html, /class="[^"]*bg-primary[^\"]*"[^>]*data-test="seedance-submit"/);
   assert.match(html, /<button[^>]*data-test="seedance-duration"/);
   assert.doesNotMatch(html, /<select[^>]*data-test="seedance-duration"/);
   const createSource = await readFile(new URL('../src/views/SeedanceCreate.vue', import.meta.url), 'utf8');
@@ -143,7 +144,7 @@ test('Seedance task card renders real metadata and state-derived actions', async
   assert.match(html, /16:9/);
   assert.match(html, /查看详情/);
   assert.match(html, /再次生成/);
-  assert.match(html, /使用尾帧继续生成/);
+  assert.match(html, /尾帧续生成/);
   assert.match(html, /删除/);
   assert.doesNotMatch(html, /取消任务|重新生成|重试下载/);
 
@@ -356,7 +357,9 @@ test('Seedance image editor opens resize controls directly and places restore be
   assert.match(html, /data-test="image-editor-resize-controls"/);
   assert.doesNotMatch(html, /image-editor-resize-toggle/);
   assert.match(html, /取消[\s\S]*data-test="image-editor-restore-original"[\s\S]*复原为原图[\s\S]*data-test="seedream-eraser-apply"/);
-  assert.match(html, /bg-success/);
+  const restore = html.match(/<button\b[^>]*data-test="image-editor-restore-original"[^>]*>/)?.[0];
+  assert.match(restore, /bg-dark-surface/);
+  assert.doesNotMatch(restore, /bg-success/);
   assert.match(html, /角色占画面高度/);
   assert.match(html, /底部留白/);
   assert.doesNotMatch(html, /image-editor-height-preset-/);

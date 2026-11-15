@@ -122,7 +122,7 @@ test('Seedance preview and create retain protected actions and preflight guards'
   assert.match(preview, /:disabled="confirmingPaidAction"/);
   assert.match(preview, /trapModalTab/);
   assert.match(preview, /@click="downloadVideo"/);
-  assert.match(preview, /variant="primary"\s+@click="regenerate"/);
+  assert.match(preview, /variant="primary"[^>]*@click="regenerate"/);
   assert.match(preview, /@click="regenerate"[\s\S]*@click="continueFromReturnedFrame"[\s\S]*@click="downloadVideo"/);
   assert.doesNotMatch(preview, /seedance\.preview\.nextSteps/);
   const saveButton = preview.match(/<button\s[^>]*data-test="seedance-download"[^>]*>[\s\S]*?<\/button>/)?.[0];

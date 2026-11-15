@@ -21,8 +21,14 @@
             form="seedance-settings-form"
             :loading="saving"
             :disabled="!settingsReady"
+            icon-only
+            :aria-label="t('common.save')"
+            :tooltip="t('common.save')"
           >
-            {{ t('common.save') }}
+            <Save
+              class="h-5 w-5"
+              aria-hidden="true"
+            />
           </Button>
         </div>
       </template>
@@ -177,9 +183,15 @@
                 <Button
                   type="button"
                   class="h-[42px] shrink-0"
+                  icon-only
+                  :aria-label="t('storage.projectDir')"
+                  :tooltip="t('storage.projectDir')"
                   @click="selectStorageDirectory('project_dir')"
                 >
-                  {{ t('seedance.ui.chooseFolder') }}
+                  <FolderOpen
+                    class="h-5 w-5"
+                    aria-hidden="true"
+                  />
                 </Button>
               </span>
               <span class="mt-2 block text-xs text-[var(--seedance-muted)]">
@@ -198,9 +210,15 @@
                 <Button
                   type="button"
                   class="h-[42px] shrink-0"
+                  icon-only
+                  :aria-label="t('storage.aiCacheDir')"
+                  :tooltip="t('storage.aiCacheDir')"
                   @click="selectStorageDirectory('cache_dir')"
                 >
-                  {{ t('seedance.ui.chooseFolder') }}
+                  <FolderOpen
+                    class="h-5 w-5"
+                    aria-hidden="true"
+                  />
                 </Button>
               </span>
               <span class="mt-2 block text-xs text-[var(--seedance-muted)]">
@@ -392,8 +410,13 @@
                 variant="danger"
                 :disabled="retentionDisabled"
                 :loading="cleaning"
+                :tooltip="t('buttonHints.cleanCache')"
                 @click="openCacheCleanConfirmation"
               >
+                <Trash2
+                  class="h-5 w-5 mr-2"
+                  aria-hidden="true"
+                />
                 {{ t('seedance.settings.clearCache') }}
               </Button>
               <p
@@ -723,6 +746,7 @@
 </template>
 
 <script setup lang="ts">
+import { Save, FolderOpen, Trash2 } from 'lucide-vue-next';
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { onBeforeRouteLeave, useRouter } from 'vue-router';

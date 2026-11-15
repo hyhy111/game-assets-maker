@@ -235,9 +235,13 @@
         block
         :loading="isProcessing"
         :disabled="!canProcess"
+        :tooltip="isStepCompleted ? t('buttonHints.rePostProcess') : t('buttonHints.postProcess')"
         @click="startProcessing"
       >
-        <Wand2 class="w-4 h-4 mr-2" />
+        <SlidersHorizontal
+          class="h-5 w-5 mr-2"
+          aria-hidden="true"
+        />
         {{ isStepCompleted ? t('step3.reProcess') : t('step3.startProcessing') }}
       </Button>
 
@@ -245,10 +249,14 @@
         v-if="isProcessing"
         variant="danger"
         block
+        :tooltip="t('common.cancelProcessing')"
         @click="cancelProcessing"
       >
-        <X class="w-4 h-4 mr-2" />
-        {{ t('common.cancel') }}
+        <Square
+          class="mr-2 h-4 w-4"
+          aria-hidden="true"
+        />
+        {{ t('common.cancelProcessing') }}
       </Button>
     </div>
   </div>
@@ -258,7 +266,7 @@
 import { computed } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useI18n } from 'vue-i18n';
-import { Wand2, CheckCircle, X } from 'lucide-vue-next';
+import { CheckCircle, SlidersHorizontal, Square } from 'lucide-vue-next';
 import Switch from '@/components/common/Switch.vue';
 import Input from '@/components/common/Input.vue';
 import { useProjectStore } from '@/stores/project';

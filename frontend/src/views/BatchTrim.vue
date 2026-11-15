@@ -5,11 +5,15 @@
     <main class="mx-auto w-full max-w-[1480px] px-4 pb-10 pt-6 sm:px-6 sm:pt-8">
       <div class="mb-5 flex justify-end">
         <button
-          class="flex items-center gap-1.5 text-sm text-gray-400 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          class="flex items-center gap-1.5 text-sm text-gray-400 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary icon-button control-tooltip"
+          :aria-label="t('common.back')"
+          :data-tooltip="t('common.back')"
           @click="goBack"
         >
-          <ArrowLeft class="h-4 w-4" />
-          {{ t('common.back') }}
+          <ArrowLeft
+            class="h-5 w-5"
+            aria-hidden="true"
+          />
         </button>
       </div>
 
@@ -172,11 +176,15 @@
             <Button
               v-if="batchTrimRootPaths.length > 0"
               size="sm"
-              :title="t('batchTrim.openResultDirTitle')"
+              icon-only
+              :aria-label="t('batchTrim.openResultDirTitle')"
+              :tooltip="t('batchTrim.openResultDirTitle')"
               @click="openBatchTrimRoots"
             >
-              <FolderOpen class="w-4 h-4" />
-              {{ t('batchTrim.openResultDir') }}
+              <FolderOpen
+                class="h-5 w-5"
+                aria-hidden="true"
+              />
             </Button>
           </div>
         </template>
@@ -250,18 +258,7 @@ import { ref, computed, onMounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import { useI18n } from 'vue-i18n';
-import {
-  ArrowLeft,
-  Check,
-  Folder,
-  FolderOpen,
-  Scissors,
-  Search,
-  CheckCircle,
-  AlertTriangle,
-  XCircle,
-  HelpCircle
-} from 'lucide-vue-next';
+import { ArrowLeft, Check, Folder, FolderOpen, Scissors, Search, CheckCircle, AlertTriangle, XCircle, HelpCircle } from 'lucide-vue-next';
 import { useAgentBatchTrimStore } from '@/stores/agentBatchTrim';
 import { useProjectStore } from '@/stores/project';
 import { api } from '@/api';

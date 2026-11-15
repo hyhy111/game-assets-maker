@@ -17,8 +17,14 @@
               type="submit"
               form="seedream-settings-form"
               :loading="saving"
+              icon-only
+              :aria-label="t('common.save')"
+              :tooltip="t('common.save')"
             >
-              {{ t('common.save') }}
+              <Save
+                class="h-5 w-5"
+                aria-hidden="true"
+              />
             </Button>
           </div>
         </template>
@@ -83,6 +89,7 @@
 </template>
 
 <script setup lang="ts">
+import { Save } from 'lucide-vue-next';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import Button from '@/components/common/Button.vue';

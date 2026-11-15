@@ -39,31 +39,45 @@
     <!-- Navigation arrows -->
     <div class="flex gap-2 ml-auto">
       <button
+        type="button"
+        class="step-action icon-button control-tooltip"
+        :disabled="isProcessing || !projectStore.currentProject"
+        :aria-label="t('header.openFolder')"
+        :data-tooltip="isProcessing ? t('common.processing') : t('header.openFolder')"
+        data-test="step-open-project-folder"
+        @click="openProjectFolder"
+      >
+        <FolderOpen class="h-5 w-5" />
+      </button>
+      <button
         v-if="currentStep > 1"
         :disabled="!canGoPrev || isProcessing"
-        :title="isProcessing ? t('common.processing') : ''"
-        class="px-3 py-2 rounded-lg bg-dark-border hover:bg-gray-700 text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:shadow-lg hover:shadow-gray-500/25"
+        :aria-label="t('steps.previous')"
+        :data-tooltip="isProcessing ? t('common.processing') : t('steps.previous')"
+        class="step-action icon-button control-tooltip"
         @click="processStore.prevStep()"
       >
-        {{ t('steps.previous') }}
+        <ArrowLeft class="h-5 w-5" />
       </button>
       <button
         v-if="currentStep < 3"
         :disabled="!canGoNext || isProcessing"
-        :title="isProcessing ? t('common.processing') : ''"
-        class="px-3 py-2 rounded-lg bg-primary hover:bg-primary-600 text-dark-bg disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:shadow-lg hover:shadow-primary/25"
+        :aria-label="t('steps.next')"
+        :data-tooltip="isProcessing ? t('common.processing') : t('steps.next')"
+        class="step-action icon-button control-tooltip"
         @click="processStore.nextStep()"
       >
-        {{ t('steps.next') }}
+        <ArrowRight class="h-5 w-5" />
       </button>
       <button
         v-if="currentStep === 3"
         :disabled="isProcessing"
-        :title="isProcessing ? t('common.processing') : ''"
-        class="px-3 py-2 rounded-lg bg-primary hover:bg-primary-600 text-dark-bg disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:shadow-lg hover:shadow-primary/25"
+        :aria-label="t('steps.finish')"
+        :data-tooltip="isProcessing ? t('common.processing') : t('buttonHints.finishEditing')"
+        class="step-action icon-button control-tooltip"
         @click="finishEditing"
       >
-        {{ t('steps.finish') }}
+        <Check class="h-5 w-5" />
       </button>
     </div>
   </nav>
@@ -74,7 +88,8 @@ import { computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import { useI18n } from 'vue-i18n';
-import { Check } from 'lucide-vue-next';
+import { ArrowLeft, ArrowRight, Check, FolderOpen } from 'lucide-vue-next';
+import { api } from '@/api';
 import { useProcessStore } from '@/stores/process';
 import { useProjectStore } from '@/stores/project';
 
@@ -130,9 +145,20 @@ async function finishEditing() {
   if (!failure) projectStore.setCurrentProject(null);
 }
 
+async function openProjectFolder() {
+  if (isProcessing.value || !projectStore.currentProject) return;
+  await api.system.openProjectFolder(projectStore.currentProject.path);
+}
+
 const goToStep = (stepId: number) => {
   if (canAccessStep(stepId)) {
     processStore.goToStep(stepId);
   }
 };
 </script>
+
+<style scoped>
+.step-action {
+  @apply rounded-lg border-0 bg-transparent text-gray-400 transition duration-200 enabled:hover:-translate-y-0.5 enabled:hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-40 motion-reduce:transition-none motion-reduce:hover:translate-y-0;
+}
+</style>

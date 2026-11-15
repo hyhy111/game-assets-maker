@@ -11,15 +11,16 @@
       </h1>
       <button
         type="button"
-        class="ml-auto flex w-fit items-center gap-2 rounded-lg px-1 py-2 text-base text-gray-400 transition-colors hover:text-white focus:outline-none focus:ring-2 focus:ring-primary/60"
+        class="ml-auto flex w-fit items-center gap-2 rounded-lg px-1 py-2 text-base text-gray-400 transition-colors hover:text-white focus:outline-none focus:ring-2 focus:ring-primary/60 icon-button control-tooltip"
         data-test="seedream-detail-back"
+        :aria-label="t('aiCreation.backToWorkspace')"
+        :data-tooltip="t('aiCreation.backToWorkspace')"
         @click="backToTasks"
       >
         <ArrowLeft
-          :size="22"
+          class="h-5 w-5"
           aria-hidden="true"
         />
-        {{ t('aiCreation.backToWorkspace') }}
       </button>
     </div>
 
@@ -48,8 +49,13 @@
             v-if="canRegenerate"
             variant="primary"
             data-test="seedream-regenerate"
+            :tooltip="t('buttonHints.regenerate')"
             @click="regenerate"
           >
+            <RotateCw
+              class="h-5 w-5 mr-2"
+              aria-hidden="true"
+            />
             {{ t('seedream.detail.regenerate') }}
           </Button>
           <Button
@@ -66,8 +72,13 @@
             variant="secondary"
             :loading="retryingDownloads"
             data-test="seedream-retry-all-downloads"
+            :tooltip="t('seedream.detail.retryAllDownloads')"
             @click="retryAllDownloads"
           >
+            <Download
+              class="h-5 w-5 mr-2"
+              aria-hidden="true"
+            />
             {{ t('seedream.detail.retryAllDownloads') }}
           </Button>
           <div class="ml-auto flex items-center gap-2">
@@ -184,9 +195,15 @@
               variant="secondary"
               size="sm"
               :data-test="`seedream-edit-image-${selectedSucceededAttempt.index}`"
+              icon-only
+              :aria-label="t('buttonHints.editImage')"
+              :tooltip="t('buttonHints.editImage')"
               @click="openImageEditor(selectedSucceededAttempt.index)"
             >
-              {{ t('seedream.detail.imageEditor') }}
+              <Pencil
+                class="h-5 w-5"
+                aria-hidden="true"
+              />
             </Button>
           </div>
           <p
@@ -294,9 +311,15 @@
                   variant="secondary"
                   size="sm"
                   :data-test="`seedream-retry-download-${attempt.index}`"
+                  icon-only
+                  :aria-label="t('buttonHints.retryDownload')"
+                  :tooltip="t('buttonHints.retryDownload')"
                   @click="retryDownload(attempt.index)"
                 >
-                  {{ t('seedream.detail.retryDownload') }}
+                  <Download
+                    class="h-5 w-5"
+                    aria-hidden="true"
+                  />
                 </Button>
               </div>
             </div>
@@ -481,7 +504,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { ArrowLeft, Check, Copy, Download, FolderOpen, Trash2 } from 'lucide-vue-next';
+import { ArrowLeft, Check, Copy, Download, FolderOpen, Trash2, RotateCw, Pencil } from 'lucide-vue-next';
 import { api } from '@/api';
 import { writeSeedreamImageDrag } from '@/seedream-image-drag';
 import { useAICreationStore } from '@/stores/aiCreation';

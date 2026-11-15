@@ -67,11 +67,15 @@
       <!-- Reset button -->
       <div class="flex justify-end">
         <button
-          class="text-xs text-gray-400 hover:text-primary transition-colors flex items-center gap-1"
+          class="text-xs text-gray-400 hover:text-primary transition-colors flex items-center gap-1 icon-button control-tooltip"
+          :aria-label="t('buttonHints.resetMatting')"
+          :data-tooltip="t('buttonHints.resetMatting')"
           @click="resetAlphaMattingParams"
         >
-          <RefreshCw class="w-3 h-3" />
-          {{ t('step2.resetParams') }}
+          <RotateCcw
+            class="h-5 w-5"
+            aria-hidden="true"
+          />
         </button>
       </div>
       <!-- Alpha matting erode size -->
@@ -290,6 +294,7 @@
         block
         :loading="isProcessing"
         :disabled="!canProcess"
+        :tooltip="isStepCompleted ? t('buttonHints.reBackground') : t('buttonHints.background')"
         @click="startProcessing"
       >
         <Wand2 class="w-4 h-4 mr-2" />
@@ -306,10 +311,14 @@
         v-if="isProcessing"
         variant="danger"
         block
+        :tooltip="t('common.cancelProcessing')"
         @click="cancelProcessing"
       >
-        <X class="w-4 h-4 mr-2" />
-        {{ t('common.cancel') }}
+        <Square
+          class="mr-2 h-4 w-4"
+          aria-hidden="true"
+        />
+        {{ t('common.cancelProcessing') }}
       </Button>
     </div>
   </div>
@@ -319,7 +328,7 @@
 import { computed, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useI18n } from 'vue-i18n';
-import { Wand2, CheckCircle, X, RefreshCw } from 'lucide-vue-next';
+import { Wand2, CheckCircle, X, RotateCcw, Square } from 'lucide-vue-next';
 import { useProjectStore } from '@/stores/project';
 import { useProcessStore } from '@/stores/process';
 import { usePlayerStore } from '@/stores/player';

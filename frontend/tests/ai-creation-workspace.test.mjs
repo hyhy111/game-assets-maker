@@ -15,10 +15,11 @@ test('AI Creation Workspace starts in image mode with the shared header utilitie
   assert.match(html, /Game Assets Maker/);
   assert.match(html, /class="h-5 w-5 object-contain"/);
   assert.doesNotMatch(html, /lucide-video-icon/);
-  assert.match(html, /lucide-globe/);
+  assert.match(html, /lucide-languages/);
   assert.match(html, /lucide-settings/);
   assert.match(html, /lucide-home-icon/);
   assert.match(html, /data-test="seedream-composer"/);
+  assert.match(html, /aria-label="生成图片"/);
   assert.doesNotMatch(html, /data-test="seedance-composer"/);
 });
 

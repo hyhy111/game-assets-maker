@@ -34,9 +34,15 @@
         variant="secondary"
         :disabled="checking || installing || !status.can_check"
         data-test="gam-skills-check"
+        icon-only
+        :aria-label="t('skillsInstall.checkUpdates')"
+        :tooltip="t('skillsInstall.checkUpdates')"
         @click="refreshStatus"
       >
-        {{ t('skillsInstall.checkUpdates') }}
+        <RefreshCw
+          class="h-5 w-5"
+          aria-hidden="true"
+        />
       </Button>
       <span
         v-if="checking || installing"
@@ -83,9 +89,21 @@
         type="button"
         variant="secondary"
         data-test="gam-skills-copy"
+        icon-only
+        :aria-label="copied ? t('common.copied') : t('buttonHints.copyInstallCommand')"
+        :tooltip="copied ? t('common.copied') : t('buttonHints.copyInstallCommand')"
         @click="copyCommand"
       >
-        {{ copied ? t('common.copied') : t('common.copy') }}
+        <Check
+          v-if="copied"
+          class="h-5 w-5"
+          aria-hidden="true"
+        />
+        <Copy
+          v-else
+          class="h-5 w-5"
+          aria-hidden="true"
+        />
       </Button>
     </div>
     <p class="mt-3 text-xs text-[var(--seedance-muted)]">
@@ -109,6 +127,7 @@
 </template>
 
 <script setup lang="ts">
+import { RefreshCw, Check, Copy } from 'lucide-vue-next';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';

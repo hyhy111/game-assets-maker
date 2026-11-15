@@ -56,22 +56,39 @@
         <Button
           v-if="canCancel"
           variant="secondary"
+          :tooltip="t('seedance.tasks.cancel')"
           @click="emit('cancel', task.local_id)"
         >
+          <StopCircle
+            class="h-5 w-5 mr-2"
+            aria-hidden="true"
+          />
           {{ t('seedance.tasks.cancel') }}
         </Button>
         <Button
           v-if="canRetryDownload"
           variant="secondary"
+          icon-only
+          :aria-label="t('buttonHints.retryDownload')"
+          :tooltip="t('buttonHints.retryDownload')"
           @click="emit('retry-download', task.local_id)"
         >
-          {{ t('seedance.ui.redownload') }}
+          <Download
+            class="h-5 w-5"
+            aria-hidden="true"
+          />
         </Button>
         <Button
           class="ml-auto"
+          icon-only
+          :aria-label="t('seedance.tasks.viewDetails')"
+          :tooltip="t('seedance.tasks.viewDetails')"
           @click="emit('open-detail', task.local_id)"
         >
-          {{ t('seedance.tasks.viewDetails') }}
+          <ArrowUpRight
+            class="h-5 w-5"
+            aria-hidden="true"
+          />
         </Button>
       </div>
     </div>
@@ -79,6 +96,7 @@
 </template>
 
 <script setup lang="ts">
+import { StopCircle, Download, ArrowUpRight } from 'lucide-vue-next';
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import Button from '@/components/common/Button.vue';

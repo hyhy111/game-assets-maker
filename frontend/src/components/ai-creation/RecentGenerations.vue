@@ -31,13 +31,17 @@
         />
         <button
           type="button"
-          class="flex items-center gap-1.5 rounded-lg border border-dark-border bg-dark-surface px-3 py-2 text-sm text-gray-400 transition-colors hover:border-gray-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+          class="flex items-center gap-1.5 rounded-lg border border-dark-border bg-dark-surface px-3 py-2 text-sm text-gray-400 transition-colors hover:border-gray-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-50 icon-button control-tooltip"
           :disabled="loading"
           data-test="recent-refresh"
+          :aria-label="t('buttonHints.refreshGenerations')"
+          :data-tooltip="t('buttonHints.refreshGenerations')"
           @click="refreshCurrent"
         >
-          <RefreshCw class="h-4 w-4" />
-          {{ t('common.refresh') }}
+          <RefreshCw
+            class="h-5 w-5"
+            aria-hidden="true"
+          />
         </button>
       </div>
     </div>
@@ -97,13 +101,14 @@
             >
               <button
                 type="button"
-                class="inline-flex items-center gap-1 text-xs font-medium text-primary transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
+                class="inline-flex items-center gap-1 text-xs font-medium text-primary transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 icon-button control-tooltip"
                 :aria-expanded="isExpanded('image', group.key)"
                 :data-test="`recent-prompt-expand-${promptGroupId('image', group.key)}`"
+                :aria-label="isExpanded('image', group.key) ? t('aiCreation.recent.collapseTasks') : t('aiCreation.recent.expandTasks')"
+                :data-tooltip="isExpanded('image', group.key) ? t('aiCreation.recent.collapseTasks') : t('aiCreation.recent.expandTasks')"
                 @click.stop="toggleExpanded('image', group.key)"
                 @keydown.stop
               >
-                {{ t(isExpanded('image', group.key) ? 'aiCreation.recent.collapseTasks' : 'aiCreation.recent.expandTasks') }}
                 <ChevronDown
                   class="h-3.5 w-3.5 transition-transform"
                   :class="isExpanded('image', group.key) ? 'rotate-180' : ''"
@@ -161,13 +166,14 @@
             >
               <button
                 type="button"
-                class="inline-flex items-center gap-1 text-xs font-medium text-primary transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
+                class="inline-flex items-center gap-1 text-xs font-medium text-primary transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 icon-button control-tooltip"
                 :aria-expanded="isExpanded('video', group.key)"
                 :data-test="`recent-prompt-expand-${promptGroupId('video', group.key)}`"
+                :aria-label="isExpanded('video', group.key) ? t('aiCreation.recent.collapseTasks') : t('aiCreation.recent.expandTasks')"
+                :data-tooltip="isExpanded('video', group.key) ? t('aiCreation.recent.collapseTasks') : t('aiCreation.recent.expandTasks')"
                 @click.stop="toggleExpanded('video', group.key)"
                 @keydown.stop
               >
-                {{ t(isExpanded('video', group.key) ? 'aiCreation.recent.collapseTasks' : 'aiCreation.recent.expandTasks') }}
                 <ChevronDown
                   class="h-3.5 w-3.5 transition-transform"
                   :class="isExpanded('video', group.key) ? 'rotate-180' : ''"

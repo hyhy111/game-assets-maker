@@ -230,74 +230,38 @@
   }
 }
 
-/* All control hints share the app's warm accent surface and appear immediately. */
-.control-tooltip {
-  position: relative;
-}
-
-.control-tooltip::after {
-  content: attr(aria-label);
-  position: absolute;
-  z-index: 60;
-  bottom: calc(100% + 8px);
-  left: 50%;
-  transform: translateX(-50%);
+/* Fixed hints remain visible outside scrollable toolbars and preview canvases. */
+.control-tooltip-popup {
+  position: fixed;
+  z-index: 10000;
   width: max-content;
-  max-width: 260px;
+  max-width: min(280px, calc(100vw - 16px));
   padding: 6px 10px;
   border: 1px solid rgb(255 189 92 / 35%);
   border-radius: 8px;
   background: #353025;
   color: #ffbd5c;
   font-size: 13px;
-  font-family: inherit;
   font-weight: 500;
   line-height: 1.5;
-  text-align: left;
-  text-transform: none;
-  letter-spacing: normal;
-  white-space: normal;
   overflow-wrap: anywhere;
   box-shadow: 0 4px 12px rgb(0 0 0 / 30%);
   pointer-events: none;
-  opacity: 0;
-  visibility: hidden;
 }
 
-.control-tooltip:hover::after,
-.control-tooltip:focus-visible::after {
-  opacity: 1;
-  visibility: visible;
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  padding: 8px;
 }
 
-.control-tooltip[data-tooltip]::after {
-  content: attr(data-tooltip);
-}
-
-/* Header and retouch-toolbar hints open below their controls. */
-.control-tooltip--below::after {
-  top: calc(100% + 8px);
-  bottom: auto;
-}
-
-/* Keep the last header/player action's hint inside the window. */
-.control-tooltip--end::after {
-  right: 0;
-  left: auto;
-  transform: none;
-}
-
-/* An open popover already explains the action; keep its trigger hint out of the way. */
-.control-tooltip[aria-expanded="true"]::after {
-  opacity: 0;
-  visibility: hidden;
-}
-
-/* Preview tools sit against the right edge; keep their labels inside the canvas. */
-.control-tooltip--left::after {
-  top: 50%;
-  right: calc(100% + 10px);
-  bottom: auto;
-  left: auto;
-  transform: translateY(-50%);
+.icon-button > svg {
+  stroke-width: 1.75;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
 }

@@ -104,19 +104,29 @@
               variant="danger"
               size="sm"
               :disabled="!playerStore.currentFrame || visibilityUpdating || processStore.isProcessing"
+              icon-only
+              :aria-label="t('buttonHints.hideFrame')"
+              :tooltip="t('buttonHints.hideFrame')"
               @click="hideCurrentFrame"
             >
-              <EyeOff class="mr-1.5 h-4 w-4" />
-              {{ t('frameVisibility.hideCurrent') }}
+              <EyeOff
+                class="h-5 w-5"
+                aria-hidden="true"
+              />
             </Button>
             <Button
               variant="secondary"
               size="sm"
               :disabled="hiddenFrames.length === 0 || visibilityUpdating || processStore.isProcessing"
+              icon-only
+              :aria-label="t('buttonHints.restoreHidden')"
+              :tooltip="t('buttonHints.restoreHidden')"
               @click="restoreLastHiddenFrame"
             >
-              <Undo2 class="mr-1.5 h-4 w-4" />
-              {{ t('frameVisibility.restoreLast') }}
+              <Undo2
+                class="h-5 w-5"
+                aria-hidden="true"
+              />
             </Button>
             <Button
               variant="ghost"
@@ -447,7 +457,7 @@ async function loadFramesForStep(step: number) {
 
   // Ensure sourceStep 1 shows output/01_frames (not cache) if we are in Step 2 preview
   // The backend already prefers cache for step 1, but for Step 2 preview we want the filtered frames
-  
+
   try {
     const response = await api.frame.getFrames(
       project.id,
@@ -468,7 +478,7 @@ async function loadFramesForStep(step: number) {
       }
       playerStore.loadFrames(frames);
       timelineFrameCount.value = response.timeline_total ?? response.total;
-      
+
       if (step === 1 && s1Params.value) {
         // Sync playback range from Step1 params ONLY for Step 1.
         // s1Params.start_frame/end_frame 是源帧空间（cache 索引）。

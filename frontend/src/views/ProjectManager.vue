@@ -206,9 +206,15 @@
             <Button
               size="sm"
               variant="secondary"
+              icon-only
+              :aria-label="t('projectManager.viewTrimResults')"
+              :tooltip="t('projectManager.viewTrimResults')"
               @click="showTrimResultsModal = true"
             >
-              {{ t('projectManager.viewTrimResults') }}
+              <Files
+                class="h-5 w-5"
+                aria-hidden="true"
+              />
             </Button>
           </div>
           <aside
@@ -366,11 +372,29 @@
               <div class="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
-                  class="rounded-lg px-3 py-1.5 text-xs font-medium text-gray-400 transition-colors hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
+                  class="rounded-lg px-3 py-1.5 text-xs font-medium text-gray-400 transition-colors hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50 icon-button control-tooltip"
                   :disabled="trimmingRole !== null"
+                  :aria-label="isRoleFullySelected(selectedGroup) ? t('batchTrim.deselectAll') : t('batchTrim.selectAll')"
+                  :data-tooltip="isRoleFullySelected(selectedGroup) ? t('batchTrim.deselectAll') : t('batchTrim.selectAll')"
+                  role="checkbox"
+                  :aria-checked="isRoleFullySelected(selectedGroup) ? 'true' : selectedInRole(selectedGroup) > 0 ? 'mixed' : 'false'"
                   @click="toggleRoleSelection(selectedGroup)"
                 >
-                  {{ isRoleFullySelected(selectedGroup) ? t('batchTrim.deselectAll') : t('batchTrim.selectAll') }}
+                  <CheckSquare
+                    v-if="isRoleFullySelected(selectedGroup)"
+                    class="h-5 w-5"
+                    aria-hidden="true"
+                  />
+                  <MinusSquare
+                    v-else-if="selectedInRole(selectedGroup) > 0"
+                    class="h-5 w-5"
+                    aria-hidden="true"
+                  />
+                  <Square
+                    v-else
+                    class="h-5 w-5"
+                    aria-hidden="true"
+                  />
                 </button>
 
                 <div
@@ -781,20 +805,21 @@
                     <code class="block break-all px-3 py-2.5 pr-24 text-xs text-gray-300">{{ path }}</code>
                     <button
                       type="button"
-                      class="absolute right-2 top-2 flex items-center gap-1 rounded-md px-2 py-1 text-xs text-gray-400 transition-colors hover:bg-dark-border hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                      :aria-label="copiedOutputPath === path ? t('common.copied') : t('common.copy')"
-                      :title="copiedOutputPath === path ? t('common.copied') : t('common.copy')"
+                      class="absolute right-2 top-2 flex items-center gap-1 rounded-md px-2 py-1 text-xs text-gray-400 transition-colors hover:bg-dark-border hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary icon-button control-tooltip"
+                      :aria-label="copiedOutputPath === path ? t('common.copied') : t('buttonHints.copyOutputPath')"
+                      :data-tooltip="copiedOutputPath === path ? t('common.copied') : t('buttonHints.copyOutputPath')"
                       @click="copyOutputPath(path)"
                     >
                       <Check
                         v-if="copiedOutputPath === path"
-                        class="h-3.5 w-3.5 text-success"
+                        class="h-5 w-5 text-success"
+                        aria-hidden="true"
                       />
                       <Copy
                         v-else
-                        class="h-3.5 w-3.5"
+                        class="h-5 w-5"
+                        aria-hidden="true"
                       />
-                      {{ copiedOutputPath === path ? t('common.copied') : t('common.copy') }}
                     </button>
                   </div>
                 </div>
@@ -816,10 +841,15 @@
                   <Button
                     v-if="trimOutputDirectories.length"
                     variant="secondary"
+                    icon-only
+                    :aria-label="t('projectManager.openOutputDirectory')"
+                    :tooltip="t('projectManager.openOutputDirectory')"
                     @click="openTrimOutputDirectories"
                   >
-                    <FolderOpen class="mr-2 h-4 w-4" />
-                    {{ t('projectManager.openOutputDirectory') }}
+                    <FolderOpen
+                      class="h-5 w-5"
+                      aria-hidden="true"
+                    />
                   </Button>
                   <Button
                     v-if="failedTrimIds.length"
@@ -976,26 +1006,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import { useI18n } from 'vue-i18n';
-import {
-  AlertTriangle,
-  Check,
-  CheckCircle,
-  ChevronLeft,
-  ChevronRight,
-  Copy,
-  FolderOpen,
-  ImageOff,
-  ImagePlus,
-  Loader2,
-  MoreVertical,
-  Play,
-  Plus,
-  RefreshCw,
-  Scissors,
-  Search,
-  Trash2,
-  X,
-} from 'lucide-vue-next';
+import { AlertTriangle, Check, CheckCircle, ChevronLeft, ChevronRight, Copy, FolderOpen, ImageOff, ImagePlus, Loader2, MoreVertical, Play, Plus, RefreshCw, Scissors, Search, Trash2, X, Files, CheckSquare, MinusSquare, Square } from 'lucide-vue-next';
 import { Dialog, DialogPanel, DialogTitle, Menu, MenuButton, MenuItem, MenuItems, TransitionChild, TransitionRoot } from '@headlessui/vue';
 import { useProjectStore } from '@/stores/project';
 import { usePlayerStore } from '@/stores/player';

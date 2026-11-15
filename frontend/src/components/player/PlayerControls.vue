@@ -29,7 +29,7 @@
           :disabled="!canGoPrev"
           @click="playerStore.prevFrame()"
         >
-          <SkipBack class="w-5 h-5" />
+          <ChevronLeft class="w-5 h-5" />
         </button>
 
         <span class="text-sm text-gray-400 min-w-[80px] text-center">
@@ -42,7 +42,7 @@
           :disabled="!canGoNext"
           @click="playerStore.nextFrame()"
         >
-          <SkipForward class="w-5 h-5" />
+          <ChevronRight class="w-5 h-5" />
         </button>
       </div>
 
@@ -115,22 +115,14 @@
               ? 'border-primary bg-primary/15 text-primary'
               : 'border-dark-border text-gray-400 hover:border-gray-500 hover:text-white'
           ]"
+          class="icon-button control-tooltip"
+          :aria-label="showAudioTimeline ? t('buttonHints.hideAudio') : t('buttonHints.showAudio')"
+          :data-tooltip="showAudioTimeline ? t('buttonHints.hideAudio') : t('buttonHints.showAudio')"
+          :aria-pressed="showAudioTimeline"
           @click="showAudioTimeline = !showAudioTimeline"
         >
-          <span
-            class="audio-track-wave"
-            :class="{ 'audio-track-wave--active': showAudioTimeline }"
-            aria-hidden="true"
-          >
-            <span />
-            <span />
-            <span />
-            <span />
-          </span>
-          <span>{{ t('player.audioTrack') }}</span>
-          <ChevronDown
-            class="h-3.5 w-3.5 transition-transform duration-200"
-            :class="showAudioTimeline ? 'rotate-180' : ''"
+          <AudioLines
+            class="h-5 w-5"
             aria-hidden="true"
           />
         </button>
@@ -203,7 +195,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useI18n } from 'vue-i18n';
-import { Play, Pause, SkipBack, SkipForward, ChevronUp, ChevronDown, Volume2, VolumeX } from 'lucide-vue-next';
+import { Play, Pause, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Volume2, VolumeX, AudioLines } from 'lucide-vue-next';
 import { usePlayerStore } from '@/stores/player';
 import { useProcessStore } from '@/stores/process';
 import { useAudioTimelineStore } from '@/stores/audioTimeline';
@@ -463,43 +455,4 @@ input[type="number"] {
   -moz-appearance: textfield;
 }
 
-.audio-track-wave {
-  display: inline-flex;
-  width: 1rem;
-  height: 1rem;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-}
-
-.audio-track-wave span {
-  width: 2px;
-  border-radius: 9999px;
-  background: currentColor;
-  transform-origin: center;
-}
-
-.audio-track-wave span:nth-child(1) { height: 0.375rem; }
-.audio-track-wave span:nth-child(2) { height: 0.75rem; }
-.audio-track-wave span:nth-child(3) { height: 1rem; }
-.audio-track-wave span:nth-child(4) { height: 0.625rem; }
-
-.audio-track-wave--active span {
-  animation: audio-track-wave 650ms ease-in-out infinite alternate;
-}
-
-.audio-track-wave--active span:nth-child(2) { animation-delay: -180ms; }
-.audio-track-wave--active span:nth-child(3) { animation-delay: -360ms; }
-.audio-track-wave--active span:nth-child(4) { animation-delay: -90ms; }
-
-@keyframes audio-track-wave {
-  from { transform: scaleY(0.5); }
-  to { transform: scaleY(1); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .audio-track-wave--active span {
-    animation: none;
-  }
-}
 </style>

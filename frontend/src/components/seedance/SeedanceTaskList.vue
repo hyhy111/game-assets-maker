@@ -2,13 +2,17 @@
   <div class="mb-4 flex items-center justify-end">
     <button
       type="button"
-      class="flex items-center gap-1.5 rounded-lg border border-dark-border bg-dark-surface px-3 py-2 text-sm text-gray-400 transition-colors hover:border-gray-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+      class="flex items-center gap-1.5 rounded-lg border border-dark-border bg-dark-surface px-3 py-2 text-sm text-gray-400 transition-colors hover:border-gray-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-50 icon-button control-tooltip"
       :disabled="store.loading"
       data-test="seedance-tasks-refresh"
+      :aria-label="t('buttonHints.refreshGenerations')"
+      :data-tooltip="t('buttonHints.refreshGenerations')"
       @click="load"
     >
-      <RefreshCw class="h-4 w-4" />
-      {{ t('common.refresh') }}
+      <RefreshCw
+        class="h-5 w-5"
+        aria-hidden="true"
+      />
     </button>
   </div>
 

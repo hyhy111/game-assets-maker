@@ -51,8 +51,13 @@
           type="button"
           :disabled="updates.actionPending"
           data-test="app-update-open"
+          :tooltip="t('buttonHints.downloadUpdate')"
           @click="updates.openUpdate"
         >
+          <Download
+            class="h-5 w-5 mr-2"
+            aria-hidden="true"
+          />
           {{ t('updates.update') }}
         </Button>
         <Button
@@ -142,7 +147,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { ChevronDown } from 'lucide-vue-next';
+import { ChevronDown, Download } from 'lucide-vue-next';
 import { useI18n } from 'vue-i18n';
 import { renderReleaseNotes } from '@/release-notes';
 import { ArrowTopRightOnSquareIcon, StarIcon } from '@heroicons/vue/24/outline';

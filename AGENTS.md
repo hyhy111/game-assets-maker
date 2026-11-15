@@ -94,3 +94,17 @@ These instructions apply to the entire repository.
 - Stage explicit paths in a mixed worktree.
 - Treat commit, push, release, and publication as separate actions; perform only the actions the user requested.
 - Before handoff, inspect the diff and run `git diff --check`.
+
+## Agent skills
+
+### Issue tracker
+
+Issues and specs are tracked as local Markdown files under `.scratch/`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Local issues use the five default triage labels. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Use the single-context domain documentation layout. See `docs/agents/domain.md`.

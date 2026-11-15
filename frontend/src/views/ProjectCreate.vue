@@ -63,11 +63,15 @@
       <!-- Page title -->
       <div class="mb-8">
         <button
-          class="mb-4 ml-auto flex w-fit items-center gap-1 text-gray-400 transition-colors hover:text-white"
+          class="mb-4 ml-auto flex w-fit items-center gap-1 text-gray-400 transition-colors hover:text-white icon-button control-tooltip"
+          :aria-label="t('common.back')"
+          :data-tooltip="t('common.back')"
           @click="goBack"
         >
-          <ArrowLeft class="w-4 h-4" />
-          {{ t('common.back') }}
+          <ArrowLeft
+            class="h-5 w-5"
+            aria-hidden="true"
+          />
         </button>
         <h1 class="text-3xl font-bold text-white mb-2">
           {{ t('projectCreate.title') }}

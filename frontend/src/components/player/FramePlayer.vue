@@ -45,6 +45,7 @@
         :aria-label="t('magicWand.wand')"
         :aria-pressed="activeTool === 'wand'"
         data-test="frame-wand-tool"
+        icon-only
         @click="emit('tool', 'wand')"
       >
         <Wand2 class="h-5 w-5" />
@@ -60,6 +61,7 @@
         :aria-label="t('magicWand.eraser')"
         :aria-pressed="activeTool === 'brush'"
         data-test="frame-eraser-tool"
+        icon-only
         @click="emit('tool', 'brush')"
       >
         <Eraser class="h-5 w-5" />
@@ -74,9 +76,10 @@
         :aria-label="t('magicWand.browse')"
         :aria-pressed="activeTool === 'browse'"
         data-test="frame-browse-tool"
+        icon-only
         @click="emit('tool', 'browse')"
       >
-        <Move class="h-5 w-5" />
+        <Hand class="h-5 w-5" />
       </Button>
       <Button
         v-for="control in zoomControls"
@@ -86,6 +89,7 @@
         class="control-tooltip control-tooltip--left text-white hover:bg-white/10 hover:text-white"
         :data-tooltip="t(`magicWand.${control.action}`)"
         :aria-label="t(`magicWand.${control.action}`)"
+        icon-only
         @click="control.handler"
       >
         <component
@@ -100,7 +104,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { storeToRefs } from 'pinia';
-import { ZoomIn, ZoomOut, Maximize, Move, Wand2, Eraser } from 'lucide-vue-next';
+import { ZoomIn, ZoomOut, Scan, Wand2, Eraser, Hand } from 'lucide-vue-next';
 import { useI18n } from 'vue-i18n';
 import { usePlayerStore } from '@/stores/player';
 import { api } from '@/api';
@@ -140,7 +144,7 @@ const canvasStyle = computed(() => ({
 const zoomControls = [
   { action: 'zoomIn', icon: ZoomIn, handler: () => playerStore.zoomIn() },
   { action: 'zoomOut', icon: ZoomOut, handler: () => playerStore.zoomOut() },
-  { action: 'reset', icon: Maximize, handler: resetCanvasView }
+  { action: 'reset', icon: Scan, handler: resetCanvasView }
 ];
 
 function resetCanvasView() {

@@ -17,7 +17,7 @@ async function player(editing) {
   setActivePinia(createPinia());
   const store = usePlayerStore();
   const setup = new Function('ref','computed','watch','onMounted','onUnmounted','storeToRefs','usePlayerStore',
-    'useI18n','defineProps','withDefaults','defineEmits','ZoomIn','ZoomOut','Maximize',
+    'useI18n','defineProps','withDefaults','defineEmits','ZoomIn','ZoomOut','Scan',
     `${javascript}\nreturn {containerRef, canvasRef, handleWheel, handleKeydown, zoomControls};`);
   const bindings = setup(ref,computed,()=>{},()=>{},()=>{},storeToRefs,()=>store,()=>({t:k=>k}),
     ()=>({editing}), p=>p,()=>()=>{},null,null,null);

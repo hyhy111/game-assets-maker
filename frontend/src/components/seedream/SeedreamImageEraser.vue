@@ -30,18 +30,30 @@
           size="sm"
           :disabled="saving || loading || undoStack.length === 0"
           data-test="seedream-eraser-undo"
+          icon-only
+          :aria-label="t('buttonHints.undo')"
+          :tooltip="t('buttonHints.undo')"
           @click="undo"
         >
-          <Undo2 :size="16" /> {{ t('common.undo') }}
+          <Undo2
+            class="h-5 w-5"
+            aria-hidden="true"
+          />
         </Button>
         <Button
           variant="secondary"
           size="sm"
           :disabled="saving || loading || redoStack.length === 0"
           data-test="seedream-eraser-redo"
+          icon-only
+          :aria-label="t('buttonHints.redo')"
+          :tooltip="t('buttonHints.redo')"
           @click="redo"
         >
-          <Redo2 :size="16" /> {{ t('common.redo') }}
+          <Redo2
+            class="h-5 w-5"
+            aria-hidden="true"
+          />
         </Button>
         <span
           v-if="!embedded"
@@ -61,24 +73,44 @@
         <button
           v-if="resizeEnabled || magicWandEnabled"
           type="button"
-          class="inline-flex h-8 items-center justify-center rounded-lg bg-success px-3 text-sm font-medium text-white transition-colors hover:bg-success/80 disabled:cursor-not-allowed disabled:opacity-50"
+          class="control-tooltip control-tooltip--below control-tooltip--end inline-flex h-10 items-center justify-center rounded-lg border border-dark-border bg-dark-surface px-3 text-sm font-medium text-gray-200 transition-colors hover:bg-dark-border disabled:cursor-not-allowed disabled:opacity-50"
           :disabled="saving || loading || suspended || drawing || (magicWandEnabled ? !originalImageUrl : !dirty && !externalRestoreAvailable)"
-          :class="magicWandEnabled ? 'control-tooltip control-tooltip--below control-tooltip--end' : ''"
-          :data-tooltip="magicWandEnabled ? t(originalImageUrl ? 'magicWand.restoreInitialHint' : initialRestoreUnsupported ? 'magicWand.restoreRestartRequired' : 'magicWand.initialUnavailable') : undefined"
+          :data-tooltip="magicWandEnabled ? t(originalImageUrl ? 'magicWand.restoreInitialHint' : initialRestoreUnsupported ? 'magicWand.restoreRestartRequired' : 'magicWand.initialUnavailable') : t('buttonHints.restoreOriginal')"
           data-test="image-editor-restore-original"
           @click="restoreOriginal"
         >
+          <History
+            class="mr-2 h-4 w-4"
+            aria-hidden="true"
+          />
           {{ magicWandEnabled ? t('magicWand.restoreInitial') : t('seedream.detail.restoreOriginal') }}
         </button>
+        <span
+          v-if="magicWandEnabled && !loading"
+          class="text-xs text-gray-400"
+          role="status"
+        >{{ dirty ? t('common.unsaved') : t('common.saved') }}</span>
         <Button
           variant="primary"
           size="sm"
           :loading="saving"
           :disabled="saving || loading || !dirty"
           data-test="seedream-eraser-apply"
+          :tooltip="magicWandEnabled ? t('buttonHints.saveFrame') : t('seedream.detail.applyEraser')"
+          :icon-only="magicWandEnabled"
           @click="apply"
         >
-          {{ magicWandEnabled ? t('magicWand.save') : t('seedream.detail.applyEraser') }}
+          <Save
+            v-if="magicWandEnabled"
+            class="h-5 w-5"
+            aria-hidden="true"
+          />
+          <Check
+            v-else
+            class="mr-2 h-4 w-4"
+            aria-hidden="true"
+          />
+          <span v-if="!magicWandEnabled">{{ t('seedream.detail.applyEraser') }}</span>
         </Button>
       </div>
 
@@ -116,17 +148,29 @@
             variant="danger"
             size="sm"
             :disabled="!selectedCount"
+            icon-only
+            :aria-label="t('buttonHints.deleteSelection')"
+            :tooltip="t('buttonHints.deleteSelection')"
             @click="deleteWandSelection"
           >
-            {{ t('magicWand.delete') }}
+            <SelectionEraseIcon
+              class="h-5 w-5"
+              aria-hidden="true"
+            />
           </Button>
           <Button
             variant="secondary"
             size="sm"
             :disabled="!selectedCount"
+            icon-only
+            :aria-label="t('buttonHints.clearSelection')"
+            :tooltip="t('buttonHints.clearSelection')"
             @click="clearWandSelection"
           >
-            {{ t('magicWand.clear') }}
+            <SelectionClearIcon
+              class="h-5 w-5"
+              aria-hidden="true"
+            />
           </Button>
         </template>
         <template v-else-if="tool === 'brush'">
@@ -179,16 +223,28 @@
               size="sm"
               :variant="tool === 'wand' ? 'primary' : 'secondary'"
               data-test="magic-wand-tool"
+              icon-only
+              :aria-label="t('buttonHints.wand')"
+              :tooltip="t('buttonHints.wand')"
               @click="tool = 'wand'"
             >
-              {{ t('magicWand.wand') }}
+              <Wand2
+                class="h-5 w-5"
+                aria-hidden="true"
+              />
             </Button>
             <Button
               size="sm"
               :variant="tool === 'brush' ? 'primary' : 'secondary'"
+              icon-only
+              :aria-label="t('buttonHints.eraser')"
+              :tooltip="t('buttonHints.eraser')"
               @click="tool = 'brush'"
             >
-              {{ t('magicWand.eraser') }}
+              <Eraser
+                class="h-5 w-5"
+                aria-hidden="true"
+              />
             </Button>
           </div>
           <p class="text-xs leading-5 text-gray-400">
@@ -227,18 +283,30 @@
               size="sm"
               :disabled="!selectedCount || saving || loading"
               data-test="magic-wand-delete"
+              icon-only
+              :aria-label="t('buttonHints.deleteSelection')"
+              :tooltip="t('buttonHints.deleteSelection')"
               @click="deleteWandSelection"
             >
-              {{ t('magicWand.delete') }}
+              <SelectionEraseIcon
+                class="h-5 w-5"
+                aria-hidden="true"
+              />
             </Button>
             <Button
               class="w-full"
               variant="secondary"
               size="sm"
               :disabled="!selectedCount"
+              icon-only
+              :aria-label="t('buttonHints.clearSelection')"
+              :tooltip="t('buttonHints.clearSelection')"
               @click="clearWandSelection"
             >
-              {{ t('magicWand.clear') }}
+              <SelectionClearIcon
+                class="h-5 w-5"
+                aria-hidden="true"
+              />
             </Button>
           </template>
           <label class="block text-xs text-gray-400">{{ t('magicWand.preview') }}
@@ -488,9 +556,11 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { Redo2, Undo2 } from 'lucide-vue-next';
+import { Redo2, Undo2, Wand2, Eraser, Save, Check, History } from 'lucide-vue-next';
 import { useI18n } from 'vue-i18n';
 import Button from '@/components/common/Button.vue';
+import SelectionEraseIcon from '@/components/common/SelectionEraseIcon.vue';
+import SelectionClearIcon from '@/components/common/SelectionClearIcon.vue';
 import Slider from '@/components/common/Slider.vue';
 import type { GenerationLayout } from '@/types';
 import { deleteSelection, eraseBrushSegment, selectColorRegion, selectionBounds, selectionOutline } from '@/utils/magic-wand';

@@ -78,7 +78,7 @@ test('Seedream batch detail shows local image and total_tokens on success', asyn
   assert.match(html, /data-test="seedream-download"/);
   assert.match(html, /data-test="seedream-edit-image-0"/);
   assert.match(html, /data-test="seedream-detail-favorite-attempt-1"/);
-  assert.match(html, /图片编辑/);
+  assert.match(html, /aria-label="编辑当前图片与角色构图"/);
   assert.doesNotMatch(html, /seedream-open-eraser-0/);
   assert.doesNotMatch(html, /seedream-resize-character-0/);
 });
@@ -141,7 +141,9 @@ test('Seedream eraser provides background fill, adjustable brush, and local undo
   assert.doesNotMatch(source, /seedream\.detail\.eraserHint/);
   assert.doesNotMatch(source, /seedream\.detail\.eraserHistoryHint/);
   assert.match(source, /data-test="image-editor-restore-original"/);
-  assert.match(source, /bg-success/);
+  const restore = source.match(/<button\b[^>]*data-test="image-editor-restore-original"[^>]*>/)?.[0];
+  assert.match(restore, /bg-dark-surface/);
+  assert.doesNotMatch(restore, /bg-success/);
   assert.match(source, /function restoreOriginal\(\)/);
   assert.match(source, /emit\('cancel'\)[\s\S]*image-editor-restore-original[\s\S]*seedream-eraser-apply/);
   assert.doesNotMatch(source, /CHARACTER_HEIGHT_PRESETS|image-editor-height-preset-/);
