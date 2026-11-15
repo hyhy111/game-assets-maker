@@ -105,6 +105,7 @@ export async function renderSfc(path, {
   slots = {},
   route = '/',
   piniaState = {},
+  locale = 'zh-CN',
   configureSetup,
   ssrContext,
 } = {}) {
@@ -144,7 +145,7 @@ export async function renderSfc(path, {
   app.use(router);
   app.use(createI18n({
     legacy: false,
-    locale: 'zh-CN',
+    locale,
     fallbackLocale: 'en',
     messages: {
       'zh-CN': withSeedreamTestMessages(zhCN, 'zh-CN'),

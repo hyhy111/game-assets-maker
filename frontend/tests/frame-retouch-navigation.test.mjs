@@ -233,6 +233,69 @@ test('saving either retouch tool before step 3 processing refreshes the complete
   assert.equal(failed.currentProject.value.steps[3].completed, false);
 });
 
+test('V enters move-canvas mode in every step and preserves unsaved retouch edits', () => {
+  const previousElement = globalThis.Element;
+  class Target { constructor(editable = false) { this.editable = editable; } closest() { return this.editable; } }
+  globalThis.Element = Target;
+  const prepare = step => {
+    const state = editor(step);
+    if (step !== 3) {
+      state.frameEditor.value = null;
+      state.frameEditorRef.value = null;
+      state.frameEditorTool.value = 'browse';
+    } else {
+      state.frameEditorTool.value = 'brush';
+      state.frameEditorRef.value.dirty = true;
+    }
+    return state;
+  };
+  const press = (state, options = {}) => {
+    const event = { key: 'v', target: new Target(), preventDefault() { this.defaultPrevented = true; }, ...options };
+    state.onToolShortcut(event);
+    return event;
+  };
+  try {
+    for (const step of [1, 2, 3]) {
+      const state = prepare(step);
+      assert.equal(press(state).defaultPrevented, true, `V must be handled in step ${step}`);
+      assert.equal(state.frameEditorTool.value, 'browse');
+      assert.equal(state.saves.length, 0);
+      if (step === 3) {
+        assert.equal(state.frameEditor.value.filename, '1.png');
+        assert.equal(state.frameEditorRef.value.dirty, true);
+      } else {
+        assert.equal(state.frameEditor.value, null, 'V must not open a retouch session');
+      }
+
+      for (const options of [
+        { target: new Target(true) }, { ctrlKey: true }, { metaKey: true }, { altKey: true },
+        { repeat: true }, { defaultPrevented: true },
+      ]) {
+        const guarded = prepare(step);
+        press(guarded, options);
+        assert.equal(guarded.frameEditorTool.value, step === 3 ? 'brush' : 'browse');
+        if (step === 3) assert.equal(guarded.frameEditorRef.value.dirty, true);
+      }
+      for (const configure of [
+        state => { state.frameEditorLoading.value = true; },
+        state => { state.frameEditorSaving.value = true; },
+        state => { state.navigationPending.value = true; },
+        state => { state.process.isProcessing = true; },
+        state => { if (state.frameEditorRef.value) state.frameEditorRef.value.busy = true; },
+      ]) {
+        const guarded = prepare(step);
+        configure(guarded);
+        press(guarded);
+        assert.equal(guarded.frameEditorTool.value, step === 3 ? 'brush' : 'browse');
+        if (step === 3) assert.equal(guarded.frameEditorRef.value.dirty, true);
+      }
+    }
+  } finally {
+    if (previousElement === undefined) delete globalThis.Element;
+    else globalThis.Element = previousElement;
+  }
+});
+
 test('W/E/V switch frame tools and ignore text entry, modifiers, other steps and pending navigation', () => {
   const state = editor();
   const previousElement = globalThis.Element;

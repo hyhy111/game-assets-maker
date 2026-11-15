@@ -72,7 +72,7 @@
         size="sm"
         :disabled="toolsDisabled"
         :class="activeTool === 'browse' ? '' : 'text-white hover:bg-white/10 hover:text-white'"
-        :data-tooltip="retouchEnabled ? `${t('magicWand.browse')} (V)` : t('magicWand.browse')"
+        :data-tooltip="t('magicWand.browse')"
         :aria-label="t('magicWand.browse')"
         :aria-pressed="activeTool === 'browse'"
         data-test="frame-browse-tool"
@@ -406,7 +406,8 @@ function handleKeydown(e: KeyboardEvent) {
   } else if (e.key === 'ArrowDown') {
     e.preventDefault();
     playerStore.zoomOut();
-  } else if (e.key === '0' && (e.ctrlKey || e.metaKey)) {
+  } else if (e.key.toLowerCase() === 'r' && !e.repeat && !e.isComposing
+    && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && !props.toolsDisabled) {
     e.preventDefault();
     resetCanvasView();
   }
