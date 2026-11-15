@@ -65,7 +65,7 @@ Game Assets Maker（GAM）是一款开源桌面工具，面向独立游戏开发
 | 步骤 | 怎么操作 | 重点检查 |
 | --- | --- | --- |
 | **01 帧提取** | 选择起止帧、帧提取间隔，点击“开始提取”。 | 起势和收招是否完整，循环是否顺畅。 |
-| **02 背景移除** | 选择 U²-Net（rembg）或 BiRefNet（Comfy-Org），首次使用时按提示下载权重。 | 头发、武器、细线和半透明边缘。 |
+| **02 背景移除** | 选择 U²-Net（rembg）或 BiRefNet（Comfy-Org），首次使用时按提示下载权重。U²-Net 仅显示 Alpha Matting 参数，BiRefNet 仅显示边缘去色参数。 | 头发、武器、细线和半透明边缘。 |
 | **03 后处理** | 按需启用挖孔、缩减边缘和帧对齐。 | 轮廓细节、跳跃高度和有意位移。 |
 
 每步完成后先播放检查。步骤 02 / 03 可隐藏异常帧，也可恢复；重新抽帧会使下游旧处理结果失效。模型就绪后，本地处理可以离线进行。重新去背整批成功后会替换当前结果，并清除步骤 03 的结果和手修。
@@ -185,7 +185,7 @@ If you need source material, create a character in Image Generation, then use th
 | Step | Action | Check |
 | --- | --- | --- |
 | **01 Extract frames** | Choose the start, end, and extraction interval, then start extraction. | Complete motion and a clean loop. |
-| **02 Remove background** | Choose U²-Net (rembg) or BiRefNet (Comfy-Org) and download the weights on first use. | Hair, weapons, thin lines, and soft edges. |
+| **02 Remove background** | Choose U²-Net (rembg) or BiRefNet (Comfy-Org) and download the weights on first use. U²-Net shows only Alpha Matting controls; BiRefNet shows only edge-defringe controls. | Hair, weapons, thin lines, and soft edges. |
 | **03 Post-process** | Enable hole punching, edge shrink, and frame alignment as needed. | Outline detail, jump height, and intentional movement. |
 
 Play the result after each step. You can hide and restore unwanted frames in steps 02 / 03. Re-extracting frames invalidates older downstream results. Once the model is ready, local processing works offline. A successful background removal run replaces the current result and clears Step 03 results and manual edits.
