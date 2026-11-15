@@ -10,6 +10,24 @@ import { createNavigationGuard } from '@/utils/navigation-guard';
 import type { BackgroundRemovalModel, ModelStatus, Step1Params, Step2Params, Step3Params, TaskStatus } from '@/types';
 import { logEvent } from '@/debug/request-log';
 
+export const step2Defaults: Step2Params = {
+  model: 'u2net',
+  alpha_matting: true,
+  alpha_matting_erode_size: 5,
+  alpha_matting_background_threshold: 120,
+  alpha_matting_foreground_threshold: 240,
+  alpha_contrast: 1.0,
+  alpha_threshold: 0,
+  defringe_enabled: false,
+  defringe_px: 2,
+  defringe_amount: 0.5,
+  min_foreground_area: 0,
+  fill_holes_max_size: 0,
+  fps: 10,
+  processed: false,
+  processing_time: 0
+};
+
 export const useProcessStore = defineStore('process', () => {
   const navigation = createNavigationGuard();
 
@@ -27,23 +45,6 @@ export const useProcessStore = defineStore('process', () => {
     processed: false
   });
 
-  const step2Defaults: Step2Params = {
-    model: 'u2net',
-    alpha_matting: true,
-    alpha_matting_erode_size: 5,
-    alpha_matting_background_threshold: 120,
-    alpha_matting_foreground_threshold: 240,
-    alpha_contrast: 1.0,
-    alpha_threshold: 0,
-    defringe_enabled: false,
-    defringe_px: 2,
-    defringe_amount: 0.5,
-    min_foreground_area: 0,
-    fill_holes_max_size: 0,
-    fps: 10,
-    processed: false,
-    processing_time: 0
-  };
   const s2Params = ref({ ...step2Defaults });
 
   const step3Defaults: Step3Params = {

@@ -9,16 +9,30 @@
       </p>
     </div>
 
-    <label class="block space-y-2 text-sm font-medium text-gray-300">
-      <span>{{ t('step2.model') }}</span>
-      <Select
-        :model-value="selectedModel"
+    <div class="space-y-2">
+      <span class="block text-sm font-medium text-gray-300">{{ t('step2.model') }}</span>
+      <div
+        class="grid grid-cols-2 gap-1 rounded-xl bg-black/15 p-1"
+        role="group"
         :aria-label="t('step2.model')"
-        :disabled="isProcessing"
-        :options="modelOptions"
-        @update:model-value="setModel"
-      />
-    </label>
+      >
+        <button
+          v-for="option in modelOptions"
+          :key="option.value"
+          type="button"
+          class="rounded-lg px-2 py-2 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-30"
+          :class="selectedModel === option.value
+            ? 'bg-primary/20 text-primary-200 shadow-sm'
+            : 'text-gray-400 hover:bg-white/[0.05] hover:text-gray-200'"
+          :disabled="isProcessing"
+          :aria-pressed="selectedModel === option.value"
+          :data-test="`background-model-${option.value}`"
+          @click="setModel(option.value)"
+        >
+          {{ option.label }}
+        </button>
+      </div>
+    </div>
 
     <ModelStatusCard
       v-if="shouldShowModelStatus"
@@ -163,76 +177,43 @@
       </div>
     </div>
 
-    <!-- Alpha Refinement (debug/tuning for local models) -->
-    <div class="space-y-3">
-      <div>
-        <label class="block text-sm font-medium text-gray-300">{{ t('step2.alphaRefine') }}</label>
-        <p class="text-xs text-gray-500">
-          {{ t('step2.alphaRefineHint') }}
-        </p>
+    <!-- Edge Defringe -->
+    <div
+      v-if="selectedModel === 'birefnet-comfy'"
+      class="space-y-4"
+    >
+      <div class="flex items-center justify-between">
+        <label class="text-sm font-medium text-gray-300">{{ t('step2.defringe') }}</label>
+        <Switch
+          v-model="s2Params.defringe_enabled"
+          :aria-label="t('step2.defringe')"
+        />
       </div>
-      <div class="space-y-4 pl-4 border-l-2 border-dark-border">
-        <div
-          v-for="field in refineFields"
+      <div
+        v-if="s2Params.defringe_enabled"
+        class="space-y-4 pl-4 border-l-2 border-dark-border"
+      >
+        <label
+          v-for="field in defringeFields"
           :key="field.key"
-          class="space-y-1"
+          class="flex items-center justify-between gap-3 text-sm text-gray-400"
         >
-          <label class="flex items-center justify-between gap-3 text-sm text-gray-400">
-            <span>{{ t(field.label) }}</span>
-            <input
-              v-model.number="s2Params[field.key]"
-              type="number"
-              :min="field.min"
-              :max="field.max"
-              :step="field.step"
-              class="w-20 rounded-lg border border-dark-border bg-dark-surface px-2 py-1.5 text-center text-gray-100"
-              @keydown="onInputKeydown"
-            >
-          </label>
+          <span>{{ t(field.label) }}</span>
           <input
             v-model.number="s2Params[field.key]"
-            type="range"
+            type="number"
             :min="field.min"
             :max="field.max"
             :step="field.step"
             :aria-label="t(field.label)"
-            class="w-full h-2 bg-dark-border rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-primary [&::-webkit-slider-thumb]:rounded-full"
+            class="w-20 rounded-lg border border-dark-border bg-dark-surface px-2 py-1.5 text-center text-gray-100"
+            @keydown="onInputKeydown"
           >
-          <p class="text-xs text-gray-500">
-            {{ t(field.hint) }}
-          </p>
-        </div>
-
-        <!-- Defringe Toggle -->
-        <div class="flex items-center justify-between">
-          <span class="text-sm text-gray-400">{{ t('step2.defringe') }}</span>
-          <Switch
-            v-model="s2Params.defringe_enabled"
-            :aria-label="t('step2.defringe')"
-          />
-        </div>
-        <template v-if="s2Params.defringe_enabled">
-          <label
-            v-for="field in defringeFields"
-            :key="field.key"
-            class="flex items-center justify-between gap-3 text-sm text-gray-400"
-          >
-            <span>{{ t(field.label) }}</span>
-            <input
-              v-model.number="s2Params[field.key]"
-              type="number"
-              :min="field.min"
-              :max="field.max"
-              :step="field.step"
-              class="w-20 rounded-lg border border-dark-border bg-dark-surface px-2 py-1.5 text-center text-gray-100"
-              @keydown="onInputKeydown"
-            >
-          </label>
-        </template>
-        <p class="text-xs text-gray-500">
-          {{ t('step2.defringeHint') }}
-        </p>
+        </label>
       </div>
+      <p class="text-xs text-gray-500">
+        {{ t('step2.defringeHint') }}
+      </p>
     </div>
 
     <!-- Processing Progress -->
@@ -330,13 +311,12 @@ import { storeToRefs } from 'pinia';
 import { useI18n } from 'vue-i18n';
 import { Wand2, CheckCircle, X, RotateCcw, Square } from 'lucide-vue-next';
 import { useProjectStore } from '@/stores/project';
-import { useProcessStore } from '@/stores/process';
+import { useProcessStore, step2Defaults } from '@/stores/process';
 import { usePlayerStore } from '@/stores/player';
 import Button from '@/components/common/Button.vue';
 import Switch from '@/components/common/Switch.vue';
 import Input from '@/components/common/Input.vue';
 import ModelStatusCard from '@/components/editor/ModelStatusCard.vue';
-import Select from '@/components/common/Select.vue';
 import { backgroundModelName, canStartStep2 } from '@/model-status';
 
 const projectStore = useProjectStore();
@@ -359,58 +339,20 @@ function setModel(value: string | number) {
   if (value === 'u2net' || value === 'birefnet-comfy') s2Params.value.model = value;
 }
 
-const canProcess = computed(() => !isProcessing.value && refineValid.value
+const canProcess = computed(() => !isProcessing.value && visibleParamsValid.value
   && canStartStep2(step1Completed.value, modelStatus.value, selectedModel.value));
 const shouldShowModelStatus = computed(() => !isProcessing.value && modelStatus.value.phase !== 'ready');
-
-const refineFields = [
-  {
-    key: 'alpha_contrast',
-    label: 'step2.alphaContrast',
-    hint: 'step2.alphaContrastHint',
-    min: 0.5,
-    max: 3,
-    step: 0.1,
-  },
-  {
-    key: 'alpha_threshold',
-    label: 'step2.alphaThreshold',
-    hint: 'step2.alphaThresholdHint',
-    min: 0,
-    max: 254,
-    step: 1,
-  },
-  {
-    key: 'min_foreground_area',
-    label: 'step2.minForegroundArea',
-    hint: 'step2.minForegroundAreaHint',
-    min: 0,
-    max: 10000,
-    step: 10,
-  },
-  {
-    key: 'fill_holes_max_size',
-    label: 'step2.fillHolesMaxSize',
-    hint: 'step2.fillHolesMaxSizeHint',
-    min: 0,
-    max: 10000,
-    step: 10,
-  },
-] as const;
 
 const defringeFields = [
   { key: 'defringe_px', label: 'step2.defringePx', min: 0, max: 20, step: 1 },
   { key: 'defringe_amount', label: 'step2.defringeAmount', min: 0, max: 1, step: 0.05 },
 ] as const;
 
-const refineValid = computed(() => {
+const visibleParamsValid = computed(() => {
+  if (selectedModel.value === 'u2net') return true;
   const p = s2Params.value;
-  return p.alpha_contrast >= 0.5 && p.alpha_contrast <= 3
-    && Number.isInteger(p.alpha_threshold) && p.alpha_threshold >= 0 && p.alpha_threshold <= 254
-    && Number.isInteger(p.defringe_px) && p.defringe_px >= 0 && p.defringe_px <= 20
-    && Number.isFinite(p.defringe_amount) && p.defringe_amount >= 0 && p.defringe_amount <= 1
-    && Number.isInteger(p.min_foreground_area) && p.min_foreground_area >= 0 && p.min_foreground_area <= 10000
-    && Number.isInteger(p.fill_holes_max_size) && p.fill_holes_max_size >= 0 && p.fill_holes_max_size <= 10000;
+  return Number.isInteger(p.defringe_px) && p.defringe_px >= 0 && p.defringe_px <= 20
+    && Number.isFinite(p.defringe_amount) && p.defringe_amount >= 0 && p.defringe_amount <= 1;
 });
 
 watch(selectedModel, (model) => {
@@ -450,6 +392,22 @@ async function startProcessing() {
     fps: s2Params.value.fps,
     processed: true
   };
+
+  // Hidden controls must not leak stale development-session values into processing.
+  params.alpha_contrast = step2Defaults.alpha_contrast;
+  params.alpha_threshold = step2Defaults.alpha_threshold;
+  params.min_foreground_area = step2Defaults.min_foreground_area;
+  params.fill_holes_max_size = step2Defaults.fill_holes_max_size;
+  if (selectedModel.value === 'birefnet-comfy') {
+    params.alpha_matting = step2Defaults.alpha_matting;
+    params.alpha_matting_erode_size = step2Defaults.alpha_matting_erode_size;
+    params.alpha_matting_background_threshold = step2Defaults.alpha_matting_background_threshold;
+    params.alpha_matting_foreground_threshold = step2Defaults.alpha_matting_foreground_threshold;
+  } else {
+    params.defringe_enabled = step2Defaults.defringe_enabled;
+    params.defringe_px = step2Defaults.defringe_px;
+    params.defringe_amount = step2Defaults.defringe_amount;
+  }
 
   await processStore.startProcessing(projectStore.currentProject.id, 2, params);
 }
