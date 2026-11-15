@@ -73,6 +73,102 @@ def test_successful_model_switch_publishes_only_the_new_sequence(process, projec
     assert BatchTrimAPI(projects_root=tmp_path)._get_source_dir(PROJECT_ID) == output / "02_no_bg"
 
 
+def test_birefnet_result_without_saved_hole_choice_disables_hole_punch(process, project, monkeypatch):
+    assert process.get_step_params(PROJECT_ID, 3)["enabled"] is True
+
+    monkeypatch.setattr(
+        "backend.core.birefnet.remove_background",
+        lambda _: Image.new("RGBA", (16, 16), (255, 255, 0, 128)),
+    )
+    assert run(process, 2, {"model": "birefnet-comfy"}) == "completed"
+
+    params = process.get_step_params(PROJECT_ID, 3)
+    assert params["enabled"] is False
+    assert params["green_intensity"] == 4
+
+    assert process.save_step_params(PROJECT_ID, 2, {"model": "u2net"})
+    assert process.get_step_params(PROJECT_ID, 3)["enabled"] is False
+
+
+def test_u2net_result_without_saved_hole_choice_enables_hole_punch(process, project, monkeypatch):
+    assert process.save_step_params(PROJECT_ID, 2, {"model": "birefnet-comfy"})
+    assert process.get_step_params(PROJECT_ID, 3)["enabled"] is True
+    monkeypatch.setattr(
+        "backend.core.smart_remove_background.remove_background_single_rembg",
+        lambda *_args, **_kwargs: (Image.new("RGBA", (16, 16), (255, 255, 0, 128)), None),
+    )
+
+    assert run(process, 2, {"model": "u2net"}) == "completed"
+
+    assert process.get_step_params(PROJECT_ID, 3)["enabled"] is True
+
+
+def test_new_project_birefnet_result_uses_unset_hole_choice(process, tmp_path, monkeypatch):
+    ProjectAPI(projects_root=tmp_path).create_project("角色", "动作")
+    frames = tmp_path / PROJECT_ID / "output" / "01_frames"
+    Image.new("RGBA", (16, 16), (0, 255, 0, 255)).save(frames / FRAME)
+    monkeypatch.setattr(
+        "backend.core.birefnet.remove_background",
+        lambda _: Image.new("RGBA", (16, 16), (255, 255, 0, 128)),
+    )
+
+    assert run(process, 2, {"model": "birefnet-comfy"}) == "completed"
+
+    assert process.get_step_params(PROJECT_ID, 3)["enabled"] is False
+
+
+def test_legacy_project_without_step3_config_keeps_model_default_unset(process, tmp_path, monkeypatch):
+    project = tmp_path / PROJECT_ID
+    cache = project / "cache"
+    cache.mkdir(parents=True)
+    (cache / "step2_params.json").write_text(json.dumps({"processed": True}), encoding="utf-8")
+    frames = project / "output" / "01_frames"
+    frames.mkdir(parents=True)
+    Image.new("RGBA", (16, 16), (0, 255, 0, 255)).save(frames / FRAME)
+    assert process.get_step_params(PROJECT_ID, 3)["enabled"] is True
+
+    monkeypatch.setattr(
+        "backend.core.birefnet.remove_background",
+        lambda _: Image.new("RGBA", (16, 16), (255, 255, 0, 128)),
+    )
+    assert run(process, 2, {"model": "birefnet-comfy"}) == "completed"
+
+    assert process.get_step_params(PROJECT_ID, 3)["enabled"] is False
+
+
+@pytest.mark.parametrize(
+    ("saved_choice", "model"),
+    [(True, "birefnet-comfy"), (False, "u2net")],
+)
+def test_saved_hole_choice_survives_model_results_and_project_reopening(
+    process, project, tmp_path, monkeypatch, saved_choice, model
+):
+    assert process.get_step_params(PROJECT_ID, 3)["green_intensity"] == 4
+    assert process.save_step_params(PROJECT_ID, 3, {"enabled": saved_choice})
+    if model == "birefnet-comfy":
+        monkeypatch.setattr(
+            "backend.core.birefnet.remove_background",
+            lambda _: Image.new("RGBA", (16, 16), (255, 255, 0, 128)),
+        )
+    else:
+        monkeypatch.setattr(
+            "backend.core.smart_remove_background.remove_background_single_rembg",
+            lambda *_args, **_kwargs: (Image.new("RGBA", (16, 16), (255, 255, 0, 128)), None),
+        )
+
+    assert run(process, 2, {"model": model}) == "completed"
+    assert process.get_step_params(PROJECT_ID, 3)["enabled"] is saved_choice
+
+    reopened = ProcessAPI(projects_root=tmp_path)
+    try:
+        params = reopened.get_step_params(PROJECT_ID, 3)
+        assert params["enabled"] is saved_choice
+        assert params["green_intensity"] == 4
+        assert ProjectAPI(projects_root=tmp_path).get_project(PROJECT_ID)["steps"]["2"]["result_model"] == model
+    finally:
+        reopened.shutdown()
+
+
 @pytest.mark.parametrize("failure", ["partial", "cancelled", "publish"])
 def test_failed_or_cancelled_replacement_keeps_outputs_and_settings(process, project, failure, monkeypatch):
     output = project / "output"

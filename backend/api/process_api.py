@@ -555,7 +555,6 @@ class ProcessAPI:
         },
         3: {
             # Step 3: Post-processing
-            "enabled": True,  # Hole punching enabled
             "green_intensity": 3,
             "feather_radius": 3,  # 0-10 pixels
             "min_hole_size": 5,  # Minimum hole area in pixels
@@ -614,6 +613,15 @@ class ProcessAPI:
         with self.parameter_transaction(project_id):
             return self._read_step_params(project_id, step)
 
+    def _merge_step_params(self, step: int, config: dict[str, Any]) -> dict[str, Any]:
+        saved = config.get(f"step{step}", {})
+        params = {**self.DEFAULT_STEP_PARAMS.get(step, {}), **saved}
+        if step == 3 and "enabled" not in saved:
+            # Absence means no explicit choice; keep the resolved default out of persisted config.
+            result_model = config.get("step2", {}).get("result_model", "u2net")
+            params["enabled"] = result_model != "birefnet-comfy"
+        return params
+
     def _read_step_params(self, project_id: str, step: int) -> dict[str, Any]:
         """Get saved parameters for a step from unified config"""
         project_path = self._get_project_path(project_id)
@@ -625,7 +633,7 @@ class ProcessAPI:
                     config = json.load(f)
                 step_key = f"step{step}"
                 if step_key in config:
-                    return {**self.DEFAULT_STEP_PARAMS.get(step, {}), **config[step_key]}
+                    return self._merge_step_params(step, config)
             except Exception as e:
                 print(f"Error reading steps config: {e}")
 
@@ -634,8 +642,7 @@ class ProcessAPI:
         if config:
             # Save migrated config
             self._save_steps_config(project_id, config)
-            step_key = f"step{step}"
-            return {**self.DEFAULT_STEP_PARAMS.get(step, {}), **config.get(step_key, {})}
+            return self._merge_step_params(step, config)
 
         # Return defaults
         return self.DEFAULT_STEP_PARAMS.get(step, {}).copy()
