@@ -306,12 +306,18 @@ function onToolShortcut(event: KeyboardEvent) {
     return;
   }
   if (event.repeat || event.ctrlKey || event.metaKey || event.altKey
-    || !frameRetouchEnabled.value || processStore.isProcessing
-    || frameEditorRef.value?.busy) return;
+    || processStore.isProcessing || frameEditorRef.value?.busy) return;
   if (event.target instanceof Element
     && event.target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="textbox"]')) return;
   const key = event.key.toLowerCase();
-  const tool = key === 'w' ? 'wand' : key === 'e' ? 'brush' : key === 'v' ? 'browse' : null;
+  if (key === 'v') {
+    if (frameEditorLoading.value || frameEditorSaving.value || navigationPending.value) return;
+    event.preventDefault();
+    selectFrameTool('browse');
+    return;
+  }
+  if (!frameRetouchEnabled.value) return;
+  const tool = key === 'w' ? 'wand' : key === 'e' ? 'brush' : null;
   if (!tool) return;
   event.preventDefault();
   selectFrameTool(tool);
