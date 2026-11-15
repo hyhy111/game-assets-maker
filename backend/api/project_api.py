@@ -275,7 +275,6 @@ class ProjectAPI:
             },
             "step3": {
                 # Step 3: Post-processing (hole punching + alignment)
-                "enabled": True,  # Hole punching enabled
                 "green_intensity": 3,
                 "feather_radius": 3,
                 "min_hole_size": 5,
