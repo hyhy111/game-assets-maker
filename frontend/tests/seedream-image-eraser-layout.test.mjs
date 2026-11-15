@@ -142,8 +142,8 @@ test('pixel rounding on an odd canvas does not place the character outside the c
 
 test('component eraser and outward wand edits restore all affected pixels on undo and redo', () => {
   const state = editor(null, 11, { magicWandEnabled: true });
-  assert.equal(state.brushSize.value, 5);
-  assert.equal(state.brushFeather.value, 0);
+  assert.equal(state.brushSize.value, 3);
+  assert.equal(state.brushFeather.value, 1);
   state.brushFeather.value = 2;
   let pixels = new Uint8ClampedArray(11 * 11 * 4);
   for (let i = 0; i < 121; i++) pixels.set([120, 130, 140, 200], i * 4);
@@ -209,7 +209,7 @@ test('plus/minus changes only the active tool parameter, repeats, clamps and ign
     assert.equal(press('+').defaultPrevented, true);
     press('=', {repeat:true}); press('-');
     assert.equal(state.wandTolerance.value, 21);
-    assert.equal(state.brushSize.value, 5);
+    assert.equal(state.brushSize.value, 3);
     for (const options of [{target:new Target(true)}, {ctrlKey:true}, {metaKey:true}, {altKey:true}, {isComposing:true}, {defaultPrevented:true}]) {
       press('+', options);
       assert.equal(state.wandTolerance.value, 21);
@@ -217,18 +217,18 @@ test('plus/minus changes only the active tool parameter, repeats, clamps and ign
     state.wandTolerance.value = 100; press('+'); assert.equal(state.wandTolerance.value, 100);
     state.wandTolerance.value = 0; press('_'); assert.equal(state.wandTolerance.value, 0);
     state.tool.value = 'brush';
-    press('+'); assert.equal(state.brushSize.value, 6);
-    press('-'); assert.equal(state.brushSize.value, 5);
+    press('+'); assert.equal(state.brushSize.value, 4);
+    press('-'); assert.equal(state.brushSize.value, 3);
     state.brushSize.value = 200; press('='); assert.equal(state.brushSize.value, 200);
     state.brushSize.value = 1; press('-'); assert.equal(state.brushSize.value, 1);
-    assert.equal(state.brushFeather.value, 0, 'parameter keys never change feather');
+    assert.equal(state.brushFeather.value, 1, 'parameter keys never change feather');
     state.tool.value = 'browse';
     assert.equal(press('+').defaultPrevented, undefined);
     assert.equal(state.brushSize.value, 1);
     assert.equal(state.wandTolerance.value, 0);
     const legacy = editor();
     legacy.onKeydown({key:'+',target:new Target(),preventDefault(){ throw Error('legacy editor must ignore frame tool shortcuts'); }});
-    assert.equal(legacy.brushSize.value, 5);
+    assert.equal(legacy.brushSize.value, 3);
   } finally {
     if (previous === undefined) delete globalThis.Element;
     else globalThis.Element = previous;

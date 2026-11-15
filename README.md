@@ -65,14 +65,14 @@ Game Assets Maker（GAM）是一款开源桌面工具，面向独立游戏开发
 | 步骤 | 怎么操作 | 重点检查 |
 | --- | --- | --- |
 | **01 帧提取** | 选择起止帧、帧提取间隔，点击“开始提取”。 | 起势和收招是否完整，循环是否顺畅。 |
-| **02 背景移除** | 选择 U²-Net（rembg）或 BiRefNet（Comfy-Org），首次使用时按提示下载权重。 | 头发、武器、细线和半透明边缘。 |
+| **02 背景移除** | 选择 U²-Net（rembg）或 BiRefNet（Comfy-Org），首次使用时按提示下载权重。U²-Net 仅显示 Alpha Matting 参数，BiRefNet 仅显示边缘去色参数。 | 头发、武器、细线和半透明边缘。 |
 | **03 后处理** | 按需启用挖孔、缩减边缘和帧对齐。 | 轮廓细节、跳跃高度和有意位移。 |
 
 每步完成后先播放检查。步骤 02 / 03 可隐藏异常帧，也可恢复；重新抽帧会使下游旧处理结果失效。模型就绪后，本地处理可以离线进行。重新去背整批成功后会替换当前结果，并清除步骤 03 的结果和手修。
 
 三个步骤的预览按钮会在悬停或键盘聚焦时显示快捷键：↑ / ↓ 缩放、← / → 切帧、空格播放或暂停、R 居中并适配预览、V 进入移动画布模式。移动模式下可左键拖动，中键拖动始终可用。
 
-步骤 02 完成后，切换到步骤 03 页面即可点击 **预览右下角的魔棒或橡皮擦**，自动暂停并在当前预览中修整，无需先运行步骤 03；顶部显示工具参数，预览窗内显示简要操作提示。魔棒点击选区、Shift 点击追加、Delete 删除；橡皮擦用左键拖动擦除。滚轮缩放、中键拖动画布，空格仍控制播放。保留当前预览背景、缩放和平移，背景仍可切换。点击“保存当前帧”后标记为已完成处理，动画卡片的第三个状态图标变绿，并保持工具选中，撤销记录以此次保存为起点；切回浏览工具保留未保存修改。播放、切帧、切步骤或离开页面前，未保存修改会提示保存、放弃或留在当前帧。取消丢弃本次未保存修改。修整只修改步骤 03 的这一帧，重新运行步骤 03 会覆盖修整。W / E / V 分别切换魔棒、橡皮擦和移动工具；选中魔棒或橡皮擦时，⌘S / Ctrl+S 保存当前帧；+ / - 调整当前工具的颜色容差或橡皮擦大小。橡皮擦默认大小 5px、羽化 0px；魔棒删除会完全清除选区，并向选区外侧羽化；羽化为 0 时仅清除选区。工具栏的“恢复初始版本”会恢复本轮人工修整前的当前帧（未运行步骤 03 时以步骤 02 结果为基准），跨保存和重启保留；恢复可撤销，点击保存才写入结果。旧备份没有步骤标记、无法确认初始版本时，恢复按钮会禁用并提示重新处理步骤 03。
+步骤 02 完成后，切换到步骤 03 页面即可点击 **预览右下角的魔棒或橡皮擦**，自动暂停并在当前预览中修整，无需先运行步骤 03；顶部显示工具参数，预览窗内显示简要操作提示。魔棒点击选区、Shift 点击追加、Delete 删除；橡皮擦用左键拖动擦除。滚轮缩放、中键拖动画布，空格仍控制播放。保留当前预览背景、缩放和平移，背景仍可切换。点击“保存当前帧”后标记为已完成处理，动画卡片的第三个状态图标变绿，并保持工具选中，撤销记录以此次保存为起点；切回浏览工具保留未保存修改。播放、切帧、切步骤或离开页面前，未保存修改会提示保存、放弃或留在当前帧。取消丢弃本次未保存修改。修整只修改步骤 03 的这一帧，重新运行步骤 03 会覆盖修整。W / E / V 分别切换魔棒、橡皮擦和移动工具；选中魔棒或橡皮擦时，⌘S / Ctrl+S 保存当前帧；+ / - 调整当前工具的颜色容差或橡皮擦大小。橡皮擦默认大小 3px、羽化 1px；魔棒删除会完全清除选区，并向选区外侧羽化；羽化为 0 时仅清除选区。工具栏的“恢复初始版本”会恢复本轮人工修整前的当前帧（未运行步骤 03 时以步骤 02 结果为基准），跨保存和重启保留；恢复可撤销，点击保存才写入结果。旧备份没有步骤标记、无法确认初始版本时，恢复按钮会禁用并提示重新处理步骤 03。
 
 #### 3. 裁剪与导出
 
@@ -187,14 +187,14 @@ If you need source material, create a character in Image Generation, then use th
 | Step | Action | Check |
 | --- | --- | --- |
 | **01 Extract frames** | Choose the start, end, and extraction interval, then start extraction. | Complete motion and a clean loop. |
-| **02 Remove background** | Choose U²-Net (rembg) or BiRefNet (Comfy-Org) and download the weights on first use. | Hair, weapons, thin lines, and soft edges. |
+| **02 Remove background** | Choose U²-Net (rembg) or BiRefNet (Comfy-Org) and download the weights on first use. U²-Net shows only Alpha Matting controls; BiRefNet shows only edge-defringe controls. | Hair, weapons, thin lines, and soft edges. |
 | **03 Post-process** | Enable hole punching, edge shrink, and frame alignment as needed. | Outline detail, jump height, and intentional movement. |
 
 Play the result after each step. You can hide and restore unwanted frames in steps 02 / 03. Re-extracting frames invalidates older downstream results. Once the model is ready, local processing works offline. A successful background removal run replaces the current result and clears Step 03 results and manual edits.
 
 Across all three steps, preview buttons show shortcuts on hover or keyboard focus: ↑ / ↓ to zoom, ← / → to change frames, Space to play or pause, R to center and fit, and V to enter pan mode. Left-drag pans in pan mode, while middle-drag remains available in every tool.
 
-After Step 02, switch to the Step 03 page and choose the **magic wand or eraser at the preview’s bottom right** to pause and retouch the current frame in place, without first running Step 03. Tool settings appear at the top, with brief instructions inside the preview. Click to select, Shift-click to add, and Delete to remove; left-drag to erase. Scroll to zoom, middle-drag to pan, and use Space for playback. The preview keeps its background, zoom and pan; background switching remains available. Saving marks processing complete, turns the animation card’s third status icon green, keeps the tool selected and starts a new undo history. Browse mode keeps unsaved edits. Before playback, frame/step navigation or leaving the page, choose to save, discard or stay. Cancel discards unsaved changes. Edits affect only this frame in Step 03. Re-running Step 03 replaces manual edits. W / E / V select the wand, eraser and pan tools; Cmd+S / Ctrl+S save the current frame while the wand or eraser is selected; + / - adjust the active tool’s color tolerance or eraser size. The eraser defaults to 5px with 0px feathering. Wand deletion fully clears the selection and feathers outward into neighboring pixels; with feathering set to 0, only selected pixels are cleared. Restore Initial Version restores the current frame’s appearance before manual edits in this run (using Step 02 output when Step 03 has not been run), across saves and restarts. Restoration can be undone and requires Save to update the output. If older backups do not identify their processing step, restoration stays disabled until Step 03 is reprocessed to establish a verified baseline.
+After Step 02, switch to the Step 03 page and choose the **magic wand or eraser at the preview’s bottom right** to pause and retouch the current frame in place, without first running Step 03. Tool settings appear at the top, with brief instructions inside the preview. Click to select, Shift-click to add, and Delete to remove; left-drag to erase. Scroll to zoom, middle-drag to pan, and use Space for playback. The preview keeps its background, zoom and pan; background switching remains available. Saving marks processing complete, turns the animation card’s third status icon green, keeps the tool selected and starts a new undo history. Browse mode keeps unsaved edits. Before playback, frame/step navigation or leaving the page, choose to save, discard or stay. Cancel discards unsaved changes. Edits affect only this frame in Step 03. Re-running Step 03 replaces manual edits. W / E / V select the wand, eraser and pan tools; Cmd+S / Ctrl+S save the current frame while the wand or eraser is selected; + / - adjust the active tool’s color tolerance or eraser size. The eraser defaults to 3px with 1px feathering. Wand deletion fully clears the selection and feathers outward into neighboring pixels; with feathering set to 0, only selected pixels are cleared. Restore Initial Version restores the current frame’s appearance before manual edits in this run (using Step 02 output when Step 03 has not been run), across saves and restarts. Restoration can be undone and requires Save to update the output. If older backups do not identify their processing step, restoration stays disabled until Step 03 is reprocessed to establish a verified baseline.
 
 #### 3. Trim and export
 

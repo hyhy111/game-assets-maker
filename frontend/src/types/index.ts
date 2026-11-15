@@ -237,7 +237,7 @@ export interface SavedFrameEdit {
 
 // Step 3: Post-processing
 export interface Step3Params {
-  enabled: boolean;              // whether hole punching is enabled, default true
+  enabled: boolean;              // defaults from the result model until explicitly saved
   // Background color tolerance (1-5); legacy field name retained for saved projects.
   green_intensity: number;       // 1-5, default 3
   feather_radius: number;        // Feather radius (0-10 pixels), default 3

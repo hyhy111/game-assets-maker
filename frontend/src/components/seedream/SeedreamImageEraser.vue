@@ -11,7 +11,7 @@
       :disabled="!embedded"
     >
       <div :class="embedded ? 'flex h-11 items-center gap-2 px-3' : 'mx-auto flex w-full max-w-6xl flex-wrap items-center gap-3 rounded-xl border border-dark-border bg-dark-surface p-3'">
-        <h2 class="mr-auto min-w-0 truncate text-sm font-semibold text-white">
+        <h2 :class="['mr-auto min-w-0 truncate text-sm', embedded ? 'font-bold text-primary' : 'font-semibold text-white']">
           {{ title || t('seedream.detail.eraserTitle') }}
         </h2>
         <div
@@ -117,7 +117,7 @@
       <fieldset
         v-if="embedded"
         :disabled="saving || loading || suspended"
-        class="flex h-20 min-w-0 items-center gap-4 overflow-x-auto border-t border-dark-border px-3"
+        class="flex h-20 min-w-0 items-center gap-4 overflow-x-auto px-3"
         data-test="frame-tool-options"
       >
         <template v-if="tool === 'wand'">
@@ -218,7 +218,7 @@
           v-if="magicWandEnabled"
           class="mb-4 space-y-3"
         >
-          <div class="flex gap-2">
+          <div class="flex justify-end gap-2">
             <Button
               size="sm"
               :variant="tool === 'wand' ? 'primary' : 'secondary'"
@@ -650,8 +650,8 @@ watch([wandTolerance, wandContiguous], () => updateWandSelection());
 watch(tool, () => clearWandSelection());
 const loading = ref(true);
 const loadError = ref('');
-const brushSize = ref(5);
-const brushFeather = ref(0);
+const brushSize = ref(3);
+const brushFeather = ref(1);
 const backgroundColor = ref<[number, number, number]>([0, 0, 0]);
 const undoStack = ref<HistoryPatch[]>([]);
 const redoStack = ref<HistoryPatch[]>([]);
