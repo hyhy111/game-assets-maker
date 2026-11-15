@@ -288,8 +288,8 @@ export const useProcessStore = defineStore('process', () => {
       }
     }) as EventListener);
 
-    window.addEventListener('task-complete', ((event: CustomEvent) => {
-      const detail = event.detail;
+    window.addEventListener('task-complete', async (event: Event) => {
+      const detail = (event as CustomEvent).detail;
       if (currentTask.value && detail.taskId === currentTask.value) {
         taskStatus.value = {
           ...taskStatus.value,
@@ -312,15 +312,20 @@ export const useProcessStore = defineStore('process', () => {
           }
         }
 
+        stopPolling();
+
         // Refresh project to get updated step status
         const projectStore = useProjectStore();
         if (projectStore.currentProject) {
-          projectStore.loadProject(projectStore.currentProject.id);
+          const projectId = projectStore.currentProject.id;
+          const step = taskStatus.value?.step;
+          await projectStore.loadProject(projectId);
+          if (detail.success && step === 2) {
+            await refreshHolePunchChoice(projectId);
+          }
         }
-
-        stopPolling();
       }
-    }) as EventListener);
+    });
 
     window.addEventListener('model-status', ((event: CustomEvent<ModelStatus>) => {
       const detail = event.detail;
