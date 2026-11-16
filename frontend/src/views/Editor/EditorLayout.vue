@@ -49,7 +49,7 @@
               :keyboard-disabled="frameEditorLoading || frameEditorSaving || navigationPending"
               :editing="!!frameEditor"
               :retouch-enabled="frameRetouchEnabled"
-              :tools-disabled="frameEditorLoading || frameEditorSaving || navigationPending || processStore.isProcessing"
+              :tools-disabled="visibilityUpdating || frameEditorLoading || frameEditorSaving || navigationPending || processStore.isProcessing"
               :active-tool="frameEditor ? frameEditorTool : 'browse'"
               :preview-frame-index="previewFrameIndex"
               @preview-step="stepCandidateFrame"
@@ -111,57 +111,18 @@
           @edit-frame="openFramePicker"
         />
 
-        <div
+        <HiddenFramesPanel
           v-if="frameVisibilityEnabled"
-          class="mt-3 flex items-center justify-between gap-3 rounded-xl border border-dark-border bg-dark-surface px-4 py-3"
-        >
-          <div>
-            <p class="text-sm text-gray-300">
-              {{ t('frameVisibility.hiddenCount', { count: hiddenFrames.length }) }}
-            </p>
-            <p class="text-xs text-gray-500">
-              {{ t('frameVisibility.hint') }}
-            </p>
-          </div>
-          <div class="flex flex-wrap justify-end gap-2">
-            <Button
-              variant="danger"
-              size="sm"
-              :disabled="!playerStore.currentFrame || visibilityUpdating || processStore.isProcessing"
-              icon-only
-              :aria-label="t('buttonHints.hideFrame')"
-              :tooltip="t('buttonHints.hideFrame')"
-              @click="hideCurrentFrame"
-            >
-              <EyeOff
-                class="h-5 w-5"
-                aria-hidden="true"
-              />
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              :disabled="hiddenFrames.length === 0 || visibilityUpdating || processStore.isProcessing"
-              icon-only
-              :aria-label="t('buttonHints.restoreHidden')"
-              :tooltip="t('buttonHints.restoreHidden')"
-              @click="restoreLastHiddenFrame"
-            >
-              <Undo2
-                class="h-5 w-5"
-                aria-hidden="true"
-              />
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              :disabled="hiddenFrames.length === 0 || visibilityUpdating || processStore.isProcessing"
-              @click="restoreAllHiddenFrames"
-            >
-              {{ t('frameVisibility.restoreAll') }}
-            </Button>
-          </div>
-        </div>
+          :key="currentProject?.id"
+          :filenames="hiddenFrames"
+          :previews="hiddenFramePreviews"
+          :can-hide="!!playerStore.currentFrame"
+          :busy="visibilityUpdating || navigationPending || processStore.isProcessing"
+          :error="frameVisibilityError"
+          @hide="hideCurrentFrame"
+          @restore="restoreHiddenFrame"
+          @restore-all="restoreAllHiddenFrames"
+        />
         <p
           v-if="frameEditorError && !frameEditor"
           class="mt-2 text-sm text-danger"
@@ -238,16 +199,18 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRouter, useRoute } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import { useI18n } from 'vue-i18n';
-import { EyeOff, Film, Undo2 } from 'lucide-vue-next';
+import { Film } from 'lucide-vue-next';
 import { useProjectStore } from '@/stores/project';
 import { useProcessStore } from '@/stores/process';
 import { usePlayerStore } from '@/stores/player';
 import { api } from '@/api';
+import type { HiddenFramePreview, HiddenFramesResponse } from '@/types';
 import { trapModalTab } from '@/modal-focus';
 import Header from '@/components/layout/Header.vue';
 import StepNavigator from '@/components/layout/StepNavigator.vue';
 import FramePlayer from '@/components/player/FramePlayer.vue';
 import FramePicker from '@/components/player/FramePicker.vue';
+import HiddenFramesPanel from '@/components/player/HiddenFramesPanel.vue';
 import PlayerControls from '@/components/player/PlayerControls.vue';
 import { extractionFrameIndices } from '@/components/player/timelineMath';
 import Button from '@/components/common/Button.vue';
@@ -352,6 +315,8 @@ watch(() => playerStore.isPlaying, (playing) => {
 // Params loaded state
 const paramsLoaded = ref(false);
 const hiddenFrames = ref<string[]>([]);
+const hiddenFramePreviews = ref<HiddenFramePreview[]>([]);
+const frameVisibilityError = ref('');
 const timelineFrameCount = ref(0);
 const visibilityUpdating = ref(false);
 let frameLoadRequestId = 0;
@@ -367,7 +332,7 @@ const navigationPending = ref(false);
 let resolveNavigation: ((allowed: boolean) => void) | null = null;
 
 function beforeFrameNavigation(): boolean | Promise<boolean> {
-  if (frameEditorLoading.value || frameEditorSaving.value || navigationPending.value || frameEditorRef.value?.busy) return false;
+  if (visibilityUpdating.value || frameEditorLoading.value || frameEditorSaving.value || navigationPending.value || frameEditorRef.value?.busy) return false;
   closeFramePicker();
   if (!frameEditor.value) return true;
   if (!frameEditorRef.value?.dirty) {
@@ -445,7 +410,7 @@ onBeforeUnmount(() => {
 });
 
 function selectFrameTool(tool: 'wand' | 'brush' | 'browse') {
-  if (frameEditorSaving.value || frameEditorLoading.value || navigationPending.value) return;
+  if (visibilityUpdating.value || frameEditorSaving.value || frameEditorLoading.value || navigationPending.value) return;
   if (frameEditor.value) frameEditorTool.value = tool;
   else if (tool !== 'browse') void openFrameEditor(tool);
 }
@@ -520,11 +485,17 @@ const currentStepComponent = computed(() => {
 
 const frameVisibilityEnabled = computed(() => (
   (currentStep.value === 2 || currentStep.value === 3)
-  && projectStore.isStepCompleted(currentStep.value)
+  && (projectStore.isStepCompleted(2) || projectStore.isStepCompleted(currentStep.value))
 ));
 
 const frameRetouchEnabled = computed(() => currentStep.value === 3
   && (projectStore.isStepCompleted(2) || projectStore.isStepCompleted(3)));
+
+watch([() => currentProject.value?.id, currentStep], ([projectId], [previousProjectId]) => {
+  if (projectId !== previousProjectId) hiddenFrames.value = [];
+  hiddenFramePreviews.value = [];
+  frameVisibilityError.value = '';
+});
 
 // Load frames when step changes or project data changes
 watch([currentStep, currentProject], async ([step]) => {
@@ -555,12 +526,6 @@ async function loadFramesForStep(step: number) {
   // Clear current frames to show loading state
   playerStore.loadFrames([]);
   timelineFrameCount.value = 0;
-  const nextHiddenFrames = step > 1
-    ? await api.frame.getHiddenFrames(project.id)
-    : [];
-  if (!isCurrentRequest()) return false;
-  hiddenFrames.value = nextHiddenFrames;
-
   // Determine which step's frames to show
   // Show the output of the current step if completed, otherwise show the previous step's output
   let sourceStep = step;
@@ -574,6 +539,9 @@ async function loadFramesForStep(step: number) {
   // The backend already prefers cache for step 1, but for Step 2 preview we want the filtered frames
 
   try {
+    const nextHiddenFrames = step > 1 ? await api.frame.getHiddenFrames(project.id) : [];
+    if (!isCurrentRequest()) return false;
+    hiddenFrames.value = nextHiddenFrames;
     const response = await api.frame.getFrames(
       project.id,
       sourceStep,
@@ -584,6 +552,7 @@ async function loadFramesForStep(step: number) {
 
     if (!isCurrentRequest()) return false;
     if (response.success) {
+      hiddenFramePreviews.value = response.hidden_previews ?? [];
       const frames = [...response.frames];
       for (let page = 2; page <= response.total_pages; page++) {
         const next = await api.frame.getFrames(project.id, sourceStep, page, 500, !(step === 2 && sourceStep === 1));
@@ -623,54 +592,55 @@ async function loadFramesForStep(step: number) {
   return false;
 }
 
-async function hideCurrentFrame() {
-  if (!await beforeFrameNavigation()) return;
-  const project = currentProject.value;
+function hideCurrentFrame() {
   const frame = playerStore.currentFrame;
-  if (!project || !frame) return;
+  if (frame) return updateFrameVisibility(projectId => api.frame.setFrameHidden(projectId, frame.filename, true));
+}
 
-  const nextIndex = playerStore.currentIndex;
+function restoreHiddenFrame(filename: string) {
+  if (hiddenFrames.value.includes(filename)) {
+    return updateFrameVisibility(projectId => api.frame.setFrameHidden(projectId, filename, false), filename);
+  }
+}
+
+function restoreAllHiddenFrames() {
+  if (hiddenFrames.value.length) {
+    return updateFrameVisibility(projectId => api.frame.restoreHiddenFrames(projectId));
+  }
+}
+
+async function updateFrameVisibility(
+  update: (projectId: string) => Promise<HiddenFramesResponse>,
+  restoredFilename?: string,
+) {
+  const project = currentProject.value;
+  const step = currentStep.value;
+  const isCurrentView = () => currentProject.value?.id === project?.id && currentStep.value === step;
+  if (!project || !frameVisibilityEnabled.value || processStore.isProcessing || !await beforeFrameNavigation()
+    || !isCurrentView() || visibilityUpdating.value || processStore.isProcessing) return;
+
+  const index = playerStore.currentIndex;
+  const preferredFilename = restoredFilename ?? playerStore.currentFrame?.filename;
+  let nextIndex: number | undefined;
   visibilityUpdating.value = true;
+  frameVisibilityError.value = '';
   playerStore.pause();
   try {
-    const result = await api.frame.setFrameHidden(project.id, frame.filename, true);
+    const result = await update(project.id);
+    if (!result.success) throw new Error('Failed to save frame visibility');
+    if (!isCurrentView()) return;
     hiddenFrames.value = result.hidden_frames;
-    await loadFramesForStep(currentStep.value);
-    playerStore.goToFrame(Math.min(nextIndex, playerStore.frames.length - 1));
+    if (!await loadFramesForStep(currentStep.value)) throw new Error('Failed to refresh frame visibility');
+    const preferredIndex = playerStore.frames.findIndex(frame => frame.filename === preferredFilename);
+    nextIndex = preferredIndex >= 0 ? preferredIndex : Math.min(index, playerStore.frames.length - 1);
+  } catch (error) {
+    logEvent(['Failed to update frame visibility:', error].join(' '), 'error');
+    if (isCurrentView()) frameVisibilityError.value = t('frameVisibility.updateFailed');
   } finally {
     visibilityUpdating.value = false;
   }
-}
 
-async function restoreLastHiddenFrame() {
-  if (!await beforeFrameNavigation()) return;
-  const project = currentProject.value;
-  const filename = hiddenFrames.value[hiddenFrames.value.length - 1];
-  if (!project || !filename) return;
-
-  visibilityUpdating.value = true;
-  try {
-    const result = await api.frame.setFrameHidden(project.id, filename, false);
-    hiddenFrames.value = result.hidden_frames;
-    await loadFramesForStep(currentStep.value);
-  } finally {
-    visibilityUpdating.value = false;
-  }
-}
-
-async function restoreAllHiddenFrames() {
-  if (!await beforeFrameNavigation()) return;
-  const project = currentProject.value;
-  if (!project || hiddenFrames.value.length === 0) return;
-
-  visibilityUpdating.value = true;
-  try {
-    const result = await api.frame.restoreHiddenFrames(project.id);
-    hiddenFrames.value = result.hidden_frames;
-    await loadFramesForStep(currentStep.value);
-  } finally {
-    visibilityUpdating.value = false;
-  }
+  if (isCurrentView() && nextIndex !== undefined && nextIndex >= 0) playerStore.goToFrame(nextIndex);
 }
 
 onMounted(async () => {

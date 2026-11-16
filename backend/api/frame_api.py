@@ -84,9 +84,20 @@ class FrameAPI:
 
         # Step 2/3 share a project-level non-destructive visibility list.
         all_frame_files = sorted(frames_dir.glob("*.png"))
-        timeline_indices = {frame: index for index, frame in enumerate(all_frame_files)}
         hidden_frames = set(get_hidden_frame_names(project_path)) if step in {2, 3} else set()
-        frame_files = [frame for frame in all_frame_files if frame.name not in hidden_frames]
+        frame_files = []
+        hidden_previews = []
+        for timeline_index, frame in enumerate(all_frame_files):
+            if frame.name not in hidden_frames:
+                frame_files.append((timeline_index, frame))
+            elif page == 1:
+                hidden_previews.append(
+                    {
+                        "filename": frame.name,
+                        "timeline_index": timeline_index,
+                        "url": self.get_frame_url(str(frame)),
+                    }
+                )
 
         # Calculate pagination
         total = len(frame_files)
@@ -96,12 +107,12 @@ class FrameAPI:
 
         # Build frame list
         frames = []
-        for i, frame_file in enumerate(frame_files[start_idx:end_idx], start=start_idx):
+        for i, (timeline_index, frame_file) in enumerate(frame_files[start_idx:end_idx], start=start_idx):
             frame_path = str(frame_file)
             frames.append(
                 {
                     "index": i,
-                    "timeline_index": timeline_indices[frame_file],
+                    "timeline_index": timeline_index,
                     "name": frame_file.stem,
                     "path": frame_path,
                     "filename": frame_file.name,
@@ -118,6 +129,7 @@ class FrameAPI:
             "page_size": page_size,
             "total_pages": total_pages,
             "hidden_count": len(hidden_frames),
+            **({"hidden_previews": hidden_previews} if hidden_previews else {}),
         }
 
     def get_hidden_frames(self, project_id: str) -> list[str]:

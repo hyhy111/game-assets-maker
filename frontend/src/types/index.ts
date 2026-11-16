@@ -114,6 +114,13 @@ export interface FramesResponse {
   page_size: number;
   total_pages: number;
   hidden_count?: number;
+  hidden_previews?: HiddenFramePreview[];
+}
+
+export interface HiddenFramePreview {
+  filename: string;
+  timeline_index: number;
+  url: string;
 }
 
 export interface HiddenFramesResponse {

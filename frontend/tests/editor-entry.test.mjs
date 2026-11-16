@@ -17,7 +17,7 @@ test('opening an editor resets its step and ignores stale frame-load results', a
 
 test('the editor loads source frames beyond the first 500 and discards stale later pages', async () => {
   const source = await readFile(new URL('../src/views/Editor/EditorLayout.vue', import.meta.url), 'utf8');
-  const method = source.slice(source.indexOf('async function loadFramesForStep('), source.indexOf('async function hideCurrentFrame('));
+  const method = source.slice(source.indexOf('async function loadFramesForStep('), source.indexOf('function hideCurrentFrame('));
   const javascript = ts.transpileModule(method, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
   for (const stale of [false, true]) {
     const project = { value: { id: 'hero/idle' } };
@@ -25,7 +25,7 @@ test('the editor loads source frames beyond the first 500 and discards stale lat
     let loaded = [];
     let range;
     const frames = Array.from({ length: 550 }, (_, index) => ({ index }));
-    const load = new Function('api', 'playerStore', 'currentProject', 'currentStep', 'hiddenFrames',
+    const load = new Function('api', 'playerStore', 'currentProject', 'currentStep', 'hiddenFrames', 'hiddenFramePreviews',
       'timelineFrameCount', 's1Params', 'projectStore', 'logEvent',
       `let frameLoadRequestId = 0; ${javascript}; return loadFramesForStep;`)(
       { frame: { async getFrames(_id, _step, page) {
@@ -34,7 +34,7 @@ test('the editor loads source frames beyond the first 500 and discards stale lat
         return { success: true, total: 550, total_pages: 2, frames: frames.slice((page - 1) * 500, page * 500) };
       } } },
       { loadFrames(value) { loaded = value; }, setPlaybackRange(...args) { range = args; } },
-      project, { value: 1 }, { value: [] }, { value: 0 },
+      project, { value: 1 }, { value: [] }, { value: [] }, { value: 0 },
       { value: { start_frame: 0, end_frame: 549, frame_interval: 3 } }, {}, () => {},
     );
     assert.equal(await load(1), !stale);
