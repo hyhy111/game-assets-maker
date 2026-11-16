@@ -1,29 +1,33 @@
 <template>
-  <article class="relative min-w-0 overflow-hidden rounded-xl border border-dark-border bg-dark-surface transition hover:border-primary/50">
-    <RouterLink
-      :to="`/ai-creation/source-media/${item.id}`"
-      class="group/source flex h-full flex-col focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
+  <article class="relative flex h-full min-w-0 flex-col overflow-hidden rounded-xl border border-dark-border bg-dark-surface transition hover:border-primary/50">
+    <button
+      type="button"
+      class="group/preview relative block aspect-video w-full shrink-0 overflow-hidden bg-black focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
       :class="{ 'cursor-grab active:cursor-grabbing': item.kind === 'image' }"
       :data-test="`source-media-${item.id}`"
       :draggable="item.kind === 'image'"
       :aria-description="item.kind === 'image' ? t('aiCreation.recent.dragImageToVideoFrame') : undefined"
+      @click="openDetail"
       @dragstart="dragImage"
     >
-      <div class="group/preview relative aspect-video w-full shrink-0 overflow-hidden bg-black">
-        <img
-          :src="item.thumbnail_url"
-          alt=""
-          loading="lazy"
-          draggable="false"
-          class="h-full w-full object-contain"
-        >
-        <MediaPreviewDragHint
-          v-if="item.kind === 'image'"
-          class="group-hover/preview:opacity-100 group-focus-visible/source:opacity-100"
-        />
-        <span class="media-overlay-badge absolute left-2 top-2">{{ t('aiCreation.sourceMedia.local') }}</span>
-      </div>
-      <div class="mt-auto p-4">
+      <img
+        :src="item.thumbnail_url"
+        alt=""
+        loading="lazy"
+        draggable="false"
+        class="h-full w-full object-contain"
+      >
+      <MediaPreviewDragHint
+        v-if="item.kind === 'image'"
+        class="group-hover/preview:opacity-100 group-focus-visible/preview:opacity-100"
+      />
+      <span class="media-overlay-badge absolute left-2 top-2">{{ t('aiCreation.sourceMedia.local') }}</span>
+    </button>
+    <RouterLink
+      :to="detailRoute"
+      class="mt-auto block focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
+    >
+      <div class="p-4">
         <p class="truncate text-sm font-medium leading-6 text-gray-100">
           {{ item.name }}
         </p>
@@ -57,7 +61,9 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { useRouter } from 'vue-router';
 import MediaPreviewDragHint from './MediaPreviewDragHint.vue';
 import RecentMediaFavoriteButton from './RecentMediaFavoriteButton.vue';
 import { useRecentMediaFavorites } from '@/recent-media-favorites';
@@ -66,11 +72,22 @@ import { writeSourceImageDrag } from '@/seedream-image-drag';
 
 const props = defineProps<{ item: SourceMedia }>();
 const { t, d } = useI18n();
+const router = useRouter();
 const { sourceMediaKey, isFavorite, toggleFavorite } = useRecentMediaFavorites();
+const detailRoute = computed(() => `/ai-creation/source-media/${props.item.id}`);
+
+function openDetail() {
+  router.push(detailRoute.value);
+}
 
 function dragImage(event: DragEvent) {
   if (props.item.kind === 'image') {
-    writeSourceImageDrag(event.dataTransfer, props.item.id, event.currentTarget as HTMLElement);
+    writeSourceImageDrag(
+      event.dataTransfer,
+      props.item.id,
+      event.currentTarget as HTMLElement,
+      props.item.absolute_path,
+    );
   }
 }
 </script>

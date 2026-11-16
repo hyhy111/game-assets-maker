@@ -59,6 +59,7 @@ export interface SourceMedia {
   thumbnail_url: string;
   edit_revision?: string;
   edit_source_url: string;
+  absolute_path?: string;
   generation_layout?: GenerationLayout | null;
 }
 

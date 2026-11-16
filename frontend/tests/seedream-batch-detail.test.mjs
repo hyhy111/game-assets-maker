@@ -69,9 +69,11 @@ test('Seedream batch detail shows loading placeholder when attempt is generating
 });
 
 test('Seedream batch detail shows local image and total_tokens on success', async () => {
-  const html = await renderDetail();
+  const html = await renderDetail({ attempts: [attemptFixture({ absolute_path: '/cache/images/0.jpg' })] });
   assert.match(html, /data-test="seedream-attempt-0"/);
   assert.match(html, /data-test="seedream-image-0"/);
+  assert.match(html, /cursor-grab[^"]*" draggable="true"/);
+  assert.match(html, /media-preview-drag-hint[^"]*"[^>]*><span[^>]*>长按拖拽<\/span>/);
   assert.match(html, /seedream-media\/batch-1\/image\/0/);
   assert.match(html, /data-test="seedream-total-tokens-summary"/);
   assert.match(html, /42/);

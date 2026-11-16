@@ -12,6 +12,7 @@ import shutil
 import sys
 import threading
 from collections.abc import Callable
+from contextlib import suppress
 from functools import wraps
 from http.server import SimpleHTTPRequestHandler
 from pathlib import Path
@@ -962,12 +963,17 @@ class API:
         revision = record.get("edit_revision")
         query = f"?revision={revision}" if revision else ""
         asset = "image" if record["kind"] == "image" else "original"
-        return {
+        result = {
             **record,
             "url": f"{base}/{asset}{query}",
             "thumbnail_url": f"{base}/thumbnail{query}",
             "edit_source_url": f"{base}/edit-source{query}" if revision else "",
         }
+        if record["kind"] == "image":
+            # External drag receivers (agent inputs) need a plain file path.
+            with suppress(OSError, RuntimeError, ValueError):
+                result["absolute_path"] = str(self._source_media.resolve(record["id"], "image"))
+        return result
 
     def _prepare_source_media(self) -> None:
         if self._storage_migration_coordinator.restart_required:

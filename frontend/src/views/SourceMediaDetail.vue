@@ -358,7 +358,12 @@ async function openDirectory() {
 
 function dragImage(event: DragEvent) {
   if (item.value?.kind === 'image') {
-    writeSourceImageDrag(event.dataTransfer, item.value.id, event.currentTarget as HTMLElement);
+    writeSourceImageDrag(
+      event.dataTransfer,
+      item.value.id,
+      event.currentTarget as HTMLElement,
+      item.value.absolute_path,
+    );
   }
 }
 

@@ -67,6 +67,8 @@ def test_mixed_native_import_copies_originals_and_persists_metadata(library, tmp
     picture, clip = result["items"]
     assert (picture["name"], picture["kind"], picture["width"], picture["height"]) == (image.name, "image", 600, 480)
     assert picture["duration"] is None
+    assert picture["absolute_path"] == str(api._source_media.resolve(picture["id"], "image"))
+    assert "absolute_path" not in clip
     assert (clip["name"], clip["kind"], clip["duration"]) == (video.name, "video", pytest.approx(1))
     for item, path in ((picture, image), (clip, video)):
         original = api._source_media.resolve(item["id"], "original")

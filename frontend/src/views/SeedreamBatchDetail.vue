@@ -140,8 +140,9 @@
           :data-test="`seedream-attempt-${selectedSucceededAttempt.index}`"
         >
           <div
-            class="relative mx-auto w-fit"
-            :draggable="!!selectedSucceededAttempt.absolute_path && selectedSucceededAttempt.can_open_directory !== false"
+            class="group/preview relative mx-auto w-fit"
+            :class="{ 'cursor-grab active:cursor-grabbing': canDragImage(selectedSucceededAttempt) }"
+            :draggable="canDragImage(selectedSucceededAttempt)"
             @dragstart="dragCurrentImage($event)"
           >
             <img
@@ -151,6 +152,10 @@
               :data-test="`seedream-image-${selectedSucceededAttempt.index}`"
               draggable="false"
             >
+            <MediaPreviewDragHint
+              v-if="canDragImage(selectedSucceededAttempt)"
+              class="group-hover/preview:opacity-100"
+            />
             <RecentMediaFavoriteButton
               class="absolute right-3 top-3 z-[2]"
               :favorite="isFavorite(imageMediaKey(batch.local_id, selectedSucceededAttempt.local_id))"
@@ -186,6 +191,7 @@
                 :src="attemptImageUrl(attempt)"
                 alt=""
                 class="h-16 w-16 object-cover"
+                draggable="false"
               >
             </button>
           </div>
@@ -510,6 +516,7 @@ import { useAICreationStore } from '@/stores/aiCreation';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 import Button from '@/components/common/Button.vue';
+import MediaPreviewDragHint from '@/components/ai-creation/MediaPreviewDragHint.vue';
 import PlatformSourceBadge from '@/components/ai-creation/PlatformSourceBadge.vue';
 import RecentMediaFavoriteButton from '@/components/ai-creation/RecentMediaFavoriteButton.vue';
 import SeedreamImageEraser from '@/components/seedream/SeedreamImageEraser.vue';
@@ -539,14 +546,19 @@ async function useAsReference() {
   } else mediaError.value = workspace.candidateHandoffError || t('aiCreation.imageUnavailable');
 }
 
+function canDragImage(attempt: SeedreamAttempt | null): attempt is SeedreamAttempt & { absolute_path: string } {
+  return !!attempt?.absolute_path && attempt.can_open_directory !== false;
+}
+
 function dragCurrentImage(event: DragEvent) {
   const attempt = selectedSucceededAttempt.value;
-  if (!attempt?.absolute_path || attempt.can_open_directory === false) { event.preventDefault(); return; }
+  if (!canDragImage(attempt)) { event.preventDefault(); return; }
   writeSeedreamImageDrag(
     event.dataTransfer,
     { localId: batchId.value, attemptIndex: attempt.index },
     event.currentTarget as HTMLElement | null,
     attempt.absolute_path,
+    'hidden',
   );
 }
 

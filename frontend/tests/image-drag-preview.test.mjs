@@ -87,6 +87,21 @@ test('large previews reuse the rendered thumbnail as the only drag bitmap', () =
   f.listeners.get('dragend')();
 });
 
+test('generated image detail drags can hide the native preview while retaining the image candidate', () => {
+  const f = fixture();
+  const previews = [];
+  f.transfer.setDragImage = element => previews.push(element);
+  const path = '/cache/image.png';
+  writeSeedreamImageDrag(f.transfer, payload, f.source, path, 'hidden');
+  assert.equal(previews.length, 1);
+  assert.match(previews[0].style.cssText, /opacity:\s*0\b/);
+  assert.ok(f.elements.some(element => element.connected && element.textContent === '+'));
+  const data = new Map(f.transfers);
+  assert.equal(data.get('text/plain'), path);
+  assert.deepEqual(readImageDrop({ files: [], getData: type => data.get(type) ?? '' }), { kind: 'candidate', candidate: payload });
+  f.listeners.get('dragend')();
+});
+
 test('an unavailable thumbnail preview does not prevent transferring the image path', () => {
   const f = fixture();
   f.transfer.setDragImage = () => { throw new Error('Native preview unavailable'); };
@@ -176,4 +191,31 @@ test('imported image cards resolve a managed media ID through direct and text-on
   }
   values.set('text/plain', 'gam-source-image:../other/file.png');
   assert.equal(readImageDrop(transferred(['text/plain'])).kind, 'error');
+});
+
+test('local image drags show the plus without a thumbnail and preserve the path on drop', () => {
+  const id = 'e983a82ab3c74b59886bc0f414c8bb0d';
+  const path = '/Users/test/素材 缓存/local-images/角色.png';
+  const f = fixture();
+  const previews = [];
+  f.transfer.setDragImage = (element, x, y) => previews.push({ element, x, y });
+  writeSourceImageDrag(f.transfer, id, f.source, path);
+  assert.equal(previews.length, 1);
+  const [{ element, x, y }] = previews;
+  assert.ok(element.connected);
+  assert.equal(element.textContent, undefined);
+  assert.match(element.style.cssText, /opacity:\s*0\b/);
+  assert.deepEqual([x, y], [0, 0]);
+  assert.ok(f.elements.some(element => element.connected && element.textContent === '+'));
+  // External agent inputs receive the usable file path, not internal metadata.
+  assert.equal(new Map(f.transfers).get('text/plain'), path);
+  // A WebView that retains only text on re-entry still resolves the source ID.
+  const textOnly = { types: ['text/plain'], files: [], getData: type => (type === 'text/plain' ? path : '') };
+  assert.equal(hasImageDrop(textOnly), true);
+  assert.deepEqual(readImageDrop(textOnly), { kind: 'source', id });
+  // Unknown paths still fail validation instead of resolving a stale drag.
+  const other = { types: ['text/plain'], files: [], getData: () => '/elsewhere/other.png' };
+  assert.equal(readImageDrop(other).kind, 'error');
+  f.listeners.get('dragend')();
+  assert.ok(f.elements.every(element => element.removed));
 });

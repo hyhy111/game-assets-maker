@@ -345,7 +345,9 @@ test('local image cards advertise dragging and local video cards do not', async 
         imported_at: '2026-11-16T10:00:00Z', width: 640, height: 360,
       } },
     });
-    assert.match(html, new RegExp(`<a[^>]*data-test="source-media-imported-media"[^>]*draggable="${kind === 'image'}"`));
+    // The drag source is a button, not the link: WebViews hijack anchor drags.
+    assert.match(html, new RegExp(`<button[^>]*data-test="source-media-imported-media"[^>]*draggable="${kind === 'image'}"`));
+    assert.match(html, /<a[^>]*href="\/ai-creation\/source-media\/imported-media"/);
     assert.equal(html.includes('media-preview-drag-hint'), kind === 'image');
     assert.doesNotMatch(html, /data-tooltip="长按拖拽"/);
   }
