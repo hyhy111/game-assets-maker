@@ -6,20 +6,23 @@ import type { PlatformCapabilities } from '@/types';
 
 type MediaKind = 'video' | 'image';
 
-/**
- * 直连源（自付 API Key）的模型名仍来自本地词条——那是客户端自己的预设表，
- * 与平台侧无关。平台源的模型**不在这里**，它的名字由服务端下发。
- */
+// Include exact model IDs saved by older clients so task history has labels offline.
 const LOCAL_LABEL_KEYS: Record<MediaKind, Record<string, string>> = {
   video: {
     standard: 'seedance.models.standard',
     fast: 'seedance.models.fast',
     mini: 'seedance.models.mini',
+    'doubao-seedance-2-0-260128': 'seedance.models.standard',
+    'doubao-seedance-2-0-fast-260128': 'seedance.models.fast',
+    'doubao-seedance-2-0-mini-260615': 'seedance.models.mini',
   },
   image: {
     pro: 'seedream.models.pro',
     flash: 'seedream.models.flash',
     lite: 'seedream.models.lite',
+    'doubao-seedream-5-0-pro-260628': 'seedream.models.pro',
+    'doubao-seedream-5-0-flash-260915': 'seedream.models.flash',
+    'doubao-seedream-5-0-260128': 'seedream.models.lite',
   },
 };
 
@@ -31,18 +34,7 @@ function serverDisplayName(capabilities: PlatformCapabilities | null, model: str
   return name ? name : null;
 }
 
-/**
- * 把任务/批次里存的模型标识解析成给用户看的名字。
- *
- * 解析顺序（任一步命中即返回）：
- *  1. **服务端下发的展示名**——平台源的模型标识是 Ark ID，名字只有服务端知道
- *  2. 本地词条——直连源的短键（standard/pro…）
- *  3. 原样显示模型标识——宁可用 ID，也不能显示成坏掉的词条 key
- *
- * 第 3 步是关键：此前直接写 `t(\`seedance.models.${model}\`)`，平台源下会命中
- * 不存在的词条，vue-i18n 把 **key 本身**当文案返回，界面上就会出现
- * `seedance.models.doubao-seedance-2-0-260128` 这种东西。
- */
+/** Prefer the current platform name, then a local label, then the saved ID. */
 export function useModelDisplayName() {
   const workspace = useAICreationStore();
   const auth = useAuthStore();

@@ -884,6 +884,7 @@ export default {
     models: {
       pro: 'Seedream 5.0 Pro',
       flash: 'Seedream 5.0 Flash',
+      lite: 'Seedream 5.0 Lite',
     },
     ui: {
       characters: '字符',

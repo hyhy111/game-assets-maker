@@ -94,6 +94,38 @@ const renderRecent = ({ batches = [], tasks = [], workspace = {} } = {}) => rend
   },
 );
 
+for (const [kind, models] of [
+  ['video', [
+    ['doubao-seedance-2-0-260128', 'Seedance2.0'],
+    ['doubao-seedance-2-0-fast-260128', 'Seedance2.0 Fast'],
+    ['doubao-seedance-2-0-mini-260615', 'Seedance2.0 Mini'],
+  ]],
+  ['image', [
+    ['doubao-seedream-5-0-pro-260628', 'Seedream 5.0 Pro'],
+    ['doubao-seedream-5-0-flash-260915', 'Seedream 5.0 Flash'],
+    ['doubao-seedream-5-0-260128', 'Seedream 5.0 Lite'],
+  ]],
+]) {
+  test(`${kind} history names known platform models offline and prefers the current platform name`, async () => {
+    const unknown = 'unrecognized-platform-model';
+    const records = [...models.map(([id]) => id), unknown].map((model, index) => {
+      const media = kind === 'video' ? uniqueTask(index) : uniqueBatch(index);
+      return { ...media, source: 'forfuner-ai', request: { ...media.request, source: 'forfuner-ai', model } };
+    });
+    const data = kind === 'video' ? { tasks: records } : { batches: records };
+    const offline = await renderRecent({ ...data, workspace: { recentFilter: kind } });
+    for (const [id, name] of models) {
+      assert.ok(offline.includes(`>${name}</span>`), `offline name for ${id}`);
+      assert.ok(!offline.includes(id));
+    }
+    assert.ok(offline.includes(`>${unknown}</span>`));
+
+    const capabilities = { [kind]: { models: [{ model: models[0][0], displayName: 'Platform display name' }] } };
+    const online = await renderRecent({ ...data, workspace: { recentFilter: kind, capabilities } });
+    assert.ok(online.includes('>Platform display name</span>'));
+  });
+}
+
 test('recent generations defaults to images and shows the newest twelve in a responsive four-column grid', async () => {
   const html = await renderRecent({ batches: Array.from({ length: 13 }, (_, index) => uniqueBatch(index)) });
 
