@@ -309,6 +309,10 @@ export const processApi = {
 
   async retryModel(model: string = 'u2net', source?: ModelDownloadSource): Promise<ModelStatus> {
     return callApi<ModelStatus>('retry_model', 'retryModel', model, source ?? null);
+  },
+
+  async cancelModelDownload(model: string = 'u2net'): Promise<ModelStatus> {
+    return callApi<ModelStatus>('cancel_model_download', 'cancelModelDownload', model);
   }
 
 }

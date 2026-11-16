@@ -510,6 +510,7 @@ export default {
     downloadSource: '下载来源',
     modelscope: '魔搭 ModelScope（国内推荐）',
     download: '下载模型',
+    cancel: '取消下载',
     needsDownload: '{model} 模型需要首次下载',
     downloading: '正在下载 {model} 模型',
     initializing: '正在初始化 {model} 模型',

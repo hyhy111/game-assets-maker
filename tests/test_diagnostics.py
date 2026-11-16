@@ -170,12 +170,12 @@ def test_provider_and_http_200_business_errors_reach_network_log(diagnostic_root
 
 
 def test_model_download_error_is_recorded_without_changing_exception(diagnostic_root, monkeypatch):
-    import pooch
+    import requests
 
     from src.core.rembg_model import download_u2net
 
     error = TimeoutError("model connection timed out")
-    monkeypatch.setattr(pooch, "retrieve", lambda *args, **kwargs: (_ for _ in ()).throw(error))
+    monkeypatch.setattr(requests, "get", lambda *args, **kwargs: (_ for _ in ()).throw(error))
     with pytest.raises(TimeoutError) as caught:
         download_u2net(diagnostic_root / "models")
     assert caught.value is error

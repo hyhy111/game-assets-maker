@@ -44,3 +44,27 @@ def test_birefnet_sources_use_the_same_verified_checkpoint(tmp_path, monkeypatch
         loader.download(birefnet.MODEL_ID, lambda *_: None, "huggingface")
     assert checkpoint.read_bytes() == weights
     assert list(tmp_path.iterdir()) == [checkpoint]
+
+
+def test_cancelled_birefnet_download_removes_partial_file(tmp_path, monkeypatch):
+    import threading
+
+    from src.core.model_download import ModelDownloadCancelledError
+
+    checkpoint = tmp_path / birefnet.WEIGHTS_NAME
+    cancel_event = threading.Event()
+
+    @contextmanager
+    def get(*_args, **_kwargs):
+        def chunks():
+            cancel_event.set()  # the user cancels while the first chunk is in flight
+            yield b"partial weights"
+
+        yield Mock(iter_content=Mock(side_effect=lambda _size: chunks()))
+
+    monkeypatch.setattr(birefnet, "model_path", lambda: checkpoint)
+    monkeypatch.setattr(requests, "get", get)
+    with pytest.raises(ModelDownloadCancelledError):
+        birefnet.download_weights(lambda *_: None, "modelscope", cancel_event)
+    assert not checkpoint.exists()
+    assert list(tmp_path.iterdir()) == []

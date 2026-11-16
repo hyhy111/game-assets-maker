@@ -11,6 +11,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageChops
 
+from src.core.model_download import ModelDownloadCancelledError
 from src.utils.data_paths import models_root
 from src.utils.diagnostics import record_network_error
 
@@ -46,7 +47,11 @@ def _checkpoint_digest(path: Path, _modified_at: int) -> str:
         return hashlib.file_digest(stream, "sha256").hexdigest()
 
 
-def download_weights(progress: Callable[[int, int | None], None], source: str = "modelscope") -> None:
+def download_weights(
+    progress: Callable[[int, int | None], None],
+    source: str = "modelscope",
+    cancel_event: threading.Event | None = None,
+) -> None:
     import requests
 
     if source not in WEIGHTS_SOURCES:
@@ -65,6 +70,8 @@ def download_weights(progress: Callable[[int, int | None], None], source: str = 
             received = 0
             digest = hashlib.sha256()
             for chunk in response.iter_content(1024 * 1024):
+                if cancel_event is not None and cancel_event.is_set():
+                    raise ModelDownloadCancelledError("BiRefNet checkpoint download cancelled")
                 received += len(chunk)
                 if received > WEIGHTS_BYTES:
                     raise ValueError("Unexpected BiRefNet checkpoint size")

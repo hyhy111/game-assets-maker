@@ -1,12 +1,32 @@
-"""Exercise cached downloads and checksum failures without external network."""
+"""Exercise cached downloads, checksum failures, and cancellation without external network."""
 
 import hashlib
+import threading
 from pathlib import Path
 
-import pooch
 import pytest
+import requests
 
 from src.core import rembg_model
+from src.core.model_download import ModelDownloadCancelledError
+
+
+class _FakeStreamResponse:
+    def __init__(self, chunks: list[bytes]) -> None:
+        self._chunks = chunks
+        self.headers = {"Content-Length": str(sum(len(chunk) for chunk in chunks))}
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args):
+        return False
+
+    def raise_for_status(self) -> None:
+        pass
+
+    def iter_content(self, _size: int):
+        yield from self._chunks
 
 
 @pytest.mark.parametrize("source", ["modelscope", "github"])
@@ -14,14 +34,17 @@ def test_download_verifies_weights_reuses_cache_and_rejects_bad_content(tmp_path
     content = b"test model weights"
     calls = []
 
-    def transfer(url, output_file, pooch_instance, check_only=False):
+    def fake_get(url, **_kwargs):
         calls.append(url)
-        with open(output_file, "wb") as output:
-            output.write(content)
+        return _FakeStreamResponse([content])
 
-    monkeypatch.setattr(pooch.core, "choose_downloader", lambda *a, **kw: transfer)
+    monkeypatch.setattr(requests, "get", fake_get)
     monkeypatch.setattr(rembg_model, "U2NET_HASH", "md5:" + hashlib.md5(content).hexdigest())
-    destination = rembg_model.download_u2net(tmp_path, source)
+    progress_calls = []
+    destination = rembg_model.download_u2net(
+        tmp_path, source, progress=lambda current, total: progress_calls.append((current, total))
+    )
+    assert progress_calls == [(len(content), len(content))]
     assert rembg_model.download_u2net(tmp_path, source) == destination
     assert calls == [rembg_model.U2NET_SOURCES[source]]
     Path(destination).unlink()
@@ -29,6 +52,23 @@ def test_download_verifies_weights_reuses_cache_and_rejects_bad_content(tmp_path
     with pytest.raises(ValueError, match="hash"):
         rembg_model.download_u2net(tmp_path, source)
     assert not Path(destination).exists()
+    assert not list(tmp_path.glob(".u2net-*"))
+
+
+def test_cancelled_download_removes_partial_file(tmp_path, monkeypatch):
+    cancel_event = threading.Event()
+
+    class CancellableResponse(_FakeStreamResponse):
+        def iter_content(self, _size: int):
+            for chunk in self._chunks:
+                cancel_event.set()  # the user cancels while the first chunk is in flight
+                yield chunk
+
+    monkeypatch.setattr(requests, "get", lambda *a, **kw: CancellableResponse([b"partial weights"]))
+    with pytest.raises(ModelDownloadCancelledError):
+        rembg_model.download_u2net(tmp_path, "modelscope", cancel_event=cancel_event)
+    assert not (tmp_path / "u2net.onnx").exists()
+    assert not list(tmp_path.glob(".u2net-*"))
 
 
 def test_inference_does_not_download_missing_model(tmp_path, monkeypatch):

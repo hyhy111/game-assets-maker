@@ -513,6 +513,7 @@ export default {
     downloadSource: 'Download source',
     modelscope: 'ModelScope (recommended in China)',
     download: 'Download model',
+    cancel: 'Cancel download',
     needsDownload: '{model} needs to be downloaded',
     downloading: 'Downloading {model}',
     initializing: 'Initializing {model}',

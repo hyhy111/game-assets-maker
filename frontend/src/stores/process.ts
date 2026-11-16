@@ -382,6 +382,15 @@ export const useProcessStore = defineStore('process', () => {
     return prepareModel(selectedModel.value, true, source);
   }
 
+  async function cancelModelDownload(model: BackgroundRemovalModel = selectedModel.value) {
+    try {
+      const status = await api.process.cancelModelDownload(model);
+      modelStatuses.value[model] = status;
+    } catch (e) {
+      logEvent(['Failed to cancel model download:', e].join(' '), 'error');
+    }
+  }
+
   return {
     // State
     currentStep,
@@ -415,6 +424,7 @@ export const useProcessStore = defineStore('process', () => {
     initProgressListeners,
     preloadModel,
     retryModel,
+    cancelModelDownload,
     setNavigationGuard: navigation.set,
   };
 });

@@ -67,6 +67,16 @@ test('model card keeps the selected source for download and retry', async () => 
 });
 
 
+test('model card offers cancellation while downloading', async () => {
+  const downloading = await renderSfc('components/editor/ModelStatusCard.vue', {
+    props: { status: status('downloading', { downloaded_bytes: 50, total_bytes: 100 }) },
+  });
+  assert.match(downloading, /取消下载/);
+
+  const step2 = await readFile(new URL('../src/views/Editor/Step2Background.vue', import.meta.url), 'utf8');
+  assert.match(step2, /@cancel="processStore\.cancelModelDownload\(\)"/);
+});
+
 test('BiRefNet offers ModelScope and Hugging Face for the same checkpoint', async () => {
   const needed = await renderSfc('components/editor/ModelStatusCard.vue', {
     props: { status: status('needs_download', { model: 'birefnet-comfy' }) },

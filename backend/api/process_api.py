@@ -759,6 +759,11 @@ class ProcessAPI:
         validate_background_model(model)
         return self._model_preloader.retry(model, source=source)
 
+    def cancel_model_download(self, model: str = "u2net") -> ModelStatus:
+        """Interrupt an in-progress model download and discard its partial file."""
+        validate_background_model(model)
+        return self._model_preloader.cancel(model)
+
     def _emit_model_status(self, status: ModelStatus) -> None:
         js_code = (
             "window.dispatchEvent(new CustomEvent('model-status', { detail: "

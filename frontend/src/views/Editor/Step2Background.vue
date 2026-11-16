@@ -39,6 +39,7 @@
       :key="selectedModel"
       :status="modelStatus"
       @retry="processStore.retryModel($event)"
+      @cancel="processStore.cancelModelDownload()"
     />
 
     <!-- Canvas Background Color Selector -->

@@ -40,6 +40,15 @@
             class="h-full w-1/3 animate-pulse rounded-full bg-primary"
           />
         </div>
+        <Button
+          v-if="status.phase === 'downloading'"
+          class="mt-3"
+          size="sm"
+          variant="secondary"
+          @click="$emit('cancel')"
+        >
+          {{ t('modelStatus.cancel') }}
+        </Button>
 
         <label
           v-if="status.phase === 'needs_download' || presentation.retryable"
@@ -76,7 +85,7 @@ import Button from '@/components/common/Button.vue';
 import Select from '@/components/common/Select.vue';
 
 const props = defineProps<{ status: ModelStatus }>();
-defineEmits<{ retry: [source: ModelDownloadSource] }>();
+defineEmits<{ retry: [source: ModelDownloadSource]; cancel: [] }>();
 const source = ref<ModelDownloadSource>('modelscope');
 
 const { t } = useI18n();

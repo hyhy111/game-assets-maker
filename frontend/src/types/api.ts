@@ -97,6 +97,7 @@ export interface PyWebViewWindow extends Window {
       get_model_status: (model: string) => Promise<ModelStatus>;
       preload_model: (model: string, source?: ModelDownloadSource | null) => Promise<ModelStatus>;
       retry_model: (model: string, source?: ModelDownloadSource | null) => Promise<ModelStatus>;
+      cancel_model_download: (model: string) => Promise<ModelStatus>;
 
       // Config API
       get_config: () => Promise<AppConfig>;
