@@ -4,6 +4,7 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { api } from '@/api';
+import { useConfigStore } from './config';
 import { useProjectStore } from './project';
 import { usePlayerStore } from './player';
 import { createNavigationGuard } from '@/utils/navigation-guard';
@@ -150,13 +151,20 @@ export const useProcessStore = defineStore('process', () => {
 
   async function loadStepParams(projectId: string, step: number) {
     try {
-      const defaults = step === 2 ? step2Defaults : step === 3 ? step3Defaults : { frame_overrides: {} };
+      const defaults = step === 2 ? step2BaseDefaults() : step === 3 ? step3Defaults : { frame_overrides: {} };
       applyStepParams(step, { ...defaults, ...await api.process.getStepParams(projectId, step) });
       return true;
     } catch (e) {
       logEvent([`Failed to load step ${step} params:`, e].join(' '), 'error');
       return false;
     }
+  }
+
+  // The configured default model fills the gap only; a project's saved step 2
+  // params still override it in loadStepParams.
+  function step2BaseDefaults(): Step2Params {
+    const configuredModel = useConfigStore().config?.processing?.background_model;
+    return { ...step2Defaults, ...(configuredModel ? { model: configuredModel } : {}) };
   }
 
   async function refreshHolePunchChoice(projectId: string) {

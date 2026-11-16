@@ -16,6 +16,10 @@ from src.utils.storage_locations import DEFAULT_PROJECT_DIR, StorageLocations, s
 CONFIG_ENV_VAR = "GAM_CONFIG"
 _CONFIG_WRITE_LOCK = threading.Lock()
 
+# Keep in sync with backend.core.model_preloader.MODEL_SOURCES; src must not
+# import backend, so the supported background-removal models are listed here.
+BACKGROUND_REMOVAL_MODELS = ("u2net", "birefnet-comfy")
+
 # Source development keeps a dedicated workspace config so it never reads or
 # writes the installed release's per-user configuration.
 DEV_CONFIG_FILENAME = "config.dev.json"
@@ -56,6 +60,9 @@ DEFAULT_APP_CONFIG: dict[str, Any] = {
         "default_resolution": "2K",
         "default_ratio": "16:9",
     },
+    "processing": {
+        "background_model": "u2net",
+    },
 }
 
 
@@ -83,6 +90,9 @@ def merge_app_config(config: dict[str, Any] | None = None) -> dict[str, Any]:
     _merge_known_keys(merged, config)
     if merged["seedance"]["default_resolution"] == "4k":
         merged["seedance"]["default_resolution"] = "1080p"
+    processing = merged["processing"]
+    if not isinstance(processing, dict) or processing.get("background_model") not in BACKGROUND_REMOVAL_MODELS:
+        merged["processing"] = deepcopy(DEFAULT_APP_CONFIG["processing"])
     cache_dir = merged["seedance"].get("cache_dir")
     if isinstance(cache_dir, str) and cache_dir:
         legacy_cache = Path(cache_dir).expanduser()

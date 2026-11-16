@@ -59,6 +59,9 @@ export const useConfigStore = defineStore('config', () => {
           retention_days: 90,
           last_cleanup_at: null,
         },
+        processing: {
+          background_model: 'u2net',
+        },
       };
     } finally {
       loading.value = false;

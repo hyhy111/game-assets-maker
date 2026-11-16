@@ -167,6 +167,10 @@ export default {
     arkAuditHint: 'Available in development only. Changes apply immediately; existing logs are preserved.',
     arkAuditSaveFailed: 'Could not save the API call logging setting. Please try again.',
     paidGenerationConfirmation: 'Confirm before generation requests',
+    processingDefaults: 'Local Processing Defaults',
+    processingDefaultsDescription: 'Default options for local processing steps such as background removal in the editor.',
+    defaultBackgroundModel: 'Default background removal model',
+    defaultBackgroundModelHint: 'Preselected when entering the background removal step; choices already saved in a project are unaffected.',
   },
   skillsInstall: {
     title: 'Install GAM Skills',

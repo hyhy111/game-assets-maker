@@ -167,6 +167,10 @@ export default {
     arkAuditHint: '仅开发模式可用，立即生效。关闭会保留已有日志。',
     arkAuditSaveFailed: '无法保存 API 调用日志设置，请重试。',
     paidGenerationConfirmation: '生成请求前确认弹窗',
+    processingDefaults: '本地处理默认值',
+    processingDefaultsDescription: '编辑器中去背等本地处理步骤的默认选项。',
+    defaultBackgroundModel: '默认去背模型',
+    defaultBackgroundModelHint: '进入去背步骤时预选该模型；项目中已保存的选择不受影响。',
   },
   skillsInstall: {
     title: 'GAM Skills 安装',

@@ -346,6 +346,28 @@
 
         <SeedancePanel
           class="xl:col-span-2"
+          :title="t('settings.processingDefaults')"
+          :description="t('settings.processingDefaultsDescription')"
+        >
+          <div class="grid gap-4 sm:grid-cols-2">
+            <label class="text-sm text-gray-300">
+              {{ t('settings.defaultBackgroundModel') }}
+              <Select
+                v-model="processingDraft.background_model"
+                class="mt-2"
+                :options="backgroundModelOptions"
+                :aria-label="t('settings.defaultBackgroundModel')"
+                data-test="processing-background-model"
+              />
+            </label>
+          </div>
+          <p class="mt-3 text-xs leading-5 text-[var(--seedance-muted)]">
+            {{ t('settings.defaultBackgroundModelHint') }}
+          </p>
+        </SeedancePanel>
+
+        <SeedancePanel
+          class="xl:col-span-2"
           :title="t('seedance.settings.cacheManagement')"
           :description="t('seedance.settings.cacheDescription')"
         >
@@ -774,6 +796,7 @@ import { useProjectStore } from '@/stores/project';
 import { useSeedanceStore } from '@/stores/seedance';
 import { useSeedreamStore } from '@/stores/seedream';
 import type {
+  ProcessingSettings,
   SeedanceCacheCleanResult,
   SeedanceSettings,
   SeedreamSettings,
@@ -823,6 +846,9 @@ let allowPendingNavigation = false;
 const appDraft = reactive({
   logger_enabled: false,
   paid_generation_confirmation_enabled: true,
+});
+const processingDraft = reactive<ProcessingSettings>({
+  background_model: 'u2net',
 });
 const seedreamDraft = reactive<SeedreamSettings>({
   default_count: DEFAULT_COUNT,
@@ -887,8 +913,15 @@ const retentionOptions = computed(() => [
   { value: 0, label: t('seedance.ui.never') },
   ...[7, 30, 90, 180].map(value => ({ value, label: t('seedance.ui.days', { value }) })),
 ]);
+// Labels mirror backgroundModelName in model-status.ts; kept inline because the
+// source-evaluation tests run this setup without module imports.
+const backgroundModelOptions = computed(() => [
+  { value: 'u2net', label: 'U²-Net (rembg)' },
+  { value: 'birefnet-comfy', label: 'BiRefNet' },
+]);
 const currentSnapshot = computed(() => JSON.stringify({
   app: { ...appDraft },
+  processing: { ...processingDraft },
   seedance: { ...draft },
   seedream: { ...seedreamDraft },
   storage: { ...storageDraft },
@@ -998,9 +1031,14 @@ function fixSeedreamDefault() {
   );
 }
 
-function syncAppDraft(config: { logger_enabled: boolean; paid_generation_confirmation_enabled: boolean }) {
+function syncAppDraft(config: {
+  logger_enabled: boolean;
+  paid_generation_confirmation_enabled: boolean;
+  processing?: ProcessingSettings;
+}) {
   appDraft.logger_enabled = config.logger_enabled;
   appDraft.paid_generation_confirmation_enabled = config.paid_generation_confirmation_enabled !== false;
+  if (config.processing) processingDraft.background_model = config.processing.background_model;
 }
 
 function markSettingsSaved() {
@@ -1203,7 +1241,7 @@ async function setArkAuditEnabled(enabled: boolean) {
 }
 
 async function savePlain() {
-  const appSaved = await configStore.saveConfig({ ...appDraft });
+  const appSaved = await configStore.saveConfig({ ...appDraft, processing: { ...processingDraft } });
   const update = { ...draft, ...(apiKey.value ? { api_key: apiKey.value } : {}) };
   const seedanceSaved = appSaved ? await store.saveSettings(update) : null;
   const seedreamSaved = seedanceSaved ? await seedreamStore.saveSettings({ ...seedreamDraft }) : null;
@@ -1223,6 +1261,7 @@ async function saveWithMigrationCheck() {
   const combined: StorageSettingsDraft = {
     logger_enabled: appDraft.logger_enabled,
     paid_generation_confirmation_enabled: appDraft.paid_generation_confirmation_enabled,
+    processing: { ...processingDraft },
     project_dir: storageDraft.project_dir,
     seedance: {
       ...draft,
@@ -1244,6 +1283,9 @@ async function saveWithMigrationCheck() {
       if (!keySaved) return false;
     }
     apiKey.value = '';
+    // The storage endpoint persisted the app-level keys too; mirror the
+    // processing defaults so the editor picks them up without a reload.
+    if (configStore.config) configStore.config.processing = { ...processingDraft };
     if (storageSettings.value) {
       storageSettings.value = {
         ...storageSettings.value,

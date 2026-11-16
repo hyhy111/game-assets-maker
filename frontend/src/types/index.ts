@@ -307,6 +307,15 @@ export interface AppConfig {
   project_dir: string;
   logger_config: LoggerConfig;
   seedance: SeedanceSettings;
+  processing: ProcessingSettings;
+}
+
+/**
+ * Local processing defaults. The editor uses these when a project has not
+ * saved its own step parameters yet.
+ */
+export interface ProcessingSettings {
+  background_model: BackgroundRemovalModel;
 }
 
 export interface LoggerConfig {
@@ -533,6 +542,7 @@ export interface StorageSettingsDraft {
   seedream?: SeedreamSettings;
   logger_enabled?: boolean;
   paid_generation_confirmation_enabled?: boolean;
+  processing?: ProcessingSettings;
 }
 
 export interface StorageApiError {
