@@ -68,6 +68,7 @@ import type {
   StorageMigrationStateResult,
   PlatformCapabilities,
   PlatformDataResult,
+  SourceMedia,
 } from '@/types';
 
 declare const window: PyWebViewWindow;
@@ -769,6 +770,19 @@ export const api = {
   seedance: seedanceApi,
   seedream: seedreamApi,
   storage: storageApi,
+  sourceMedia: {
+    list: () => callApi<SourceMedia[]>('source_media_list', 'sourceMediaList'),
+    get: (id: string) => callApi<SourceMedia | null>('source_media_get', 'sourceMediaGet', id),
+    import: () => callApi<{ items: SourceMedia[]; failed: string[] }>('source_media_import', 'sourceMediaImport'),
+    openDirectory: (id: string) => callApi<boolean>('source_media_open_directory', 'sourceMediaOpenDirectory', id),
+    imageInput: (id: string) => callApi<string>('source_media_image_input', 'sourceMediaImageInput', id),
+    editImage: (id: string, image: string, source: string, layout: GenerationLayout | null) =>
+      callApi<SourceMedia>('source_media_edit_image', 'sourceMediaEditImage', id, image, source, layout),
+    restoreImage: (id: string) => callApi<SourceMedia>('source_media_restore_image', 'sourceMediaRestoreImage', id),
+    delete: (id: string) => callApi<boolean>('source_media_delete', 'sourceMediaDelete', id),
+    createProject: (id: string, role: string, action: string) =>
+      callApi<Project>('source_media_create_project', 'sourceMediaCreateProject', id, role, action),
+  },
   lifecycle: lifecycleApi,
   platform: platformApi,
   isAvailable: isApiAvailable

@@ -37,7 +37,13 @@
               {{ t('magicWand.idleHint') }}
             </p>
           </div>
-          <div class="relative min-h-0 flex-1">
+          <div
+            ref="frameViewport"
+            class="relative min-h-0 flex-1 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
+            role="region"
+            :aria-label="t('player.framePreview')"
+            tabindex="-1"
+          >
             <FramePlayer
               v-if="playerStore.frames.length > 0"
               :keyboard-disabled="frameEditorLoading || frameEditorSaving || navigationPending"
@@ -45,6 +51,10 @@
               :retouch-enabled="frameRetouchEnabled"
               :tools-disabled="frameEditorLoading || frameEditorSaving || navigationPending || processStore.isProcessing"
               :active-tool="frameEditor ? frameEditorTool : 'browse'"
+              :preview-frame-index="previewFrameIndex"
+              @preview-step="stepCandidateFrame"
+              @preview-cancel="closeFramePicker(true)"
+              @preview-ready="readyPreviewFrame = $event"
               @tool="selectFrameTool"
             >
               <SeedreamImageEraser
@@ -78,13 +88,27 @@
               </div>
             </div>
           </div>
+          <FramePicker
+            v-if="framePicker"
+            :key="framePicker.baseFrame"
+            v-bind="framePicker"
+            :can-replace="canReplaceFrame"
+            @step="stepCandidateFrame"
+            @compare="framePicker.showCurrent = !framePicker.showCurrent"
+            @restore="setCandidateFrame(framePicker.baseFrame)"
+            @close="closeFramePicker(true)"
+            @replace="selectReplacementFrame"
+          />
         </div>
 
         <!-- Player controls -->
         <PlayerControls
           v-if="playerStore.frames.length > 0"
           :timeline-frame-count="timelineFrameCount"
+          :active-base-frame="framePicker?.baseFrame"
+          :preview-frame-index="previewFrameIndex"
           class="mt-4 rounded-xl"
+          @edit-frame="openFramePicker"
         />
 
         <div
@@ -223,7 +247,9 @@ import { trapModalTab } from '@/modal-focus';
 import Header from '@/components/layout/Header.vue';
 import StepNavigator from '@/components/layout/StepNavigator.vue';
 import FramePlayer from '@/components/player/FramePlayer.vue';
+import FramePicker from '@/components/player/FramePicker.vue';
 import PlayerControls from '@/components/player/PlayerControls.vue';
+import { extractionFrameIndices } from '@/components/player/timelineMath';
 import Button from '@/components/common/Button.vue';
 import Step1Extract from './Step1Extract.vue';
 import Step2Background from './Step2Background.vue';
@@ -240,6 +266,88 @@ const { t } = useI18n();
 
 const { currentProject } = storeToRefs(projectStore);
 const { currentStep, s1Params } = storeToRefs(processStore);
+
+const frameViewport = ref<HTMLElement | null>(null);
+const framePicker = ref<{
+  baseFrame: number;
+  currentFrame: number;
+  minFrame: number;
+  maxFrame: number;
+  candidate: number;
+  showCurrent: boolean;
+} | null>(null);
+const previewFrameIndex = computed(() => {
+  const picker = framePicker.value;
+  return picker?.showCurrent ? picker.currentFrame : picker?.candidate;
+});
+const readyPreviewFrame = ref<number>();
+const canReplaceFrame = computed(() => {
+  const picker = framePicker.value;
+  return !!picker && !picker.showCurrent && picker.candidate !== picker.currentFrame
+    && picker.candidate === readyPreviewFrame.value;
+});
+let pickerAnchor: HTMLButtonElement | undefined;
+
+function openFramePicker(baseFrame: number, anchor?: HTMLButtonElement) {
+  const { startFrame, endFrame, totalFrames } = playerStore;
+  const { frame_interval: interval, frame_overrides: overrides } = s1Params.value;
+  if (currentStep.value !== 1 || processStore.isProcessing || interval <= 1) return;
+  const slot = (baseFrame - startFrame) / interval;
+  const selected = extractionFrameIndices(totalFrames, startFrame, endFrame, interval, overrides);
+  if (!Number.isInteger(slot) || slot < 0 || slot >= selected.length) return;
+  playerStore.pause();
+  pickerAnchor = anchor;
+  framePicker.value = {
+    baseFrame,
+    currentFrame: selected[slot],
+    minFrame: slot > 0 ? selected[slot - 1] + 1 : startFrame,
+    maxFrame: slot + 1 < selected.length ? selected[slot + 1] - 1 : endFrame,
+    candidate: selected[slot],
+    showCurrent: false,
+  };
+}
+
+function setCandidateFrame(frame: number) {
+  const picker = framePicker.value;
+  if (!picker || !Number.isInteger(frame) || frame < picker.minFrame || frame > picker.maxFrame) return;
+  picker.candidate = frame;
+  picker.showCurrent = false;
+}
+
+function stepCandidateFrame(delta: number) {
+  const picker = framePicker.value;
+  if (picker) setCandidateFrame(picker.candidate + delta);
+}
+
+function closeFramePicker(restoreFocus = false) {
+  framePicker.value = null;
+  readyPreviewFrame.value = undefined;
+  if (restoreFocus) pickerAnchor?.focus({ preventScroll: true });
+  pickerAnchor = undefined;
+}
+
+function selectReplacementFrame() {
+  const picker = framePicker.value;
+  if (!picker || !canReplaceFrame.value || currentStep.value !== 1 || processStore.isProcessing) return;
+  const { baseFrame, candidate } = picker;
+  const overrides = { ...s1Params.value.frame_overrides };
+  if (candidate === baseFrame) delete overrides[baseFrame];
+  else overrides[baseFrame] = candidate;
+  closeFramePicker();
+  s1Params.value.frame_overrides = overrides;
+  playerStore.goToFrame(candidate);
+  frameViewport.value?.focus({ preventScroll: true });
+}
+
+watch(
+  () => [currentProject.value?.id, currentStep.value, playerStore.frames, playerStore.startFrame,
+    playerStore.endFrame, s1Params.value.frame_interval, s1Params.value.frame_overrides, processStore.isProcessing],
+  () => closeFramePicker(),
+);
+// Playback may finish preloading after the picker has paused it.
+watch(() => playerStore.isPlaying, (playing) => {
+  if (playing && framePicker.value) playerStore.pause();
+}, { flush: 'sync' });
 
 // Params loaded state
 const paramsLoaded = ref(false);
@@ -260,6 +368,7 @@ let resolveNavigation: ((allowed: boolean) => void) | null = null;
 
 function beforeFrameNavigation(): boolean | Promise<boolean> {
   if (frameEditorLoading.value || frameEditorSaving.value || navigationPending.value || frameEditorRef.value?.busy) return false;
+  closeFramePicker();
   if (!frameEditor.value) return true;
   if (!frameEditorRef.value?.dirty) {
     closeFrameEditor();

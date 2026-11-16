@@ -56,37 +56,58 @@ test('automatic interval calculation rebuilds regular ticks after a manual repla
   assert.deepEqual(extraction.playerStore.playbackFrameIndices, [14, 23, 32, 41, 50, 59, 68, 77, 86]);
 });
 
-test('selecting a neighboring frame changes the extraction, playback and reopened picker', async () => {
-  let controls;
-  const html = await renderSfc('components/player/PlayerControls.vue', {
+test('the inline picker previews and compares without changing extraction until a rendered candidate is confirmed', async () => {
+  let editor;
+  const html = await renderSfc('views/Editor/EditorLayout.vue', {
     piniaState: {
       player: {
         frames: Array.from({ length: 95 }, (_, index) => ({ path: `f${index}`, url: `frame-${index}.png` })),
-        startFrame: 14, endFrame: 94, currentIndex: 50, frameInterval: 3,
+        startFrame: 14, endFrame: 94, currentIndex: 20, frameInterval: 3, isPlaying: true,
+        zoom: 2, panX: 17, panY: -8,
       },
       process: { currentStep: 1, s1Params: { frame_interval: 3 } },
     },
     configureSetup(bindings) {
-      controls = bindings;
+      editor = bindings;
       bindings.openFramePicker(50);
+      bindings.stepCandidateFrame(1);
     },
   });
   assert.match(html, /data-test="frame-picker"/);
-  assert.match(html, /data-candidate="48"/);
-  assert.match(html, /data-candidate="52"/);
-  assert.match(html, /src="frame-50.png"/);
-  assert.equal(controls.playerStore.isPlaying, false);
-  controls.selectReplacementFrame(53);
-  assert.equal(controls.s1Params.value.frame_overrides, undefined, 'the neighboring selected tick cannot be duplicated');
-  controls.selectReplacementFrame(51);
-  assert.deepEqual(controls.s1Params.value.frame_overrides, { 50: 51 });
-  assert.equal(controls.playerStore.currentIndex, 51);
-  assert.equal(controls.playerStore.playbackFrameIndices[12], 51);
-  assert.equal(controls.editingBaseFrame.value, null);
-  controls.openFramePicker(50);
-  assert.equal(controls.framePicker.value.currentFrame, 51);
-  controls.selectReplacementFrame(50);
-  assert.deepEqual(controls.s1Params.value.frame_overrides, {});
+  assert.doesNotMatch(html, /role="dialog"|src="frame-51.png"/);
+  assert.match(html, /51 \/ 94/);
+  assert.equal(editor.playerStore.isPlaying, false);
+  assert.equal(editor.previewFrameIndex.value, 51);
+  assert.equal(editor.playerStore.currentIndex, 20);
+  editor.setCandidateFrame(53);
+  assert.equal(editor.previewFrameIndex.value, 51, 'the neighboring selected tick cannot be duplicated');
+  editor.selectReplacementFrame();
+  assert.equal(editor.s1Params.value.frame_overrides, undefined, 'an unrendered candidate cannot be applied');
+
+  editor.framePicker.value.showCurrent = true;
+  assert.equal(editor.previewFrameIndex.value, 50);
+  editor.framePicker.value.showCurrent = false;
+  assert.equal(editor.previewFrameIndex.value, 51);
+  editor.closeFramePicker();
+  assert.equal(editor.previewFrameIndex.value, undefined);
+  assert.equal(editor.playerStore.currentIndex, 20);
+  assert.equal(editor.s1Params.value.frame_overrides, undefined);
+
+  editor.openFramePicker(50);
+  editor.stepCandidateFrame(1);
+  editor.readyPreviewFrame.value = 51;
+  editor.selectReplacementFrame();
+  assert.deepEqual(editor.s1Params.value.frame_overrides, { 50: 51 });
+  assert.equal(editor.playerStore.currentIndex, 51);
+  assert.equal(editor.playerStore.playbackFrameIndices[12], 51);
+  assert.deepEqual([editor.playerStore.zoom, editor.playerStore.panX, editor.playerStore.panY], [2, 17, -8]);
+  assert.equal(editor.framePicker.value, null);
+  editor.openFramePicker(50);
+  assert.equal(editor.framePicker.value.currentFrame, 51);
+  editor.setCandidateFrame(50);
+  editor.readyPreviewFrame.value = 50;
+  editor.selectReplacementFrame();
+  assert.deepEqual(editor.s1Params.value.frame_overrides, {});
 });
 
 test('extraction ticks reflect changed intervals, range bounds and short videos', async () => {
@@ -118,6 +139,7 @@ test('default, every-frame, simple and unloaded timelines omit extraction ticks'
 test('player controls supply extraction ticks with the audio track collapsed and expanded', async () => {
   for (const expanded of [false, true]) {
     const html = await renderSfc('components/player/PlayerControls.vue', {
+      props: { activeBaseFrame: 50, previewFrameIndex: 51 },
       piniaState: {
         player: {
           frames: Array.from({ length: 95 }, (_, index) => ({ url: `frame-${index}.png` })),
@@ -133,5 +155,6 @@ test('player controls supply extraction ticks with the audio track collapsed and
     });
     assert.equal((html.match(/data-test="extraction-ticks"/g) ?? []).length, 1);
     assert.deepEqual(selectedFrames(html), Array.from({ length: 27 }, (_, index) => 14 + index * 3));
+    assert.match(html, /aria-label="预览并替换第 50 帧" aria-pressed="true"/);
   }
 });

@@ -56,9 +56,10 @@
           :current-frame="currentTimelineFrame"
           :frame-interval="s1Params.frame_interval"
           :frame-overrides="s1Params.frame_overrides"
+          :active-base-frame="activeBaseFrame"
           :editable="!processStore.isProcessing"
           :simple="processStore.currentStep > 1"
-          @edit-frame="openFramePicker"
+          @edit-frame="(frame, anchor) => emit('editFrame', frame, anchor)"
           @update:start-frame="onStartFrameChange"
           @update:end-frame="onEndFrameChange"
           @update:current-frame="onCurrentFrameChange"
@@ -171,23 +172,16 @@
           :current-frame="currentTimelineFrame"
           :frame-interval="s1Params.frame_interval"
           :frame-overrides="s1Params.frame_overrides"
+          :active-base-frame="activeBaseFrame"
           :editable="!processStore.isProcessing"
           :simple="processStore.currentStep > 1"
-          @edit-frame="openFramePicker"
+          @edit-frame="(frame, anchor) => emit('editFrame', frame, anchor)"
           @update:start-frame="onStartFrameChange"
           @update:end-frame="onEndFrameChange"
           @update:current-frame="onCurrentFrameChange"
         />
       </template>
     </AudioTimeline>
-    <FramePicker
-      v-if="framePicker"
-      :key="framePicker.baseFrame"
-      v-bind="framePicker"
-      :frames="playerStore.frames"
-      @select="selectReplacementFrame"
-      @close="editingBaseFrame = null"
-    />
   </div>
 </template>
 
@@ -207,9 +201,7 @@ import {
 } from '@/composables/audioPeaks';
 import RangeSlider from './RangeSlider.vue';
 import AudioTimeline from './AudioTimeline.vue';
-import FramePicker from './FramePicker.vue';
 import {
-  extractionFrameIndices,
   nearestVisibleFrameIndex,
   sourceFrameFromTimelineFrame,
   timelineFrameForVisibleIndex,
@@ -217,9 +209,12 @@ import {
 
 const props = withDefaults(defineProps<{
   timelineFrameCount?: number;
+  activeBaseFrame?: number;
+  previewFrameIndex?: number;
 }>(), {
   timelineFrameCount: 0,
 });
+const emit = defineEmits<{ editFrame: [frame: number, anchor: HTMLButtonElement] }>();
 
 const { t } = useI18n();
 const playerStore = usePlayerStore();
@@ -233,7 +228,6 @@ const { playbackEnabled: audioPlaybackEnabled } = storeToRefs(audioStore);
 
 const fpsInputRef = ref<HTMLInputElement | null>(null);
 const showAudioTimeline = ref(false);
-const editingBaseFrame = ref<number | null>(null);
 
 // 音频运行时常驻在播放器控制层；折叠 AudioTimeline 只影响编辑 UI。
 const { peaks, audioBuffer, loading: wavLoading, error: wavError, load: loadWaveform } = useAudioWaveform();
@@ -258,7 +252,7 @@ const timelineTotalFrames = computed(() => (
 ));
 const currentTimelineFrame = computed(() => (
   processStore.currentStep === 1
-    ? currentIndex.value
+    ? props.previewFrameIndex ?? currentIndex.value
     : timelineFrameForVisibleIndex(playerStore.frames, currentIndex.value)
 ));
 const timelineStartFrame = computed(() => processStore.currentStep === 1 ? startFrame.value : 0);
@@ -267,47 +261,6 @@ const timelineEndFrame = computed(() => (
     ? endFrame.value
     : Math.max(0, timelineTotalFrames.value - 1)
 ));
-
-const selectedSourceFrames = computed(() => extractionFrameIndices(
-  totalFrames.value, timelineStartFrame.value, timelineEndFrame.value,
-  s1Params.value.frame_interval, s1Params.value.frame_overrides,
-));
-const framePicker = computed(() => {
-  const baseFrame = editingBaseFrame.value;
-  if (baseFrame === null || processStore.currentStep !== 1 || processStore.isProcessing) return null;
-  const slot = (baseFrame - timelineStartFrame.value) / s1Params.value.frame_interval;
-  const selected = selectedSourceFrames.value;
-  if (!Number.isInteger(slot) || slot < 0 || slot >= selected.length) return null;
-  return {
-    baseFrame,
-    currentFrame: selected[slot],
-    minFrame: slot > 0 ? selected[slot - 1] + 1 : timelineStartFrame.value,
-    maxFrame: slot + 1 < selected.length ? selected[slot + 1] - 1 : timelineEndFrame.value,
-  };
-});
-
-function openFramePicker(baseFrame: number) {
-  if (processStore.currentStep !== 1 || processStore.isProcessing) return;
-  playerStore.pause();
-  editingBaseFrame.value = baseFrame;
-}
-
-function selectReplacementFrame(frame: number) {
-  const selection = framePicker.value;
-  if (!selection || !Number.isInteger(frame) || frame < selection.minFrame || frame > selection.maxFrame) return;
-  const overrides = { ...s1Params.value.frame_overrides };
-  if (frame === selection.baseFrame) delete overrides[selection.baseFrame];
-  else overrides[selection.baseFrame] = frame;
-  s1Params.value.frame_overrides = overrides;
-  playerStore.goToFrame(frame);
-  editingBaseFrame.value = null;
-}
-
-watch(
-  () => [projectStore.projectId, processStore.currentStep, totalFrames.value,
-    timelineStartFrame.value, timelineEndFrame.value, s1Params.value.frame_interval, processStore.isProcessing],
-  () => { editingBaseFrame.value = null; },
-);
 
 function mapToSource(frame: number): number {
   if (processStore.currentStep === 1) return frame;

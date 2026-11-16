@@ -215,7 +215,7 @@ test('favorites belong to individual media and stacked covers do not show a favo
   assert.doesNotMatch(stackedImages, /data-test="recent-media-favorite-/);
   assert.match(singleVideo, /data-test="recent-media-favorite-video:task-1"/);
   assert.match(imageCardSource, /<slot\s+name="top-right"\s+:attempt="selectedAttempt"/);
-  assert.match(recentSource, /imageMediaKey\(group\.items\[0\]\.local_id, attempt\.local_id\)/);
+  assert.match(recentSource, /imageMediaKey\(entry\.group\.items\[0\]\.local_id, attempt\.local_id\)/);
   assert.match(recentSource, /useRecentMediaFavorites\(\)/);
   assert.doesNotMatch(recentSource, /recent-prompt-favorites|favoritePromptKeys/);
 });
@@ -316,7 +316,12 @@ test('image task cards use one main preview with a selectable thumbnail strip', 
   assert.match(html, /data-test="recent-image-thumbnail-1"/);
   assert.match(html, /data-test="recent-image-thumbnail-2"/);
   assert.match(html, /draggable="true"/);
-  assert.match(html, /title="长按拖拽"/);
+  const mainPreview = html.match(/<button[^>]*data-test="recent-image-main-preview"[\s\S]*?<\/button>/)?.[0];
+  assert.match(mainPreview, /class="media-preview-drag-hint[^"]*"[^>]*><span[^>]*>长按拖拽<\/span>/);
+  assert.doesNotMatch(mainPreview, /data-tooltip=/);
+  const thumbnailButtons = [...html.matchAll(/<button[^>]*data-test="recent-image-thumbnail-\d+"[^>]*>/g)];
+  assert.equal(thumbnailButtons.length, 3);
+  for (const [button] of thumbnailButtons) assert.match(button, /data-tooltip="长按拖拽"[^>]*data-tooltip-delay="1000"/);
   assert.match(html, /aria-pressed="true"[^>]*data-test="recent-image-thumbnail-0"/);
   assert.doesNotMatch(html, /3\/3/);
   assert.doesNotMatch(html, /gridTemplateRows|thumbnailGridStyle|thumbnailItemClass/);
@@ -328,14 +333,30 @@ test('missing cached images cannot be dragged as local paths', async () => {
   });
   assert.match(html, /<button[^>]*data-test="recent-image-main-preview"[^>]*draggable="false"/);
   assert.doesNotMatch(html, /draggable="true"/);
+  assert.doesNotMatch(html, /data-tooltip="长按拖拽"/);
+  assert.doesNotMatch(html, /media-preview-drag-hint/);
+});
+
+test('local image cards advertise dragging and local video cards do not', async () => {
+  for (const kind of ['image', 'video']) {
+    const html = await renderSfc('components/ai-creation/SourceMediaCard.vue', {
+      props: { item: {
+        id: 'imported-media', kind, name: 'local-media', thumbnail_url: '/fixture.png',
+        imported_at: '2026-11-16T10:00:00Z', width: 640, height: 360,
+      } },
+    });
+    assert.match(html, new RegExp(`<a[^>]*data-test="source-media-imported-media"[^>]*draggable="${kind === 'image'}"`));
+    assert.equal(html.includes('media-preview-drag-hint'), kind === 'image');
+    assert.doesNotMatch(html, /data-tooltip="长按拖拽"/);
+  }
 });
 
 test('image previews fill the card top edge like video previews', async () => {
   const card = await source('components/ai-creation/RecentImageGenerationCard.vue');
 
   assert.match(card, /class="group\/preview relative block aspect-video w-full overflow-hidden bg-black\/25/);
-  assert.match(card, /class="h-full w-full object-cover transition/);
-  assert.match(card, /class="absolute right-3 top-3 z-\[2\]"/);
+  assert.match(card, /class="h-full w-full object-cover"/);
+  assert.match(card, /class="absolute right-2 top-2 z-\[2\]"/);
   assert.doesNotMatch(card, /bg-\[#18191c\] p-3|overflow-hidden rounded-lg bg-black\/25|object-contain/);
 });
 

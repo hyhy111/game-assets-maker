@@ -230,6 +230,7 @@ const emit = defineEmits<{
   edit: [];
   clear: [];
   'drop-image': [payload: SeedreamImageDragPayload];
+  'drop-source-image': [id: string];
   'drop-file': [file: File];
   'drop-error': [key: string];
 }>();
@@ -274,6 +275,7 @@ function onDrop(event: DragEvent) {
   dragActive.value = false;
   const result = readImageDrop(event.dataTransfer);
   if (result.kind === 'candidate') emit('drop-image', result.candidate);
+  else if (result.kind === 'source') emit('drop-source-image', result.id);
   else if (result.kind === 'file') emit('drop-file', result.file);
   else emit('drop-error', result.key);
 }

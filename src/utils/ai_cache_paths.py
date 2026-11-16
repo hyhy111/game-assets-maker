@@ -7,6 +7,8 @@ from src.utils.data_paths import data_root
 
 AI_PIC_CACHE_DIRNAME = "ai-pic-cache"
 AI_VIDEO_CACHE_DIRNAME = "ai-video-cache"
+LOCAL_IMAGE_CACHE_DIRNAME = "local-images"
+LOCAL_VIDEO_CACHE_DIRNAME = "local-videos"
 
 
 def ai_cache_root(configured_dir: object, *, base_dir: Path | None = None) -> Path:

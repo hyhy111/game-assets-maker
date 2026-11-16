@@ -71,6 +71,6 @@ export function canStartStep2(step1Completed: boolean, status: ModelStatus, sele
 
 export function backgroundModelName(model: string): string {
   if (model === 'u2net') return 'U²-Net (rembg)';
-  if (model === 'birefnet-comfy') return 'BiRefNet (Comfy-Org)';
+  if (model === 'birefnet-comfy') return 'BiRefNet';
   return model;
 }

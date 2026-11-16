@@ -23,8 +23,13 @@ const position = ref({ x: 0, y: 0 });
 let originalTitle: string | null = null;
 let addedLabel = false;
 let observer: MutationObserver | undefined;
+let hoverTarget: HTMLElement | null = null;
+let hoverTimer: number | undefined;
 
 function hide() {
+  window.clearTimeout(hoverTimer);
+  hoverTarget = null;
+  hoverTimer = undefined;
   const element = trigger.value;
   if (element) {
     const descriptions = (element.getAttribute('aria-describedby') || '').split(/\s+/)
@@ -40,12 +45,28 @@ function hide() {
   observer?.disconnect();
 }
 
-async function show(event: Event) {
+function show(event: Event) {
   const element = event.target instanceof Element
     ? event.target.closest<HTMLElement>('.control-tooltip, button[title]') : null;
   if (!element || element.getAttribute('aria-expanded') === 'true') return;
-  if (trigger.value === element) return;
+  const hovering = event.type === 'pointerover';
+  if (trigger.value === element || (hovering && hoverTarget === element)) return;
   hide();
+  const delay = hovering ? Number(element.dataset.tooltipDelay) : 0;
+  if (Number.isFinite(delay) && delay > 0) {
+    hoverTarget = element;
+    hoverTimer = window.setTimeout(() => {
+      hoverTarget = null;
+      hoverTimer = undefined;
+      if (element.matches(':hover')) void reveal(element);
+    }, delay);
+    return;
+  }
+  void reveal(element);
+}
+
+async function reveal(element: HTMLElement) {
+  if (!element.isConnected || element.getAttribute('aria-expanded') === 'true') return;
   const label = element.getAttribute('data-tooltip') || element.getAttribute('aria-label') || element.getAttribute('title');
   if (!label) return;
   originalTitle = element.getAttribute('title');
@@ -82,7 +103,7 @@ async function show(event: Event) {
 
 function leave(event: Event) {
   const next = (event as MouseEvent | FocusEvent).relatedTarget;
-  if (next instanceof Node && trigger.value?.contains(next)) return;
+  if (next instanceof Node && (trigger.value ?? hoverTarget)?.contains(next)) return;
   hide();
 }
 
@@ -100,6 +121,7 @@ onMounted(() => {
   document.addEventListener('focusout', leave);
   document.addEventListener('keydown', onKeydown);
   document.addEventListener('click', hide);
+  document.addEventListener('dragstart', hide);
   document.addEventListener('scroll', hide, true);
   window.addEventListener('resize', hide);
 });
@@ -112,6 +134,7 @@ onBeforeUnmount(() => {
   document.removeEventListener('focusout', leave);
   document.removeEventListener('keydown', onKeydown);
   document.removeEventListener('click', hide);
+  document.removeEventListener('dragstart', hide);
   document.removeEventListener('scroll', hide, true);
   window.removeEventListener('resize', hide);
 });

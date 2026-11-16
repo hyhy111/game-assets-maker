@@ -37,6 +37,7 @@
               @edit="openImageEditor('first_frame')"
               @clear="clearFrame('first_frame')"
               @drop-image="dropCandidateFrame('first_frame', $event)"
+              @drop-source-image="dropSourceFrame('first_frame', $event)"
               @drop-file="dropLocalFrame('first_frame', $event)"
               @drop-error="dropError = t($event)"
             />
@@ -68,6 +69,7 @@
               @edit="openImageEditor('last_frame')"
               @clear="clearFrame('last_frame')"
               @drop-image="dropCandidateFrame('last_frame', $event)"
+              @drop-source-image="dropSourceFrame('last_frame', $event)"
               @drop-file="dropLocalFrame('last_frame', $event)"
               @drop-error="dropError = t($event)"
             />
@@ -466,23 +468,21 @@
             />
             <button
               type="submit"
-              class="control-tooltip inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-medium text-dark-bg transition hover:bg-primary-600 disabled:cursor-not-allowed disabled:opacity-50"
+              class="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-primary text-dark-bg transition hover:bg-primary-600 disabled:cursor-not-allowed disabled:bg-[#4a4a4a] disabled:text-[#777]"
               :disabled="submitting || platformSubmitBlocked || capabilitiesBlocked || draftLoadFailed || !form.first_frame || !form.prompt.trim()"
               :aria-label="t('aiCreation.videoMode')"
               data-test="seedance-submit"
-              :data-tooltip="t('buttonHints.generateVideo')"
             >
               <span
                 v-if="submitting"
                 class="h-4 w-4 animate-spin rounded-full border-2 border-dark-bg/30 border-t-dark-bg"
                 aria-hidden="true"
               />
-              <Clapperboard
+              <ArrowUp
                 v-else
-                class="h-5 w-5"
+                :size="20"
                 aria-hidden="true"
               />
-              <span>{{ t('aiCreation.videoMode') }}</span>
             </button>
           </div>
         </div>
@@ -643,7 +643,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { Listbox, ListboxButton, ListboxOption, ListboxOptions } from '@headlessui/vue';
-import { ArrowRight, Check, ChevronDown, Copy, Trash2, RefreshCw, Image, Clapperboard, SlidersHorizontal } from 'lucide-vue-next';
+import { ArrowRight, ArrowUp, Check, ChevronDown, Copy, Trash2, RefreshCw, Image, Clapperboard, SlidersHorizontal } from 'lucide-vue-next';
 import { Translation as I18nT, useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 import DraftClearConfirmation from '@/components/ai-creation/DraftClearConfirmation.vue';
@@ -958,6 +958,12 @@ async function dropLocalFrame(field: 'first_frame' | 'last_frame', file: File) {
   dropError.value = '';
   if (await workspace.importDroppedImage(file, field)) delete errors.value[field];
   else dropError.value = workspace.candidateHandoffError || t('aiCreation.imageUnavailable');
+}
+
+async function dropSourceFrame(field: 'first_frame' | 'last_frame', id: string) {
+  dropError.value = '';
+  if (await workspace.handoffSourceImage(id, field)) delete errors.value[field];
+  else dropError.value = t('aiCreation.imageUnavailable');
 }
 
 function resetDraft() {

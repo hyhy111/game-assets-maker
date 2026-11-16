@@ -50,6 +50,14 @@ def resolve_project_path(projects_root: Path, project_id: str) -> Path:
     return projects_root / action
 
 
+def project_video_path(project_path: Path, metadata: dict) -> str:
+    """Resolve a project-owned video after the project has been moved."""
+    value = metadata.get("video_path") or ""
+    if value and metadata.get("managed_video") is True:
+        return str(project_path / "input" / Path(value).name)
+    return value
+
+
 def media_url_for_path(path: Path, *, projects_root: Path, data_root: Path, base_url: str) -> str:
     """Build the assets-server URL for a local media file.
 

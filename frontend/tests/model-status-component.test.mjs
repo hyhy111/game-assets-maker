@@ -71,7 +71,7 @@ test('BiRefNet offers the ModelScope download with its own weight size', async (
   const needed = await renderSfc('components/editor/ModelStatusCard.vue', {
     props: { status: status('needs_download', { model: 'birefnet-comfy' }) },
   });
-  assert.match(needed, /BiRefNet \(Comfy-Org\) 模型需要首次下载/);
+  assert.match(needed, /BiRefNet 模型需要首次下载/);
   assert.match(needed, /从魔搭 ModelScope 下载约 424 MB/);
   assert.match(needed, /下载模型/);
   assert.doesNotMatch(needed, /aria-haspopup="listbox"/);

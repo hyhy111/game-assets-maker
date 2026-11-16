@@ -74,3 +74,6 @@ Thumbs.db
 .worktrees/
 .scratch/
 .kimi-code/
+
+# Imported original media when running from source
+/source-media/

@@ -1,5 +1,7 @@
 export const SEEDREAM_IMAGE_DRAG_TYPE = 'application/x-gam-seedream-image';
 const IMAGE_DRAG_TEXT_PREFIX = 'gam-seedream-image:';
+const SOURCE_IMAGE_DRAG_TYPE = 'application/x-gam-source-image';
+const SOURCE_IMAGE_TEXT_PREFIX = 'gam-source-image:';
 let removeImageDragEffect: (() => void) | undefined;
 let currentImageDrag: { absolutePath: string; payload: SeedreamImageDragPayload } | undefined;
 
@@ -10,11 +12,12 @@ export interface SeedreamImageDragPayload {
 
 export function hasImageDrop(dataTransfer: DataTransfer | null): boolean {
   return Boolean(dataTransfer && (hasSeedreamImageDrag(dataTransfer)
-    || Array.from(dataTransfer.types).includes('Files')));
+    || Array.from(dataTransfer.types).some(type => type === 'Files' || type === SOURCE_IMAGE_DRAG_TYPE)));
 }
 
 export type ImageDropResult =
   | { kind: 'candidate'; candidate: SeedreamImageDragPayload }
+  | { kind: 'source'; id: string }
   | { kind: 'file'; file: File }
   | { kind: 'error'; key: 'aiCreation.dropSingleImage' | 'aiCreation.dropInvalidImage' };
 
@@ -24,12 +27,24 @@ export function readImageDrop(dataTransfer: DataTransfer | null): ImageDropResul
   }
   const candidate = readSeedreamImageDrag(dataTransfer);
   if (candidate) return { kind: 'candidate', candidate };
+  const text = dataTransfer?.getData('text/plain') ?? '';
+  const id = dataTransfer?.getData(SOURCE_IMAGE_DRAG_TYPE)
+    || (text.startsWith(SOURCE_IMAGE_TEXT_PREFIX) ? text.slice(SOURCE_IMAGE_TEXT_PREFIX.length) : '');
+  if (/^[a-f0-9]{32}$/.test(id)) return { kind: 'source', id };
   const file = dataTransfer?.files[0];
   if (file && (/^image\/(png|jpeg|webp|bmp|gif|tiff|heic|heif)$/i.test(file.type)
     || (!file.type && /\.(png|jpe?g|webp|bmp|gif|tiff?|heic|heif)$/i.test(file.name)))) {
     return { kind: 'file', file };
   }
   return { kind: 'error', key: 'aiCreation.dropInvalidImage' };
+}
+
+export function writeSourceImageDrag(dataTransfer: DataTransfer | null, id: string, source: HTMLElement) {
+  if (!dataTransfer) return;
+  dataTransfer.effectAllowed = 'copy';
+  dataTransfer.setData(SOURCE_IMAGE_DRAG_TYPE, id);
+  dataTransfer.setData('text/plain', SOURCE_IMAGE_TEXT_PREFIX + id);
+  startImageDragEffect(source);
 }
 
 export function readImageFile(file: File): Promise<string> {

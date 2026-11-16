@@ -289,14 +289,14 @@ class AgentOperations:
             payload = deepcopy(entry["request"]["payload"])
         if not cli_generation_enabled():
             result = {"success": False, "error": {"code": "CLI_GENERATION_DISABLED"}}
-        elif source != "api-key":
+        elif source not in ("api-key", "forfuner-ai"):
             result = {"success": False, "error": {"code": "GENERATION_SOURCE_UNAVAILABLE"}}
         elif self.api is None:
             result = {"success": False, "error": {"code": "UI_NOT_RUNNING"}}
         else:
             try:
                 create = self.api.seedance_create_task if payload["kind"] == "video" else self.api.seedream_create_batch
-                result = create(payload["request"])
+                result = create(payload["request"], source)
                 task = result.get("task", {})
                 if task.get("remote_status") == "submission_unknown":
                     result = {**result, "success": False, "error": {"code": "SUBMISSION_UNKNOWN"}}

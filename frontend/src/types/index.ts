@@ -46,6 +46,22 @@ export interface RoleSummary {
   projectCount: number;
 }
 
+export interface SourceMedia {
+  id: string;
+  kind: 'image' | 'video';
+  name: string;
+  size_bytes: number;
+  width: number;
+  height: number;
+  duration: number | null;
+  imported_at: string;
+  url: string;
+  thumbnail_url: string;
+  edit_revision?: string;
+  edit_source_url: string;
+  generation_layout?: GenerationLayout | null;
+}
+
 export interface LegacyMigrationRequest {
   projectId: string;
   targetRole: string;

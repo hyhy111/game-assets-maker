@@ -12,7 +12,7 @@ from typing import Any
 import cv2
 import imageio_ffmpeg
 
-from backend.api.project_paths import media_url_for_path, resolve_project_path
+from backend.api.project_paths import media_url_for_path, project_video_path, resolve_project_path
 from src.utils.app_config import default_projects_root
 from src.utils.data_paths import data_root
 
@@ -42,7 +42,7 @@ class AudioAPI:
             return {"success": False, "error": "项目不存在", "source_wav": "", "source_fps": 0, "total_frames": 0}
 
         meta = self._load_project_meta(project_path)
-        video_path = meta.get("video_path", "") if meta else ""
+        video_path = project_video_path(project_path, meta or {})
         if not video_path:
             return {
                 "success": False,

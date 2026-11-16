@@ -12,7 +12,7 @@
   >
     <!-- Canvas for frame display -->
     <canvas
-      v-show="!editing"
+      v-show="!editing && (!previewing || previewStatus === 'ready')"
       ref="canvasRef"
       class="absolute top-1/2 left-1/2 max-w-none max-h-none"
       :style="canvasStyle"
@@ -21,9 +21,19 @@
 
     <slot />
 
+    <div
+      v-if="previewing && previewStatus !== 'ready'"
+      class="pointer-events-none absolute inset-0 grid place-items-center"
+      role="status"
+    >
+      <p class="rounded-lg bg-black/80 px-3 py-2 text-sm text-gray-200">
+        {{ t(previewStatus === 'error' ? 'step1.candidateUnavailable' : 'step1.candidateLoading') }}
+      </p>
+    </div>
+
     <!-- Info overlay -->
     <div class="pointer-events-none absolute top-4 left-4 z-10 px-3 py-1.5 bg-black/60 rounded-lg text-xs text-gray-300">
-      <span>{{ currentIndex }} / {{ endFrame }}</span>
+      <span>{{ previewFrameIndex ?? currentIndex }} / {{ endFrame }}</span>
       <span class="mx-2">|</span>
       <span>{{ Math.round(zoom * 100) }}%</span>
     </div>
@@ -117,11 +127,21 @@ const props = withDefaults(defineProps<{
   retouchEnabled?: boolean;
   toolsDisabled?: boolean;
   activeTool?: 'wand' | 'brush' | 'browse';
+  previewFrameIndex?: number;
 }>(), { activeTool: 'browse' });
-const emit = defineEmits<{ tool: [tool: 'wand' | 'brush' | 'browse'] }>();
+const emit = defineEmits<{
+  tool: [tool: 'wand' | 'brush' | 'browse'];
+  previewStep: [delta: number];
+  previewCancel: [];
+  previewReady: [frame: number | undefined];
+}>();
 const { t } = useI18n();
 const playerStore = usePlayerStore();
 const { currentFrame, zoom, panX, panY, currentIndex, startFrame, endFrame, currentImage, isPlaying, canvasBgColorValue } = storeToRefs(playerStore);
+const previewing = computed(() => props.previewFrameIndex !== undefined);
+const displayFrame = computed(() => props.previewFrameIndex === undefined
+  ? currentFrame.value : playerStore.frames[props.previewFrameIndex]);
+const previewStatus = ref<'loading' | 'ready' | 'error'>('loading');
 
 // Refs
 const containerRef = ref<HTMLDivElement>();
@@ -171,6 +191,10 @@ function drawCachedImage(img: HTMLImageElement) {
   if (canvas.height !== img.height) canvas.height = img.height;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.drawImage(img, 0, 0);
+  if (previewing.value) {
+    previewStatus.value = 'ready';
+    emit('previewReady', props.previewFrameIndex);
+  }
 }
 
 // Load and render frame
@@ -182,14 +206,20 @@ async function renderFrame() {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
 
+  if (previewing.value) {
+    previewStatus.value = 'loading';
+    emit('previewReady', undefined);
+  }
+
   // If currentImage is set (preview mode), render it
-  if (playerStore.currentImage) {
+  if (!previewing.value && playerStore.currentImage) {
     renderBase64Image(playerStore.currentImage, undefined, version);
     return;
   }
 
-  if (!currentFrame.value) return;
-  const framePath = currentFrame.value.path;
+  const frame = displayFrame.value;
+  if (!frame) return;
+  const framePath = frame.path;
 
   // Fast path: already loaded and cached image element
   const cachedImg = playerStore.imageElementCache.get(framePath);
@@ -200,17 +230,17 @@ async function renderFrame() {
 
   // Always load the current frame regardless of background preload state.
   // If preload got there first, we load it again to ensure onload triggers canvas draw.
-  if (currentFrame.value.url) {
+  if (frame.url) {
     playerStore.loadingPaths.add(framePath);
     const img = new Image();
     img.crossOrigin = 'anonymous';
-    const frameUrl = currentFrame.value.url;
+    const frameUrl = frame.url;
     img.onload = () => {
       if (!playerStore.frames.some(frame => frame.path === framePath && frame.url === frameUrl)) return;
       playerStore.imageElementCache.set(framePath, img);
       playerStore.loadingPaths.delete(framePath);
       // Only draw if this frame is still the current one
-      if (version === renderVersion && currentFrame.value?.path === framePath) {
+      if (version === renderVersion && displayFrame.value === frame) {
         drawCachedImage(img);
       }
     };
@@ -218,14 +248,18 @@ async function renderFrame() {
       playerStore.loadingPaths.delete(framePath);
       if (version === renderVersion) void loadFrameViaBase64(version);
     };
-    img.src = currentFrame.value.url;
-  }
+    img.src = frameUrl;
+  } else if (previewing.value) void loadFrameViaBase64(version);
 }
 
 // Preload surrounding frames so manual stepping is smooth
 async function preloadNearbyFrames(centerIndex: number, radius: number) {
   const { frames, frameInterval } = playerStore;
   if (!frames.length) return;
+  if (previewing.value) {
+    void playerStore.preloadFrames(frames.slice(Math.max(0, centerIndex - 2), centerIndex + 3), 3);
+    return;
+  }
   const nearby = [];
   for (let offset = 1; offset <= radius; offset++) {
     const idx = centerIndex + offset * frameInterval;
@@ -240,40 +274,29 @@ async function preloadNearbyFrames(centerIndex: number, radius: number) {
 
 // Fallback: Load frame via base64
 async function loadFrameViaBase64(version: number) {
-  if (!currentFrame.value || !canvasRef.value) return;
-
-  const canvas = canvasRef.value;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return;
-
-  const framePath = currentFrame.value.path;
+  const framePath = displayFrame.value?.path;
+  if (!framePath || !canvasRef.value) return;
 
   try {
     const imageData = await api.frame.getFrameImage(framePath);
     renderBase64Image(imageData, framePath, version);
   } catch (e) {
+    if (version === renderVersion && previewing.value) previewStatus.value = 'error';
     logEvent(['Failed to load frame via base64:', e].join(' '), 'error');
   }
 }
 
 // Render base64 image data
 function renderBase64Image(base64Data: string, intendedPath?: string, version = renderVersion) {
-  if (!canvasRef.value) return;
-
-  const canvas = canvasRef.value;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return;
-
+  if (version !== renderVersion || !canvasRef.value) return;
   const img = new Image();
   img.onload = () => {
-    if (version !== renderVersion || (intendedPath && currentFrame.value?.path !== intendedPath)) return;
-    if (canvas.width !== img.width) canvas.width = img.width;
-    if (canvas.height !== img.height) canvas.height = img.height;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(img, 0, 0);
+    if (version !== renderVersion || (intendedPath && displayFrame.value?.path !== intendedPath)) return;
+    drawCachedImage(img);
   };
   img.onerror = () => {
-    if (version !== renderVersion || (intendedPath && currentFrame.value?.path !== intendedPath)) return;
+    if (version !== renderVersion || (intendedPath && displayFrame.value?.path !== intendedPath)) return;
+    if (previewing.value) previewStatus.value = 'error';
     logEvent('Failed to render base64 image', 'error');
   };
   // Ensure proper data URI format
@@ -286,20 +309,13 @@ function renderBase64Image(base64Data: string, intendedPath?: string, version = 
 
 // Watch for frame changes
 watch(
-  currentFrame,
+  [displayFrame, () => props.previewFrameIndex, currentImage],
   () => {
     renderFrame();
-    preloadNearbyFrames(currentIndex.value, 5);
+    preloadNearbyFrames(props.previewFrameIndex ?? currentIndex.value, 5);
   },
   { immediate: true }
 );
-
-// Watch for currentImage changes (preview mode)
-watch(currentImage, (newImage) => {
-  if (newImage) {
-    renderFrame();
-  }
-}, { immediate: true });
 
 // Watch for playback start to aggressively preload upcoming frames
 watch(isPlaying, (playing) => {
@@ -377,10 +393,19 @@ function stopArrowRepeat() {
 }
 
 watch(() => props.keyboardDisabled, (disabled) => { if (disabled) stopArrowRepeat(); });
+watch(previewing, (active) => { if (active) stopArrowRepeat(); });
 
 function handleKeydown(e: KeyboardEvent) {
   if (props.keyboardDisabled || e.defaultPrevented || (e.target instanceof Element && e.target.closest('input, textarea, select, [contenteditable="true"]'))) return;
-  if (e.key === ' ' && !e.repeat) {
+  if (previewing.value && e.key === 'Escape') {
+    e.preventDefault();
+    emit('previewCancel');
+  } else if (previewing.value && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+    e.preventDefault();
+    emit('previewStep', e.key === 'ArrowLeft' ? -1 : 1);
+  } else if (e.key === ' ' && e.target instanceof Element && e.target.closest('button')) {
+    return;
+  } else if (e.key === ' ' && !e.repeat) {
     e.preventDefault();
     playerStore.togglePlay();
   } else if (e.key === 'ArrowRight' && !props.editing) {

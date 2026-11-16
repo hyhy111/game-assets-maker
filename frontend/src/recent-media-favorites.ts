@@ -1,6 +1,7 @@
 import { ref } from 'vue';
 
 const STORAGE_KEY = 'gam:recent-media-favorites';
+const favoriteMediaKeys = ref(loadFavoriteMediaKeys());
 
 export function imageMediaKey(batchId: string, attemptId: string): string {
   return `image:${batchId}:${attemptId}`;
@@ -10,9 +11,11 @@ export function videoMediaKey(taskId: string): string {
   return `video:${taskId}`;
 }
 
-export function useRecentMediaFavorites() {
-  const favoriteMediaKeys = ref(loadFavoriteMediaKeys());
+export function sourceMediaKey(id: string): string {
+  return `source:${id}`;
+}
 
+export function useRecentMediaFavorites() {
   function isFavorite(mediaKey: string): boolean {
     return favoriteMediaKeys.value.has(mediaKey);
   }
@@ -25,7 +28,7 @@ export function useRecentMediaFavorites() {
     saveFavoriteMediaKeys(next);
   }
 
-  return { imageMediaKey, videoMediaKey, isFavorite, toggleFavorite };
+  return { imageMediaKey, videoMediaKey, sourceMediaKey, isFavorite, toggleFavorite };
 }
 
 function loadFavoriteMediaKeys(): Set<string> {

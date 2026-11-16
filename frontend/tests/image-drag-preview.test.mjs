@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 import ts from 'typescript';
-import { SEEDREAM_IMAGE_DRAG_TYPE, hasImageDrop, readImageDrop, writeSeedreamImageDrag } from '../src/seedream-image-drag.ts';
+import { SEEDREAM_IMAGE_DRAG_TYPE, hasImageDrop, readImageDrop, writeSeedreamImageDrag, writeSourceImageDrag } from '../src/seedream-image-drag.ts';
 
 function fixture() {
   const listeners = new Map();
@@ -33,8 +33,9 @@ const payload = { localId: 'batch-1', attemptIndex: 2 };
 
 test('main-image and small-image drags use the same corresponding thumbnail preview', async () => {
   const source = await readFile(new URL('../src/components/ai-creation/RecentImageGenerationCard.vue', import.meta.url), 'utf8');
+  const eligibility = source.match(/function canDragImage\([\s\S]*?\n\}/)[0];
   const handler = source.match(/function startImageDrag\([\s\S]*?\n\}/)[0];
-  const compiled = ts.transpileModule(handler, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
+  const compiled = ts.transpileModule(`${eligibility}\n${handler}`, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
   const thumbnail = { name: 'thumbnail-2' };
   const card = { querySelector(selector) { assert.equal(selector, '[data-test="recent-image-thumbnail-2"]'); return thumbnail; } };
   const previews = [];
@@ -156,4 +157,23 @@ test('drag payloads do not require a source element and null transfers do nothin
   assert.equal(f.transfers.length, 2);
   writeSeedreamImageDrag(null, payload, f.source);
   assert.equal(f.elements.length, 0);
+});
+
+test('imported image cards resolve a managed media ID through direct and text-only WebView transfers', () => {
+  const id = 'e983a82ab3c74b59886bc0f414c8bb0d';
+  const values = new Map();
+  const source = { ownerDocument: {} };
+  writeSourceImageDrag({ setData: (type, value) => values.set(type, value) }, id, source);
+  const transferred = types => ({
+    types,
+    files: [],
+    getData: type => types.includes(type) ? values.get(type) ?? '' : '',
+  });
+  for (const types of [[...values.keys()], ['text/plain']]) {
+    const transfer = transferred(types);
+    assert.equal(hasImageDrop(transfer), true);
+    assert.deepEqual(readImageDrop(transfer), { kind: 'source', id });
+  }
+  values.set('text/plain', 'gam-source-image:../other/file.png');
+  assert.equal(readImageDrop(transferred(['text/plain'])).kind, 'error');
 });

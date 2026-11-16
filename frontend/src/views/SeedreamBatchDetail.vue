@@ -142,7 +142,6 @@
           <div
             class="relative mx-auto w-fit"
             :draggable="!!selectedSucceededAttempt.absolute_path && selectedSucceededAttempt.can_open_directory !== false"
-            :title="t('aiCreation.recent.dragImageToVideoFrame')"
             @dragstart="dragCurrentImage($event)"
           >
             <img

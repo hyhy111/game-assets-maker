@@ -33,15 +33,17 @@
         class="extraction-tick absolute top-0 h-4 w-2 -translate-x-1/2 pointer-events-auto rounded-sm cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:cursor-default"
         :disabled="!editable"
         :aria-label="t('step1.adjustFrame', { frame })"
+        :aria-pressed="activeBaseFrame === startFrame + index * (frameInterval ?? 1)"
         :title="t('step1.adjustFrame', { frame })"
         :style="{ left: `${timelineFramePercent(frame, totalFrames)}%` }"
         :data-frame="frame"
         @mousedown.stop
-        @click.stop="emit('editFrame', startFrame + index * (frameInterval ?? 1))"
+        @click.stop="emit('editFrame', startFrame + index * (frameInterval ?? 1), $event.currentTarget as HTMLButtonElement)"
       >
         <span
           class="extraction-tick-mark absolute left-1/2 top-1.5 h-1.5 w-px rounded-full bg-current"
-          :class="frame !== startFrame + index * (frameInterval ?? 1) ? 'text-white' : 'text-primary'"
+          :class="activeBaseFrame === startFrame + index * (frameInterval ?? 1)
+            ? 'text-primary ring-2 ring-primary' : frame !== startFrame + index * (frameInterval ?? 1) ? 'text-white' : 'text-primary'"
           :style="tickHoverStyle(frame)"
           aria-hidden="true"
         />
@@ -107,6 +109,7 @@ const props = defineProps<{
   currentFrame: number;
   frameInterval?: number;
   frameOverrides?: Record<string, number>;
+  activeBaseFrame?: number;
   editable?: boolean;
   simple?: boolean;
 }>();
@@ -115,7 +118,7 @@ const emit = defineEmits<{
   'update:startFrame': [value: number];
   'update:endFrame': [value: number];
   'update:currentFrame': [value: number];
-  editFrame: [baseFrame: number];
+  editFrame: [baseFrame: number, anchor: HTMLButtonElement];
 }>();
 
 const { t } = useI18n();

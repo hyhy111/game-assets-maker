@@ -105,7 +105,7 @@ def test_submission_uses_real_application_once_and_preserves_unknown_id(config_p
     "source,disable,code",
     [
         ("api-key", True, "CLI_GENERATION_DISABLED"),
-        ("forfuner-ai", False, "GENERATION_SOURCE_UNAVAILABLE"),
+        ("unknown", False, "GENERATION_SOURCE_UNAVAILABLE"),
     ],
 )
 def test_permission_revocation_and_source_are_checked_after_dispatch(config_path, source, disable, code):
@@ -196,3 +196,53 @@ def test_permission_write_failure_keeps_persisted_value(config_path, monkeypatch
     monkeypatch.setattr("src.utils.app_config.save_app_config", fail_write)
     assert api.save_cli_generation_enabled(True, True)["success"] is False
     assert config_path.read_bytes() == before
+
+
+@pytest.mark.parametrize("kind,result_key", [("image", "batch"), ("video", "task")])
+def test_cli_uses_live_forfuner_source_once(config_path, monkeypatch, kind, result_key):
+    from test_agent_navigation import BrowserWindow
+
+    from backend.agent_control.server import AgentControlServer
+
+    api = API()
+    api.save_cli_generation_enabled(True, True)
+    server = AgentControlServer(BrowserWindow(), api=api, port=0)
+    server.operations.timeout = 0
+    request = {"prompt": "fixture", "source": "api-key"}
+    calls = []
+
+    def create(data, source):
+        calls.append((data, source))
+        return {"success": True, result_key: {"local_id": "fixture-id", "remote_status": "queued"}}
+
+    monkeypatch.setattr(api, "seedream_create_batch" if kind == "image" else "seedance_create_task", create)
+    server.operations.execute(
+        {"request_id": kind, "operation": "generation.submit", "payload": {"kind": kind, "request": request}}
+    )
+    result = api.agent_submit_generation(kind, "forfuner-ai")
+    assert result["success"]
+    assert api.agent_submit_generation(kind, "forfuner-ai") == result
+    api.agent_acknowledge(kind, {"ok": True})
+    receipt = server.operations.status(kind)
+    assert receipt["data"]["result"][result_key]["local_id"] == "fixture-id"
+    assert calls == [(request, "forfuner-ai")]
+
+
+def test_cli_forfuner_requires_desktop_login(config_path):
+    from test_agent_navigation import BrowserWindow
+
+    from backend.agent_control.server import AgentControlServer
+
+    api = API()
+    api.save_cli_generation_enabled(True, True)
+    server = AgentControlServer(BrowserWindow(), api=api, port=0)
+    server.operations.timeout = 0
+    server.operations.execute(
+        {
+            "request_id": "logged-out",
+            "operation": "generation.submit",
+            "payload": {"kind": "image", "request": {"prompt": "fixture"}},
+        }
+    )
+    rejected = api.agent_submit_generation("logged-out", "forfuner-ai")
+    assert rejected["error"]["code"] == "PLATFORM_NOT_CONFIGURED"

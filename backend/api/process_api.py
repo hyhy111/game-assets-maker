@@ -19,7 +19,7 @@ import cv2
 import numpy as np
 from filelock import FileLock
 
-from backend.api.project_paths import resolve_project_path
+from backend.api.project_paths import project_video_path, resolve_project_path
 from backend.core.alpha_refine import validate_alpha_refine_params
 from backend.core.background_color import batch_punch_holes_color, validate_color_params
 from backend.core.edge_shrink import shrink_frame, validate_edge_shrink_params
@@ -234,7 +234,7 @@ class ProcessAPI:
             if meta_path.exists():
                 with open(meta_path, encoding="utf-8") as f:
                     meta = json.load(f)
-                    video_path = meta.get("video_path")
+                    video_path = project_video_path(project_path, meta)
 
         if not video_path or not Path(video_path).exists():
             raise ValueError("Video file not found")

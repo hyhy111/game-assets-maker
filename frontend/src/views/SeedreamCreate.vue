@@ -326,23 +326,21 @@
             />
             <button
               type="submit"
-              class="control-tooltip inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-medium text-dark-bg transition hover:bg-primary-600 disabled:cursor-not-allowed disabled:opacity-50"
+              class="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-primary text-dark-bg transition hover:bg-primary-600 disabled:cursor-not-allowed disabled:bg-[#4a4a4a] disabled:text-[#777]"
               :disabled="submitting || platformSubmitBlocked || capabilitiesBlocked || !form.prompt.trim()"
               :aria-label="t('aiCreation.imageMode')"
               data-test="seedream-submit"
-              :data-tooltip="t('buttonHints.generateImage')"
             >
               <span
                 v-if="submitting"
                 class="h-4 w-4 animate-spin rounded-full border-2 border-dark-bg/30 border-t-dark-bg"
                 aria-hidden="true"
               />
-              <ImagePlus
+              <ArrowUp
                 v-else
-                class="h-5 w-5"
+                :size="20"
                 aria-hidden="true"
               />
-              <span>{{ t('aiCreation.imageMode') }}</span>
             </button>
           </div>
         </div>
@@ -443,7 +441,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { Check, ChevronDown, Copy, Trash2, RefreshCw, Image, Clapperboard, ImagePlus, SlidersHorizontal } from 'lucide-vue-next';
+import { ArrowUp, Check, ChevronDown, Copy, Trash2, RefreshCw, Image, Clapperboard, SlidersHorizontal } from 'lucide-vue-next';
 import { Translation as I18nT, useI18n } from 'vue-i18n';
 import { hasImageDrop, readImageDrop, type SeedreamImageDragPayload } from '@/seedream-image-drag';
 import { useRoute, useRouter } from 'vue-router';
@@ -639,11 +637,14 @@ function onReferenceDragOver(event: DragEvent) {
   referenceDragActive.value = true;
 }
 
-function onReferenceDrop(event: DragEvent) {
+async function onReferenceDrop(event: DragEvent) {
   referenceDragActive.value = false;
   const result = readImageDrop(event.dataTransfer);
   if (result.kind === 'candidate') void dropCandidateReference(result.candidate);
   else if (result.kind === 'file') void dropReferenceFile(result.file);
+  else if (result.kind === 'source') {
+    referenceError.value = await workspace.handoffSourceImage(result.id, 'reference') ? '' : t('aiCreation.imageUnavailable');
+  }
   else referenceError.value = t(result.key);
 }
 const copyTitle = computed(() => copied.value ? t('common.copied') : t('common.copy'));

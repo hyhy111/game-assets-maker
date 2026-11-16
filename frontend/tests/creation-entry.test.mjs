@@ -306,6 +306,34 @@ test('video model scope guards model selection while insufficient credits only g
 });
 
 for (const kind of ['image', 'video']) {
+  test(`${kind}: a new account can select and quote a model with no credit buckets`, async t => {
+    const price = kind === 'image' ? 60 : 199;
+    const page = await mountPage(t, kind, {
+      quoteResponse: { data: { quote: price, canSubmit: false, reasonCode: 'NO_ELIGIBLE_CREDITS' } },
+      availabilityResponse: {
+        ...availability,
+        account: { generalAvailable: 0, bonusAvailable: 0, totalAvailable: 0, buckets: [] },
+        combinations: availability.combinations.map(row => ({
+          ...row, generalAvailable: 0, canSubmit: false,
+        })),
+      },
+    });
+    page.workspace.imageDraft.prompt = 'Draw a deer';
+    page.workspace.videoDraft.prompt = 'Walk forward';
+    page.workspace.videoDraft.first_frame = '/tmp/character.png';
+    await page.tick();
+
+    const state = page.app._instance.setupState;
+    const model = kind === 'image' ? imageId : videoId;
+    assert.equal(state.modelOptions.find(option => option.value === model).disabled, false);
+    assert.ok(page.httpCalls.some(call => call.path === `/app/credit/v2/quote/${kind}` && call.body?.model === model));
+    assert.equal(state.quoteError, `预计消耗 ${price} 积分，当前可用积分不足`);
+    assert.equal(await primarySubmitDisabled(kind, state), true);
+    assert.equal(state.platformConfirmBlocked, true);
+    await state.submit();
+    assert.equal(page.bridge.calls.some(call => /seedream_create_batch|seedance_create_task/.test(call.method)), false);
+  });
+
   test(`${kind}: a selected model outside the bonus scope becomes disabled and falls back to an eligible model`, async t => {
     const eligible = kind === 'image' ? imageId : videoId;
     const excluded = 'outside-bonus-scope';

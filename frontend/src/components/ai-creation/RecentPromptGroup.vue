@@ -1,20 +1,30 @@
 <template>
   <article
-    class="min-w-0"
+    class="relative isolate min-w-0"
     :data-test="`recent-prompt-group-${groupId}`"
   >
-    <div
-      class="relative"
-      :class="count > 1 ? 'pb-3 pr-3' : ''"
-    >
-      <template v-if="count > 1">
-        <span class="pointer-events-none absolute inset-x-3 bottom-0 top-3 rounded-xl border border-dark-border bg-[#151820]" />
-        <span class="pointer-events-none absolute inset-x-1.5 bottom-1.5 top-1.5 rounded-xl border border-dark-border bg-[#242424]" />
-      </template>
-      <div class="relative z-[1] transition-transform duration-200 hover:-translate-y-0.5">
-        <slot />
-      </div>
+    <template v-if="count > 1">
+      <span class="pointer-events-none absolute inset-0 translate-x-1.5 translate-y-1.5 rounded-xl border border-dark-border bg-[#151820]" />
+      <span class="pointer-events-none absolute inset-0 translate-x-[3px] translate-y-[3px] rounded-xl border border-dark-border bg-[#242424]" />
+    </template>
+    <div class="relative z-[1] h-full">
+      <slot />
     </div>
+    <button
+      v-if="count > 1"
+      type="button"
+      class="media-overlay-action control-tooltip absolute right-[9px] top-[9px] z-[2]"
+      :aria-expanded="expanded"
+      :data-test="`recent-prompt-expand-${groupId}`"
+      :aria-label="t(expanded ? 'aiCreation.recent.collapseTasks' : 'aiCreation.recent.expandTasks')"
+      :data-tooltip="t(expanded ? 'aiCreation.recent.collapseTasks' : 'aiCreation.recent.expandTasks')"
+      @click="emit('toggle-expanded')"
+    >
+      <ChevronDown
+        class="h-3.5 w-3.5"
+        aria-hidden="true"
+      />
+    </button>
   </article>
 
   <Teleport
@@ -53,7 +63,7 @@
             />
           </button>
         </header>
-        <div class="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-y-auto p-4 sm:p-5 md:grid-cols-2 xl:grid-cols-4">
+        <div class="grid min-h-0 flex-1 auto-rows-fr grid-cols-1 gap-4 overflow-y-auto p-4 sm:p-5 md:grid-cols-2 xl:grid-cols-4">
           <slot name="expanded" />
         </div>
       </section>
@@ -63,7 +73,7 @@
 
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, ref, watch } from 'vue';
-import { X } from 'lucide-vue-next';
+import { ChevronDown, X } from 'lucide-vue-next';
 import { useI18n } from 'vue-i18n';
 import { trapModalTab } from '@/modal-focus';
 

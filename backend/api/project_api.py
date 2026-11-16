@@ -16,6 +16,7 @@ from backend.api.project_paths import (
     is_legacy_import_project_dir,
     is_project_dir,
     make_project_id,
+    project_video_path,
     resolve_project_path,
     sanitize_segment,
     split_project_id,
@@ -56,7 +57,7 @@ class ProjectAPI:
             "legacy": legacy,
             "name": meta.get("project_name", action) if meta else action,
             "path": str(project_path),
-            "video_path": meta.get("video_path", "") if meta else "",
+            "video_path": project_video_path(project_path, meta or {}),
             "frame_interval": meta.get("frame_interval", 1) if meta else 1,
             "created_at": meta.get("timestamp", "") if meta else "",
             "modified_at": modified_at,
@@ -118,7 +119,7 @@ class ProjectAPI:
             "legacy": legacy,
             "name": meta.get("project_name", action) if meta else action,
             "path": str(project_path),
-            "video_path": meta.get("video_path", "") if meta else "",
+            "video_path": project_video_path(project_path, meta or {}),
             "frame_interval": meta.get("frame_interval", 1) if meta else 1,
             "created_at": meta.get("timestamp", "") if meta else "",
             "modified_at": datetime.fromtimestamp(project_path.stat().st_mtime).isoformat(),
@@ -189,7 +190,9 @@ class ProjectAPI:
 
         return steps
 
-    def create_project(self, role: str, action: str, video_path: str = "", frame_interval: int = 1) -> dict[str, Any]:
+    def create_project(
+        self, role: str, action: str, video_path: str = "", frame_interval: int = 1, *, copy_video: bool = False
+    ) -> dict[str, Any]:
         """Create a new action project under a role."""
         # Backward compatibility with the old signature: (name, video_path, frame_interval)
         if isinstance(video_path, int):
@@ -197,8 +200,8 @@ class ProjectAPI:
             action = role
             role = UNKNOWN_ROLE
 
-        safe_role = sanitize_segment(role, UNKNOWN_ROLE)
-        safe_action = self._sanitize_name(action)
+        safe_role = self._validate_rename_name(role) if copy_video else sanitize_segment(role, UNKNOWN_ROLE)
+        safe_action = self._validate_rename_name(action) if copy_video else self._sanitize_name(action)
         project_id = make_project_id(safe_role, safe_action)
 
         # Check for duplicate action in the same role (case-insensitive)
@@ -214,6 +217,19 @@ class ProjectAPI:
 
         # Create directory structure
         project_path = self._get_project_path(project_id)
+        if copy_video:
+            if not project_path.resolve().is_relative_to(self._projects_root.resolve()):
+                raise ValueError("Invalid project destination")
+            project_path.mkdir(parents=True, exist_ok=False)
+            try:
+                source = Path(video_path)
+                destination = project_path / "input" / f"source{source.suffix.lower()}"
+                destination.parent.mkdir()
+                shutil.copyfile(source, destination)
+                video_path = str(destination)
+            except OSError:
+                shutil.rmtree(project_path, ignore_errors=True)
+                raise
         (project_path / "cache").mkdir(parents=True)
         (project_path / "output" / "01_frames").mkdir(parents=True)
         (project_path / "output" / "02_no_bg").mkdir(parents=True)
@@ -248,6 +264,8 @@ class ProjectAPI:
             "frame_interval": 1,
             "timestamp": datetime.now().isoformat(),
         }
+        if copy_video:
+            meta["managed_video"] = True
 
         with open(project_path / "cache" / "global_params.json", "w", encoding="utf-8") as f:
             json.dump(meta, f, ensure_ascii=False, indent=2)

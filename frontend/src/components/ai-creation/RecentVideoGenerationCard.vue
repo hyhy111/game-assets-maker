@@ -1,6 +1,6 @@
 <template>
   <article
-    class="group cursor-pointer overflow-hidden rounded-xl border border-dark-border bg-dark-surface transition hover:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/60"
+    class="group flex h-full min-w-0 cursor-pointer flex-col overflow-hidden rounded-xl border border-dark-border bg-dark-surface transition hover:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/60"
     :class="{ 'recent-generation-card-active': active }"
     :data-test="`recent-video-${task.local_id}`"
     tabindex="0"
@@ -11,7 +11,7 @@
     @keydown.enter="emit('open', task.local_id)"
     @keydown.space.prevent="emit('open', task.local_id)"
   >
-    <div class="relative aspect-video overflow-hidden bg-black/20">
+    <div class="relative aspect-video w-full shrink-0 overflow-hidden bg-black/20">
       <video
         v-if="isPreviewing && videoUrl"
         ref="previewVideo"
@@ -55,13 +55,13 @@
       </div>
       <div
         v-if="$slots['top-right']"
-        class="absolute right-3 top-3 z-[2]"
+        class="absolute right-2 top-2 z-[2]"
       >
         <slot name="top-right" />
       </div>
     </div>
 
-    <div class="p-4">
+    <div class="mt-auto p-4">
       <div
         class="flex flex-nowrap gap-1.5 overflow-hidden whitespace-nowrap text-xs text-gray-400"
         data-test="recent-video-metadata"
@@ -89,12 +89,6 @@
           </dd>
         </div>
       </dl>
-      <div
-        v-if="$slots['bottom-right']"
-        class="mt-3 flex justify-end"
-      >
-        <slot name="bottom-right" />
-      </div>
     </div>
   </article>
 </template>

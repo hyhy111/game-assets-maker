@@ -308,6 +308,23 @@ export const useAICreationStore = defineStore('ai-creation', () => {
     }
   }
 
+  async function handoffSourceImage(id: string, field: 'reference' | VideoFrameField): Promise<boolean> {
+    if (candidateHandoffPending.value) return false;
+    candidateHandoffPending.value = true;
+    candidateHandoffError.value = '';
+    try {
+      const path = await api.sourceMedia.imageInput(id);
+      if (!path) return false;
+      await setImageInput(path, field);
+      activeMode.value = field === 'reference' ? 'image' : 'video';
+      return true;
+    } catch {
+      return false;
+    } finally {
+      candidateHandoffPending.value = false;
+    }
+  }
+
   async function importDroppedImage(file: File, field: 'reference' | VideoFrameField): Promise<boolean> {
     if (candidateHandoffPending.value) return false;
     candidateHandoffPending.value = true;
@@ -360,6 +377,7 @@ export const useAICreationStore = defineStore('ai-creation', () => {
     rememberWorkspaceScroll,
     handoffCandidateToVideo,
     handoffCandidateToImage,
+    handoffSourceImage,
     importDroppedImage,
     setImageInput,
     patchAgentDraft,

@@ -134,14 +134,19 @@ export const useCreditUsageStore = defineStore('credit-usage', () => {
     const rows = matching(media, model);
     if (!rows.length) return false;
     if (rows.some(row => row.generalAvailable > 0 || row.bonusAvailable > 0)) return true;
+    const { account, asOf } = data.value;
     // Funded accounts use current eligibility; empty historical buckets must not widen their scope.
-    if (data.value.account.generalAvailable + data.value.account.bonusAvailable > 0) return false;
-    // Keep declared configuration selectable when the entire account is exhausted.
-    const now = new Date(data.value.asOf).getTime();
-    return data.value.account.buckets.some(({ bucket, rules, capabilityAvailable }) => {
+    if (account.generalAvailable + account.bonusAvailable > 0) return false;
+    const now = new Date(asOf).getTime();
+    const effectiveBuckets = account.buckets.filter(({ bucket }) => (
+      (!bucket.effectiveFrom || new Date(bucket.effectiveFrom.replace(' ', 'T')).getTime() <= now)
+      && (!bucket.expireTime || new Date(bucket.expireTime.replace(' ', 'T')).getTime() > now)
+    ));
+    // Accounts without an effective bucket can browse prices before acquiring credits.
+    if (!effectiveBuckets.length) return true;
+    // Keep the declared scope of effective buckets even when their credits are exhausted.
+    return effectiveBuckets.some(({ bucket, rules, capabilityAvailable }) => {
       if (capabilityAvailable === false) return false;
-      if (bucket.effectiveFrom && !(new Date(bucket.effectiveFrom.replace(' ', 'T')).getTime() <= now)) return false;
-      if (bucket.expireTime && !(new Date(bucket.expireTime.replace(' ', 'T')).getTime() > now)) return false;
       if (bucket.usageMode === 'UNRESTRICTED') return true;
       return bucket.usageMode === 'RESTRICTED' && (rules ?? []).some(rule => rows.some(({ context }) => (
         (['platform', 'mediaType', 'model', 'resolution', 'durationSec', 'sizeLabel'] as const)
