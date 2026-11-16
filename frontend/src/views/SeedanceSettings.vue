@@ -916,7 +916,7 @@ const retentionOptions = computed(() => [
 // Labels mirror backgroundModelName in model-status.ts; kept inline because the
 // source-evaluation tests run this setup without module imports.
 const backgroundModelOptions = computed(() => [
-  { value: 'u2net', label: 'U²-Net (rembg)' },
+  { value: 'u2net', label: 'U²-Net' },
   { value: 'birefnet-comfy', label: 'BiRefNet' },
 ]);
 const currentSnapshot = computed(() => JSON.stringify({

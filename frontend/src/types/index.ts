@@ -196,6 +196,8 @@ export interface AudioSaveResult {
 
 export type BackgroundRemovalModel = 'u2net' | 'birefnet-comfy';
 
+export type ModelDownloadSource = 'modelscope' | 'github' | 'huggingface';
+
 export type ModelPhase = 'needs_download' | 'downloading' | 'initializing' | 'ready' | 'failed';
 
 export interface ModelStatusError {

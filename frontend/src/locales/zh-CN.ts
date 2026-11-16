@@ -516,7 +516,6 @@ export default {
     ready: '{model} 模型已就绪',
     failed: '{model} 模型准备失败',
     firstUseHint: '安装包不含模型。请选择来源下载约 {size} MB 的模型文件，完成后保存在本机，无需重复下载。',
-    birefnetDownloadHint: '从魔搭 ModelScope 下载约 {size} MB 的权重。下载完成后可离线处理。',
     firstUseHintUnknownSize: '首次使用背景移除需要联网下载模型文件，完成后会保存在本机。',
     indeterminateProgress: '正在下载，暂时无法获得可靠的文件大小和进度。',
     progress: '已下载 {downloaded} / {total}',
@@ -531,6 +530,7 @@ export default {
     },
   },
   step2: {
+    recommendedModel: '{model} (推荐)',
     title: '步骤 2：背景移除',
     description: '用所选模型移除背景，生成透明帧。',
     model: '去背模型',

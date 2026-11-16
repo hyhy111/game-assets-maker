@@ -27,6 +27,7 @@ import type {
   GamSkillsInstallResult,
   BackgroundColor,
   ModelStatus,
+  ModelDownloadSource,
   ProjectTrimStatus,
   BatchTrimParams,
   BatchTrimResult,
@@ -302,11 +303,11 @@ export const processApi = {
     return callApi<ModelStatus>('get_model_status', 'getModelStatus', model);
   },
 
-  async preloadModel(model: string = 'u2net', source?: 'modelscope' | 'github'): Promise<ModelStatus> {
+  async preloadModel(model: string = 'u2net', source?: ModelDownloadSource): Promise<ModelStatus> {
     return callApi<ModelStatus>('preload_model', 'preloadModel', model, source ?? null);
   },
 
-  async retryModel(model: string = 'u2net', source?: 'modelscope' | 'github'): Promise<ModelStatus> {
+  async retryModel(model: string = 'u2net', source?: ModelDownloadSource): Promise<ModelStatus> {
     return callApi<ModelStatus>('retry_model', 'retryModel', model, source ?? null);
   }
 

@@ -16,6 +16,9 @@ test('Step 2 uses segmented model controls and shows only U2Net alpha-matting se
   assert.ok(modelGroup, 'models use a segmented control group');
   assert.ok(u2net, 'U2Net has a segmented model button');
   assert.ok(birefnet, 'BiRefNet has a segmented model button');
+  assert.ok(modelGroup.indexOf(birefnet) < modelGroup.indexOf(u2net), 'BiRefNet appears first');
+  assert.match(modelGroup, /data-test="background-model-birefnet-comfy"[^>]*>\s*BiRefNet \(推荐\)\s*<\/button>/);
+  assert.match(modelGroup, /data-test="background-model-u2net"[^>]*>\s*U²-Net\s*<\/button>/);
   assert.match(u2net, /aria-pressed="true"/);
   assert.match(birefnet, /aria-pressed="false"/);
   assert.doesNotMatch(modelGroup, /aria-haspopup="listbox"/);

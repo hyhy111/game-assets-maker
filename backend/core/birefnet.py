@@ -16,7 +16,11 @@ from src.utils.diagnostics import record_network_error
 
 MODEL_ID = "birefnet-comfy"
 WEIGHTS_NAME = "birefnet.safetensors"
-WEIGHTS_URL = "https://modelscope.cn/models/Comfy-Org/BiRefNet/resolve/master/background_removal/birefnet.safetensors"
+WEIGHTS_SOURCES = {
+    "modelscope": "https://modelscope.cn/models/Comfy-Org/BiRefNet/resolve/master/background_removal/birefnet.safetensors",
+    "huggingface": "https://huggingface.co/Comfy-Org/BiRefNet/resolve/"
+    "35767b272f2846752a3aee1259abdd4586f735c8/background_removal/birefnet.safetensors",
+}
 WEIGHTS_SHA256 = "9ab37426bf4de0567af6b5d21b16151357149139362e6e8992021b8ce356a154"
 WEIGHTS_BYTES = 444_473_596
 
@@ -42,15 +46,18 @@ def _checkpoint_digest(path: Path, _modified_at: int) -> str:
         return hashlib.file_digest(stream, "sha256").hexdigest()
 
 
-def download_weights(progress: Callable[[int, int | None], None]) -> None:
+def download_weights(progress: Callable[[int, int | None], None], source: str = "modelscope") -> None:
     import requests
 
+    if source not in WEIGHTS_SOURCES:
+        raise ValueError("Unsupported model download source")
+    url = WEIGHTS_SOURCES[source]
     path = model_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = None
     try:
         with (
-            requests.get(WEIGHTS_URL, stream=True, timeout=(10, 60)) as response,
+            requests.get(url, stream=True, timeout=(10, 60)) as response,
             tempfile.NamedTemporaryFile(dir=path.parent, prefix=".birefnet-", delete=False) as stream,
         ):
             temporary = Path(stream.name)
@@ -68,7 +75,7 @@ def download_weights(progress: Callable[[int, int | None], None]) -> None:
             raise ValueError("BiRefNet checkpoint checksum mismatch")
         os.replace(temporary, path)
     except requests.RequestException as error:
-        record_network_error("GET", WEIGHTS_URL, error)
+        record_network_error("GET", url, error)
         raise
     finally:
         if temporary is not None:

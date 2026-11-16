@@ -519,7 +519,6 @@ export default {
     ready: '{model} is ready',
     failed: 'Could not prepare {model}',
     firstUseHint: 'The app does not bundle the model. Choose a source to download about {size} MB once and keep it on this device.',
-    birefnetDownloadHint: 'Download about {size} MB of weights from ModelScope. Processing then works offline.',
     firstUseHintUnknownSize: 'The first background-removal run downloads a model and keeps it on this device.',
     indeterminateProgress: 'Downloading; a reliable file size and progress value are not available yet.',
     progress: 'Downloaded {downloaded} / {total}',
@@ -534,6 +533,7 @@ export default {
     },
   },
   step2: {
+    recommendedModel: '{model} (Recommended)',
     title: 'Step 2: Background Removal',
     description: 'Remove the background with the selected model to create transparent frames.',
     model: 'Background removal model',

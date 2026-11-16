@@ -8,7 +8,7 @@ import { useConfigStore } from './config';
 import { useProjectStore } from './project';
 import { usePlayerStore } from './player';
 import { createNavigationGuard } from '@/utils/navigation-guard';
-import type { BackgroundRemovalModel, ModelStatus, Step1Params, Step2Params, Step3Params, TaskStatus } from '@/types';
+import type { BackgroundRemovalModel, ModelDownloadSource, ModelStatus, Step1Params, Step2Params, Step3Params, TaskStatus } from '@/types';
 import { logEvent } from '@/debug/request-log';
 
 export const step2Defaults: Step2Params = {
@@ -354,7 +354,7 @@ export const useProcessStore = defineStore('process', () => {
   async function prepareModel(
     model: BackgroundRemovalModel,
     retry: boolean,
-    source?: 'modelscope' | 'github',
+    source?: ModelDownloadSource,
   ) {
     const previous = modelStatuses.value[model];
     try {
@@ -378,7 +378,7 @@ export const useProcessStore = defineStore('process', () => {
     return prepareModel(model, false);
   }
 
-  function retryModel(source?: 'modelscope' | 'github') {
+  function retryModel(source?: ModelDownloadSource) {
     return prepareModel(selectedModel.value, true, source);
   }
 

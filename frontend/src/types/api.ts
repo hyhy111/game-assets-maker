@@ -17,6 +17,7 @@ import type {
   VideoInfo,
   VideoValidation,
   TaskStatus,
+  ModelDownloadSource,
   Step1Params,
   Step2Params,
   Step3Params,
@@ -94,8 +95,8 @@ export interface PyWebViewWindow extends Window {
       save_step_params: (project_id: string, step: number, params: Record<string, unknown>) => Promise<boolean>;
       get_background_color: (project_id: string) => Promise<{ hsv: [number, number, number]; rgb: [number, number, number]; sampled_from: string } | null>;
       get_model_status: (model: string) => Promise<ModelStatus>;
-      preload_model: (model: string) => Promise<ModelStatus>;
-      retry_model: (model: string) => Promise<ModelStatus>;
+      preload_model: (model: string, source?: ModelDownloadSource | null) => Promise<ModelStatus>;
+      retry_model: (model: string, source?: ModelDownloadSource | null) => Promise<ModelStatus>;
 
       // Config API
       get_config: () => Promise<AppConfig>;

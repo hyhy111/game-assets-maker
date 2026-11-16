@@ -248,16 +248,19 @@ def test_step2_requires_ready_u2net():
         api.shutdown()
 
 
-@pytest.mark.parametrize("source", ["modelscope", "github"])
-def test_missing_model_waits_for_explicit_source(source):
+@pytest.mark.parametrize(
+    ("model", "source"),
+    [("u2net", "modelscope"), ("u2net", "github"), ("birefnet-comfy", "modelscope"), ("birefnet-comfy", "huggingface")],
+)
+def test_missing_model_waits_for_explicit_source(model, source):
     loader = FakeModelLoader(available=False)
     preloader = ModelPreloader(loader)
     try:
-        assert preloader.preload("u2net")["phase"] == "needs_download"
-        assert preloader.retry("u2net")["phase"] == "needs_download"
+        assert preloader.preload(model)["phase"] == "needs_download"
+        assert preloader.retry(model)["phase"] == "needs_download"
         assert loader.download_calls == 0
-        preloader.preload("u2net", source=source)
-        assert preloader.wait("u2net", timeout=1)["phase"] == "ready"
+        preloader.preload(model, source=source)
+        assert preloader.wait(model, timeout=1)["phase"] == "ready"
         assert loader.download_sources == [source]
     finally:
         preloader.shutdown()
@@ -274,12 +277,16 @@ def test_existing_model_initializes_without_download_choice():
         preloader.shutdown()
 
 
-def test_invalid_source_cannot_start_download():
+@pytest.mark.parametrize(
+    ("model", "source"),
+    [("u2net", "https://example.com/model"), ("u2net", "huggingface"), ("birefnet-comfy", "github")],
+)
+def test_invalid_source_cannot_start_download(model, source):
     loader = FakeModelLoader(available=False)
     preloader = ModelPreloader(loader)
     try:
         with pytest.raises(ValueError, match="Unsupported model download source"):
-            preloader.preload("u2net", source="https://example.com/model")
+            preloader.preload(model, source=source)
         assert loader.download_calls == 0
     finally:
         preloader.shutdown()

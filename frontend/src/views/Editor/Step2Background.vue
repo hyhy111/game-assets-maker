@@ -36,6 +36,7 @@
 
     <ModelStatusCard
       v-if="shouldShowModelStatus"
+      :key="selectedModel"
       :status="modelStatus"
       @retry="processStore.retryModel($event)"
     />
@@ -330,10 +331,10 @@ const isStepCompleted = computed(() => projectStore.isStepCompleted(2));
 
 const step1Completed = computed(() => projectStore.isStepCompleted(1));
 const stepStatus = computed(() => projectStore.currentProject?.steps?.['2']);
-const modelOptions = (['u2net', 'birefnet-comfy'] as const).map((value) => ({
-  value,
-  label: backgroundModelName(value),
-}));
+const modelOptions = computed(() => [
+  { value: 'birefnet-comfy', label: t('step2.recommendedModel', { model: backgroundModelName('birefnet-comfy') }) },
+  { value: 'u2net', label: backgroundModelName('u2net') },
+]);
 
 function setModel(value: string | number) {
   if (value === 'u2net' || value === 'birefnet-comfy') s2Params.value.model = value;

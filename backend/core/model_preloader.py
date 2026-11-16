@@ -11,7 +11,7 @@ from typing import Literal, Protocol, TypedDict
 from backend.core import birefnet
 from src.core.rembg_model import U2NET_SOURCES
 
-MODEL_SOURCES = {"u2net": U2NET_SOURCES.keys(), birefnet.MODEL_ID: {"modelscope"}}
+MODEL_SOURCES = {"u2net": U2NET_SOURCES.keys(), birefnet.MODEL_ID: birefnet.WEIGHTS_SOURCES.keys()}
 
 
 def validate_background_model(model: str) -> None:
@@ -77,7 +77,7 @@ class BackgroundModelLoader(RembgModelLoader):
 
     def download(self, model: str, progress: Callable[[int, int | None], None], source: str) -> None:
         if model == birefnet.MODEL_ID:
-            birefnet.download_weights(progress)
+            birefnet.download_weights(progress, source)
         else:
             super().download(model, progress, source)
 

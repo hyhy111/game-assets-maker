@@ -6,7 +6,7 @@
 
 ## BiRefNet（Comfy-Org）
 
-在「背景移除」选择 **BiRefNet (Comfy-Org)**，首次使用时点击下载。权重来自 [魔搭 ModelScope](https://modelscope.cn/models/Comfy-Org/BiRefNet)，约 424 MiB。GAM 使用 PyTorch 在本地推理，Apple Silicon 使用可用的 MPS 加速，Windows x64 使用 CPU。BiRefNet 的 macOS 运行时要求 macOS 14 或更新版本。
+在「背景移除」选择 **BiRefNet**，首次使用时从 [魔搭 ModelScope](https://modelscope.cn/models/Comfy-Org/BiRefNet) 或 [Hugging Face](https://huggingface.co/Comfy-Org/BiRefNet/blob/35767b272f2846752a3aee1259abdd4586f735c8/background_removal/birefnet.safetensors) 下载约 424 MiB 的权重。两个来源共用同一个本地文件，并校验同一个 SHA-256。Hugging Face 下载地址固定到提交 `35767b2`。GAM 使用 PyTorch 在本地推理，Apple Silicon 使用可用的 MPS 加速，Windows x64 使用 CPU。BiRefNet 的 macOS 运行时要求 macOS 14 或更新版本。
 
 已下载的权重也可复制到模型目录并命名为 `birefnet.safetensors`。安装版默认路径是 `~/.gam/models/birefnet-comfy/birefnet.safetensors`，设置 `GAM_DATA_ROOT` 时使用该数据根。源码开发模式使用仓库的 `models/birefnet-comfy/`。应用校验 Comfy-Org 权重的 SHA-256，校验通过后可离线使用。推理代码沿用 [ZhengPeng7 的 BiRefNet](https://huggingface.co/ZhengPeng7/BiRefNet)，按 MIT 许可随应用分发。
 

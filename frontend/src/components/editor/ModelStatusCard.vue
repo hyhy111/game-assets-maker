@@ -42,7 +42,7 @@
         </div>
 
         <label
-          v-if="status.model === 'u2net' && (status.phase === 'needs_download' || presentation.retryable)"
+          v-if="status.phase === 'needs_download' || presentation.retryable"
           class="mt-3 block text-xs"
         >
           {{ t('modelStatus.downloadSource') }}
@@ -57,7 +57,7 @@
           class="mt-3"
           size="sm"
           variant="secondary"
-          @click="$emit('retry', status.model === 'u2net' ? source : 'modelscope')"
+          @click="$emit('retry', source)"
         >
           {{ t(status.phase === 'needs_download' ? 'modelStatus.download' : 'modelStatus.retry') }}
         </Button>
@@ -71,18 +71,20 @@ import { computed, ref } from 'vue';
 import { AlertCircle, CheckCircle, Loader2 } from 'lucide-vue-next';
 import { useI18n } from 'vue-i18n';
 import { backgroundModelName, modelApproximateSizeMb, modelProgressPercent, modelStatusPresentation } from '@/model-status';
-import type { ModelStatus } from '@/types';
+import type { ModelDownloadSource, ModelStatus } from '@/types';
 import Button from '@/components/common/Button.vue';
 import Select from '@/components/common/Select.vue';
 
 const props = defineProps<{ status: ModelStatus }>();
-defineEmits<{ retry: [source: 'modelscope' | 'github'] }>();
-const source = ref<'modelscope' | 'github'>('modelscope');
+defineEmits<{ retry: [source: ModelDownloadSource] }>();
+const source = ref<ModelDownloadSource>('modelscope');
 
 const { t } = useI18n();
 const sourceOptions = computed(() => [
   { value: 'modelscope', label: t('modelStatus.modelscope') },
-  { value: 'github', label: 'GitHub' },
+  props.status.model === 'birefnet-comfy'
+    ? { value: 'huggingface', label: 'Hugging Face' }
+    : { value: 'github', label: 'GitHub' },
 ]);
 const presentation = computed(() => modelStatusPresentation(props.status));
 const progress = computed(() => modelProgressPercent(props.status));
@@ -94,7 +96,6 @@ const toneClasses = computed(() => ({
 const detailText = computed(() => {
   if (props.status.phase === 'needs_download') {
     const size = modelApproximateSizeMb(props.status.model);
-    if (props.status.model === 'birefnet-comfy') return t('modelStatus.birefnetDownloadHint', { size });
     return size === null
       ? t('modelStatus.firstUseHintUnknownSize')
       : t('modelStatus.firstUseHint', { size });
