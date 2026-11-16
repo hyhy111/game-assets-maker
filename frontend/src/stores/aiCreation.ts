@@ -3,8 +3,8 @@ import { nextTick, reactive, ref } from 'vue';
 import { api } from '@/api';
 import type { PyWebViewWindow } from '@/types/api';
 import { readImageFile } from '@/seedream-image-drag';
-import { correctPlatformImageParameters, defaultForm, type CreateForm as SeedreamCreateForm } from '@/seedream-ui';
-import type { CreateForm as SeedanceCreateForm } from '@/seedance-ui';
+import { correctPlatformImageParameters, correctResolution as correctImageResolution, defaultForm, type CreateForm as SeedreamCreateForm } from '@/seedream-ui';
+import { correctDuration, correctResolution as correctVideoResolution, type CreateForm as SeedanceCreateForm } from '@/seedance-ui';
 import type { PlatformCapabilities } from '@/types';
 
 export type CreationMode = 'image' | 'video';
@@ -234,6 +234,11 @@ export const useAICreationStore = defineStore('ai-creation', () => {
     generationSource.value = source;
     imageDraft.model = source === 'forfuner-ai' ? defaultModelIds.image : imageDefaults.model;
     videoDraft.model = source === 'forfuner-ai' ? defaultModelIds.video : videoDefaults.model;
+    if (source === 'api-key') {
+      imageDraft.resolution = correctImageResolution(imageDraft.model, imageDraft.resolution);
+      videoDraft.resolution = correctVideoResolution(videoDraft.model, videoDraft.resolution);
+      videoDraft.duration = correctDuration(videoDraft.duration);
+    }
   }
 
   function loadMoreRecent(filter: RecentGenerationFilter) {

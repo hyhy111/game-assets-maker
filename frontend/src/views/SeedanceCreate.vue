@@ -1036,6 +1036,10 @@ watch(
   { immediate: true },
 );
 
+watch(() => workspace.generationSource, () => {
+  if (paidConfirmModal.value) cancelPaidAction();
+});
+
 // Capability refreshes preserve the draft. Invalid combinations are explained by the quote and scope notice.
 
 async function selectFrame(field: 'first_frame' | 'last_frame') {
@@ -1179,7 +1183,9 @@ async function submit() {
   }
   if (!ensureGenerationAccess()) return;
   const request = createRequest(form);
-  const preflight = await store.validateRequest(request, workspace.generationSource);
+  const source = workspace.generationSource;
+  const preflight = await store.validateRequest(request, source);
+  if (workspace.generationSource !== source) return;
   if (!preflight) {
     const error = store.error;
     if (error) {

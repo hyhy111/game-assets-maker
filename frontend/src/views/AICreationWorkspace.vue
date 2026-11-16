@@ -51,7 +51,7 @@ if (route.query.mode === 'video') workspace.activeMode = 'video';
 if (route.query.mode === 'image') workspace.activeMode = 'image';
 
 watch(() => auth.isLoggedIn, (loggedIn) => {
-  if (loggedIn) workspace.setGenerationSource('forfuner-ai');
+  workspace.setGenerationSource(loggedIn ? 'forfuner-ai' : 'api-key');
 }, { immediate: true });
 
 onMounted(async () => {

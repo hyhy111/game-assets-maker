@@ -762,6 +762,10 @@ watch(
   { immediate: true },
 );
 
+watch(() => workspace.generationSource, () => {
+  if (confirmModal.value) closeConfirmModal();
+});
+
 // Capability refreshes preserve the draft; the user must explicitly choose a replacement.
 
 function selectGenerationSource(source: string) {
