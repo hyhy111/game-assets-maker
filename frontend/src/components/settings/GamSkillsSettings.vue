@@ -6,32 +6,23 @@
     :description="t('skillsInstall.description')"
     data-test="gam-skills-settings"
   >
-    <label class="block max-w-sm text-sm text-gray-300">
-      {{ t('skillsInstall.agent') }}
-      <Select
-        v-model="agent"
-        class="mt-2"
-        :options="agentOptions"
-        :disabled="installing"
-        :aria-label="t('skillsInstall.agent')"
-        data-test="gam-skills-agent"
-      />
-    </label>
-    <div class="mt-4 flex flex-wrap items-center gap-3">
-      <Button
-        v-if="showInstallAction"
-        type="button"
-        :loading="installing"
-        :disabled="checking || installing || !status?.can_install || !status?.node_available"
-        data-test="gam-skills-install"
-        @click="installSkills"
-      >
-        {{ t(status?.status === 'update_available' ? 'skillsInstall.update' : 'skillsInstall.install') }}
-      </Button>
+    <div class="flex items-end gap-3">
+      <label class="min-w-0 max-w-sm flex-1 text-sm text-gray-300">
+        {{ t('skillsInstall.agent') }}
+        <Select
+          v-model="agent"
+          class="mt-2"
+          :options="agentOptions"
+          :disabled="installing"
+          :aria-label="t('skillsInstall.agent')"
+          data-test="gam-skills-agent"
+        />
+      </label>
       <Button
         v-if="status?.source === 'npx'"
         type="button"
         variant="secondary"
+        class="!h-[42px] !w-[42px]"
         :disabled="checking || installing || !status.can_check"
         data-test="gam-skills-check"
         icon-only
@@ -44,14 +35,25 @@
           aria-hidden="true"
         />
       </Button>
-      <span
-        v-if="checking || installing"
-        class="text-sm text-gray-400"
-        role="status"
+      <Button
+        v-if="showInstallAction"
+        type="button"
+        class="h-[42px] shrink-0"
+        :loading="installing"
+        :disabled="checking || installing || !status?.can_install || !status?.node_available"
+        data-test="gam-skills-install"
+        @click="installSkills"
       >
-        {{ t(installing ? 'skillsInstall.installing' : 'skillsInstall.checking') }}
-      </span>
+        {{ t(status?.status === 'update_available' ? 'skillsInstall.update' : 'skillsInstall.install') }}
+      </Button>
     </div>
+    <p
+      v-if="checking || installing"
+      class="mt-3 text-sm text-gray-400"
+      role="status"
+    >
+      {{ t(installing ? 'skillsInstall.installing' : 'skillsInstall.checking') }}
+    </p>
     <p
       v-if="status && !checking"
       class="mt-3 text-sm"
