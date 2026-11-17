@@ -843,6 +843,14 @@ class API:
         """Start processing task, returns task ID"""
         return self._process_api.start_processing(project_id, step, params)
 
+    @_project_write(existing=True)
+    def reset_post_processing(self, project_id: str) -> bool:
+        return self._process_api.reset_post_processing(project_id)
+
+    @_project_write(existing=True)
+    def undo_post_processing(self, project_id: str) -> bool:
+        return self._process_api.undo_post_processing(project_id)
+
     def get_task_status(self, task_id: str) -> dict[str, Any]:
         """Get task status and progress"""
         return self._process_api.get_task_status(task_id)

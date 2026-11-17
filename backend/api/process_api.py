@@ -23,7 +23,11 @@ from backend.api.project_paths import project_video_path, resolve_project_path
 from backend.core.alpha_refine import validate_alpha_refine_params
 from backend.core.background_color import batch_punch_holes_color, validate_color_params
 from backend.core.edge_shrink import shrink_frame, validate_edge_shrink_params
-from backend.core.frame_edit_history import new_frame_edit_generation
+from backend.core.frame_edit_history import (
+    current_frame_edit_generation,
+    new_frame_edit_generation,
+    use_frame_edit_generation,
+)
 from backend.core.model_preloader import (
     BackgroundModelLoader,
     ModelLoader,
@@ -31,6 +35,7 @@ from backend.core.model_preloader import (
     ModelStatus,
     validate_background_model,
 )
+from backend.core.post_process_backup import clean_processing_backups, processing_backup
 from backend.core.smart_remove_background import batch_remove_background
 
 # Import core processing modules from backend
@@ -294,7 +299,17 @@ class ProcessAPI:
             stale_dir = project_path / "output" / sub
             if stale_dir.exists():
                 shutil.rmtree(stale_dir)
-            self.save_step_params(task.project_id, step_num, {"processed": False})
+            reset = {"processed": False}
+            if step_num == 3:
+                reset["result_aligned"] = False
+            self.save_step_params(task.project_id, step_num, reset)
+        with self.parameter_transaction(task.project_id):
+            config = self._load_processing_config(task.project_id)
+            undo = config.pop("step3_undo", None)
+            legacy = config.pop("step3_history", None)
+            if (undo or legacy) and not self._save_steps_config(task.project_id, config):
+                raise OSError("Could not invalidate the Step 3 backup")
+            clean_processing_backups(project_path)
 
     def _progress(self, task: Task, current: int, total: int, phase: int = 0, phases: int = 1) -> None:
         if task.cancelled:
@@ -324,7 +339,7 @@ class ProcessAPI:
             self._publish_processed_frames(task, Path(staging), result.get("background_color"))
 
     def _run_step3(self, task: Task):
-        """Apply enabled operations in order, keeping Step 2 intact."""
+        """Apply enabled operations to the current result, keeping Step 2 intact."""
         from src.core.image_aligning import align_sprites
 
         project = self._get_project_path(task.project_id)
@@ -334,6 +349,17 @@ class ProcessAPI:
             raise ValueError("Step 2 output not found. Please run Step 2 first.")
 
         params = task.params
+        with self.parameter_transaction(task.project_id):
+            previous = self._read_step_params(task.project_id, 3, migrate=False)
+        current_dir = input_dir.with_name("03_hole_punched")
+        if current_dir.resolve() != project.resolve() / "output" / current_dir.name:
+            raise ValueError("Invalid Step 3 output path")
+        current_frames = {
+            frame.name: frame for frame in current_dir.glob("*.png") if frame.is_file() and not frame.is_symlink()
+        }
+        previously_aligned = bool(
+            current_frames and previous.get("result_aligned", previous.get("align_enabled", False))
+        )
         shrink, feather = validate_edge_shrink_params(params) if params.get("edge_shrink_enabled") else (0, 0)
         align = params.get("align_enabled", False)
         phases = 1 + bool(shrink or feather) + bool(align)
@@ -347,11 +373,13 @@ class ProcessAPI:
                     str(input_dir.with_name("01_frames")),
                     params=params,
                     progress_callback=lambda current, total: self._progress(task, current, total, phases=phases),
+                    frame_overrides=current_frames,
+                    overrides_aligned=previously_aligned,
                 )
             else:
                 for index, frame in enumerate(frames, 1):
                     self._progress(task, index - 1, total, phases=phases)
-                    shutil.copy2(frame, output / frame.name)
+                    shutil.copy2(current_frames.get(frame.name, frame), output / frame.name)
 
             if shrink or feather:
                 for index, frame in enumerate(frames, 1):
@@ -375,53 +403,154 @@ class ProcessAPI:
                     )
                     rename_path(aligned, path, replace=True)
 
-            self._publish_processed_frames(task, output)
+            self._publish_processed_frames(task, output, result_aligned=previously_aligned or bool(align))
 
-    def _publish_processed_frames(self, task: Task, staged: Path, background_color=None) -> None:
+    def _publish_processed_frames(
+        self,
+        task: Task,
+        staged: Path,
+        background_color=None,
+        *,
+        result_aligned: bool = False,
+    ) -> None:
         """Replace the active result, restoring the old files if publishing fails."""
         project = self._get_project_path(task.project_id)
         step2 = task.step == 2
         output = project / "output" / ("02_no_bg" if step2 else "03_hole_punched")
         replaced = [output, output.with_name("03_hole_punched")] if step2 else [output]
-        backups: list[tuple[Path, Path]] = []
-        published = False
+        backup_id = None
+        previous_output = None
         with self.parameter_transaction(task.project_id):
             if task.cancelled:
                 raise InterruptedError("Task cancelled")
 
-            config_path = self._get_steps_config_path(task.project_id)
-            config = self._migrate_legacy_params(project)
-            if config_path.is_file():
-                with config_path.open(encoding="utf-8") as stream:
-                    config.update(json.load(stream))
-            config.setdefault(f"step{task.step}", {}).update(task.params, processed=True)
+            config = self._load_processing_config(task.project_id)
+            config.pop("step3_history", None)
             if step2:
+                config["step2"].update(task.params, processed=True)
                 config["step2"]["result_model"] = task.params.get("model", "u2net")
-                config.setdefault("step3", {})["processed"] = False
+                config.setdefault("step3", {}).update(processed=False, result_aligned=False)
+                config.pop("step3_undo", None)
                 if background_color:
                     config["background_color"] = self._background_color_entry(background_color)
+            else:
+                frame_count = sum(frame.is_file() and not frame.is_symlink() for frame in output.glob("*.png"))
+                previous = config["step3"]
+                if frame_count:
+                    backup_id = uuid.uuid4().hex
+                    previous_output = processing_backup(project, backup_id)
+                    previous_output.parent.mkdir(parents=True, exist_ok=True)
+                config["step3_undo"] = {
+                    "backup": backup_id,
+                    "frame_count": frame_count,
+                    "generation": current_frame_edit_generation(project, 3) if frame_count else None,
+                    "result_aligned": bool(
+                        frame_count and previous.get("result_aligned", previous.get("align_enabled"))
+                    ),
+                }
+                previous.update(task.params, processed=True, result_aligned=result_aligned)
+            self._publish_replacement(task.project_id, task.step, replaced, staged, config, keep=previous_output)
+            task.committed = True
+            clean_processing_backups(project, backup_id)
 
-            try:
-                with new_frame_edit_generation(project, task.step):
-                    for old in replaced:
-                        if old.exists():
-                            backup = old.with_name(f".{old.name}-backup-{task.task_id}")
-                            rename_path(old, backup)
-                            backups.append((old, backup))
+    def _publish_replacement(
+        self,
+        project_id: str,
+        step: int,
+        replaced: list[Path],
+        staged: Path | None,
+        config: dict,
+        *,
+        keep: Path | None = None,
+        undo: dict | None = None,
+    ) -> None:
+        """Publish frames and settings together while holding the parameter transaction."""
+        project = self._get_project_path(project_id)
+        output = replaced[0]
+        backups = []
+        published = False
+        generation = (
+            new_frame_edit_generation(project, step)
+            if undo is None
+            else use_frame_edit_generation(project, step, undo["generation"])
+        )
+        try:
+            with generation:
+                for old in replaced:
+                    if old.exists():
+                        backup = (
+                            keep
+                            if old == output and keep is not None
+                            else (old.with_name(f".{old.name}-backup-{uuid.uuid4().hex}"))
+                        )
+                        rename_path(old, backup)
+                        backups.append((old, backup))
+                if staged is not None:
                     rename_path(staged, output)
                     published = True
-                    if not self._save_steps_config(task.project_id, config):
-                        raise OSError("Could not save processing settings")
-            except BaseException:
-                if published:
-                    rename_path(output, staged)
-                for old, backup in reversed(backups):
-                    rename_path(backup, old)
-                raise
-            task.committed = True
-
+                if not self._save_steps_config(project_id, config):
+                    raise OSError("Could not save processing settings")
+        except BaseException:
+            if published:
+                rename_path(output, staged)
+            for old, backup in reversed(backups):
+                rename_path(backup, old)
+            raise
         for _, backup in backups:
-            shutil.rmtree(backup, ignore_errors=True)
+            if backup != keep:
+                shutil.rmtree(backup, ignore_errors=True)
+
+    def undo_post_processing(self, project_id: str) -> bool:
+        """Restore the sequence and editing baseline from before the last Step 3 batch."""
+        with self.parameter_transaction(project_id):
+            project, output = self._step3_restore_path(project_id)
+            config = self._load_processing_config(project_id)
+            undo = config.pop("step3_undo", None)
+            if not undo:
+                raise ValueError("No Step 3 batch to undo")
+            backup = processing_backup(project, undo["backup"]) if undo["backup"] is not None else None
+            if backup is not None:
+                frame_count = sum(frame.is_file() and not frame.is_symlink() for frame in backup.glob("*.png"))
+                if not frame_count or frame_count != undo["frame_count"]:
+                    raise ValueError("Incomplete Step 3 backup")
+            config.pop("step3_history", None)
+            config["step3"].update(
+                processed=backup is not None, processing_time=0, result_aligned=undo["result_aligned"]
+            )
+            self._publish_replacement(project_id, 3, [output], backup, config, undo=undo)
+            clean_processing_backups(project)
+        return True
+
+    def reset_post_processing(self, project_id: str) -> bool:
+        """Remove the current Step 3 result so the editor falls back to Step 2."""
+        with self.parameter_transaction(project_id):
+            project, output = self._step3_restore_path(project_id)
+            config = self._load_processing_config(project_id)
+            config.pop("step3_undo", None)
+            config.pop("step3_history", None)
+            config["step3"].update(processed=False, processing_time=0, result_aligned=False)
+            self._publish_replacement(project_id, 3, [output], None, config)
+            clean_processing_backups(project)
+        return True
+
+    def _step3_restore_path(self, project_id: str) -> tuple[Path, Path]:
+        if self.has_active_writes():
+            raise ValueError("PROCESSING_ACTIVE")
+        project = self._get_project_path(project_id).resolve()
+        output = project / "output" / "03_hole_punched"
+        if output.resolve() != output or (output.exists() and not output.is_dir()):
+            raise ValueError("Invalid Step 3 output path")
+        if not any(output.with_name("02_no_bg").glob("*.png")):
+            raise ValueError("Step 2 output not found. Please run Step 2 first.")
+        return project, output
+
+    def _load_processing_config(self, project_id: str) -> dict[str, Any]:
+        config = self._migrate_legacy_params(self._get_project_path(project_id))
+        config_path = self._get_steps_config_path(project_id)
+        if config_path.is_file():
+            with config_path.open(encoding="utf-8") as stream:
+                config.update(json.load(stream))
+        return config
 
     def _get_background_color(self, project_id: str) -> tuple | None:
         """Get background color from steps_config.json"""
@@ -622,7 +751,7 @@ class ProcessAPI:
             params["enabled"] = result_model != "birefnet-comfy"
         return params
 
-    def _read_step_params(self, project_id: str, step: int) -> dict[str, Any]:
+    def _read_step_params(self, project_id: str, step: int, *, migrate: bool = True) -> dict[str, Any]:
         """Get saved parameters for a step from unified config"""
         project_path = self._get_project_path(project_id)
         config_path = self._get_steps_config_path(project_id)
@@ -640,8 +769,8 @@ class ProcessAPI:
         # Try to migrate from legacy files
         config = self._migrate_legacy_params(project_path)
         if config:
-            # Save migrated config
-            self._save_steps_config(project_id, config)
+            if migrate:
+                self._save_steps_config(project_id, config)
             return self._merge_step_params(step, config)
 
         # Return defaults

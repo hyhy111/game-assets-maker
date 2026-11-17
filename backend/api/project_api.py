@@ -187,6 +187,8 @@ class ProjectAPI:
             if not steps["3"]["completed"]:
                 steps["3"]["completed"] = len(frames) > 0
             steps["3"]["count"] = len(frames)
+            if frames and steps["2"]["count"] and config.get("step3_undo"):
+                steps["3"]["can_undo_processing"] = True
 
         return steps
 

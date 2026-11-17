@@ -148,8 +148,11 @@ def batch_punch_holes_color(
     source_dir: str,
     params: dict,
     progress_callback: Callable[[int, int], None] | None = None,
+    *,
+    frame_overrides: dict[str, Path] | None = None,
+    overrides_aligned: bool = False,
 ) -> dict:
-    """Match original-frame colors and apply the resulting holes to rembg RGBA frames."""
+    """Remove matching background colors from the current RGBA inputs."""
     import shutil
 
     validate_color_params(params)
@@ -160,6 +163,7 @@ def batch_punch_holes_color(
     if any(not source.is_file() for source in sources):
         raise ValueError("Original frames required for background detection. Please run Step 1 and Step 2 again.")
     reference, tolerance = estimate_background(sources, params.get("green_intensity", 3))
+    overrides = frame_overrides or {}
     output = Path(output_dir)
     if output.exists():
         shutil.rmtree(output)
@@ -167,10 +171,14 @@ def batch_punch_holes_color(
     for index, (frame, source) in enumerate(zip(frames, sources, strict=True)):
         if progress_callback:
             progress_callback(index, len(frames))
-        rgba = cv2.imdecode(np.fromfile(frame, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
+        frame_input = overrides.get(frame.name, frame)
+        rgba = cv2.imdecode(np.fromfile(frame_input, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
         original = read_bgr(source)
         if rgba is None or rgba.ndim != 3 or rgba.shape[2] != 4 or rgba.shape[:2] != original.shape[:2]:
             raise ValueError(f"Source and RGBA frame dimensions must match: {frame.name}")
+        if overrides_aligned and frame_input != frame:
+            # Step 1 pixels are no longer in the same position as the aligned result.
+            original = rgba[:, :, :3]
         # Bound metric intermediates on large frames, especially CIEDE2000's float64 arrays.
         matches = np.empty(original.shape[:2], dtype=bool)
         for row in range(0, original.shape[0], 128):

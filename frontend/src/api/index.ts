@@ -270,6 +270,14 @@ export const processApi = {
     return callApi<TaskStatus>('get_task_status', 'getTaskStatus', taskId);
   },
 
+  async resetPostProcessing(projectId: string): Promise<boolean> {
+    return callApi<boolean>('reset_post_processing', 'resetPostProcessing', projectId);
+  },
+
+  async undoPostProcessing(projectId: string): Promise<boolean> {
+    return callApi('undo_post_processing', 'undoPostProcessing', projectId);
+  },
+
   async cancelTask(taskId: string): Promise<boolean> {
     return callApi<boolean>('cancel_task', 'cancelTask', taskId);
   },

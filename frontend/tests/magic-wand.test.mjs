@@ -174,7 +174,7 @@ test('embedded retouch header emphasizes the current frame and joins tool option
   assert.doesNotMatch(options[1], /\bborder-t\b/);
 });
 
-test('frame editor exposes initial-version restore and disables it when no verified baseline exists', async () => {
+test('frame editor exposes batch-version restore and disables it when no verified baseline exists', async () => {
   for (const initial of ['', 'data:image/png;base64,fixture']) {
     const html = await renderSfc('components/seedream/SeedreamImageEraser.vue', {
       props:{imageUrl:'',saving:false,magicWandEnabled:true,originalImageUrl:initial},
@@ -182,7 +182,7 @@ test('frame editor exposes initial-version restore and disables it when no verif
     });
     const button=html.match(/<button([^>]*data-test="image-editor-restore-original"[^>]*)>/);
     assert.ok(button);
-    assert.match(html,/恢复初始版本/);
+    assert.match(html,/恢复批处理版本/);
     assert.equal(/\sdisabled(?:\s|=|$)/.test(button[1]),!initial);
   }
 });

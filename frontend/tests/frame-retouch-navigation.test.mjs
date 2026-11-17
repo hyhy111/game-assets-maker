@@ -16,8 +16,10 @@ function editor(step = 3, completed = true, backgroundCompleted = true) {
   const currentProject = ref({ id: 'hero/idle', steps: { 2: { completed: backgroundCompleted }, 3: { completed } } });
   const currentStep = ref(step);
   const player = { setNavigationGuard() {}, replaceFrameImage() {}, pause() {} };
-  const process = { setNavigationGuard() {}, isProcessing: false };
+  const process = { setNavigationGuard() {}, applyStepParams() {}, isProcessing: false };
   const saves = [];
+  const resets = [];
+  const undos = [];
   const refreshes = [];
   const project = {
     isStepCompleted: step => currentProject.value.steps[step]?.completed ?? false,
@@ -27,19 +29,66 @@ function editor(step = 3, completed = true, backgroundCompleted = true) {
     },
   };
   let fail = false;
-  const api = { frame: { async saveFrameEdit(...args) { saves.push(args); if (fail) throw Error('save failed'); return { revision: `r${saves.length}` }; } } };
+  let failReset = false;
+  const api = {
+    frame: { async saveFrameEdit(...args) { saves.push(args); if (fail) throw Error('save failed'); return { revision: `r${saves.length}` }; } },
+    process: {
+      async resetPostProcessing(id) { resets.push(id); return !failReset; },
+      async undoPostProcessing(id) { undos.push(id); return !failReset; },
+    },
+  };
   const names = ['computed', 'nextTick', 'onBeforeUnmount', 'onMounted', 'ref', 'watch', 'onBeforeRouteLeave',
     'useRouter', 'useRoute', 'useProjectStore', 'useProcessStore', 'usePlayerStore', 'useI18n', 'storeToRefs',
     'api', 'Step1Extract', 'Step2Background', 'Step3PostProcess'];
-  const setup = new Function(...names, `${javascript}\nreturn { frameEditor, frameEditorRef, frameEditorTool, frameEditorError, frameEditorLoading, frameEditorSaving, navigationPending, beforeFrameNavigation, resolveFrameNavigation, saveCurrentFrameEdit, selectFrameTool, frameRetouchEnabled, frameVisibilityEnabled, onToolShortcut };`);
+  const setup = new Function(...names, `${javascript}\nreturn { frameEditor, frameEditorRef, frameEditorTool, frameEditorError, frameEditorLoading, frameEditorSaving, navigationPending, beforeFrameNavigation, resolveFrameNavigation, saveCurrentFrameEdit, selectFrameTool, frameRetouchEnabled, frameVisibilityEnabled, onToolShortcut, openPostProcessingReset, closePostProcessingReset, resetPostProcessing, postProcessingResetOpen, postProcessingResetError };`);
   const state = setup(computed, nextTick, () => {}, () => {}, ref, () => {}, () => {},
     () => ({}), () => ({}), () => project, () => process, () => player,
     () => ({ t: key => key }), () => ({ currentProject, currentStep, s1Params: ref({}) }), api, null, null, null);
   state.frameEditor.value = { projectId: 'hero/idle', filename: '1.png', imageUrl: 'original', originalImageUrl: 'initial-frame', revision: 'r0', step };
   state.frameEditorTool.value = 'brush';
   state.frameEditorRef.value = { dirty: true, busy: false, markSaved() { this.dirty = false; }, getImageData: () => 'edited' };
-  return { ...state, player, process, currentProject, currentStep, saves, refreshes, failSaving(value) { fail = value; } };
+  return { ...state, player, process, currentProject, currentStep, saves, resets, undos, refreshes, failSaving(value) { fail = value; }, failReset(value) { failReset = value; } };
 }
+
+test('resetting all Step 3 edits requires confirmation and preserves unsaved work on cancel or failure', async () => {
+  const state = editor();
+  state.openPostProcessingReset();
+  assert.equal(state.postProcessingResetOpen.value, true);
+  assert.equal(state.beforeFrameNavigation(), false);
+  state.closePostProcessingReset();
+  await state.resetPostProcessing();
+  assert.deepEqual(state.resets, []);
+  assert.equal(state.frameEditorRef.value.dirty, true);
+
+  state.openPostProcessingReset();
+  state.failReset(true);
+  await state.resetPostProcessing();
+  assert.equal(state.postProcessingResetOpen.value, true);
+  assert.equal(state.postProcessingResetError.value, 'step3.resetAllFailed');
+  assert.equal(state.frameEditorRef.value.dirty, true);
+  state.failReset(false);
+  await state.resetPostProcessing();
+  assert.deepEqual(state.resets, ['hero/idle', 'hero/idle']);
+  assert.deepEqual(state.refreshes, ['hero/idle']);
+  assert.equal(state.frameEditor.value, null);
+  assert.equal(state.postProcessingResetOpen.value, false);
+  assert.deepEqual(state.saves, []);
+});
+
+test('undoing Step 3 requires an available batch and calls only the one-step restore', async () => {
+  const state = editor();
+  state.openPostProcessingReset('last');
+  assert.equal(state.postProcessingResetOpen.value, false);
+  state.currentProject.value.steps[3].can_undo_processing = true;
+  state.openPostProcessingReset('last');
+  assert.equal(state.postProcessingResetOpen.value, true);
+  assert.deepEqual(state.undos, []);
+  await state.resetPostProcessing();
+  assert.deepEqual(state.resets, []);
+  assert.deepEqual(state.undos, ['hero/idle']);
+  assert.deepEqual(state.refreshes, ['hero/idle']);
+  assert.equal(state.postProcessingResetOpen.value, false);
+});
 
 test('saving keeps the current frame and tool, resets the edit baseline, and uses the returned revision on the next save', async () => {
   const state = editor();

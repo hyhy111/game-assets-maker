@@ -89,6 +89,8 @@ export interface PyWebViewWindow extends Window {
 
       // Process API
       start_processing: (project_id: string, step: number, params: Record<string, unknown>) => Promise<string>;
+      reset_post_processing: (project_id: string) => Promise<boolean>;
+      undo_post_processing: (project_id: string) => Promise<boolean>;
       get_task_status: (task_id: string) => Promise<TaskStatus>;
       cancel_task: (task_id: string) => Promise<boolean>;
       get_step_params: (project_id: string, step: number) => Promise<Step1Params | Step2Params | Step3Params>;

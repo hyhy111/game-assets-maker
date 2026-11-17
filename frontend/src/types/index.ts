@@ -22,6 +22,7 @@ export interface StepStatus {
   data_ready: boolean;
   count: number;
   result_model?: BackgroundRemovalModel;
+  can_undo_processing?: boolean;
 }
 
 export interface StepStatusMap {

@@ -8,6 +8,8 @@
         <component
           :is="currentStepComponent"
           v-if="projectStore.currentProject && paramsLoaded"
+          @reset-post-processing="openPostProcessingReset()"
+          @undo-post-processing="openPostProcessingReset('last')"
         />
         <div
           v-else-if="!paramsLoaded"
@@ -46,7 +48,7 @@
           >
             <FramePlayer
               v-if="playerStore.frames.length > 0"
-              :keyboard-disabled="frameEditorLoading || frameEditorSaving || navigationPending"
+              :keyboard-disabled="frameEditorLoading || frameEditorSaving || navigationPending || postProcessingResetOpen"
               :editing="!!frameEditor"
               :retouch-enabled="frameRetouchEnabled"
               :tools-disabled="visibilityUpdating || frameEditorLoading || frameEditorSaving || navigationPending || processStore.isProcessing"
@@ -71,7 +73,7 @@
                 :view-zoom="playerStore.zoom"
                 :view-pan-x="playerStore.panX"
                 :view-pan-y="playerStore.panY"
-                :suspended="navigationPending || processStore.isProcessing"
+                :suspended="navigationPending || processStore.isProcessing || postProcessingResetOpen"
                 :error="frameEditorError"
                 :title="t('magicWand.title', { filename: frameEditor.filename })"
                 @cancel="closeFrameEditor"
@@ -191,6 +193,54 @@
         </div>
       </section>
     </div>
+    <Dialog
+      v-if="postProcessingResetOpen"
+      :open="true"
+      class="fixed inset-0 z-50"
+      @close="closePostProcessingReset"
+    >
+      <div
+        class="absolute inset-0 bg-black/70"
+        aria-hidden="true"
+      />
+      <div class="relative grid h-full place-items-center overflow-y-auto p-4">
+        <DialogPanel
+          class="w-full max-w-lg rounded-xl border border-dark-border bg-dark-surface p-6 shadow-xl"
+          data-test="step3-reset-dialog"
+        >
+          <DialogTitle class="text-lg font-semibold text-white">
+            {{ postProcessingResetTitle }}
+          </DialogTitle>
+          <DialogDescription class="mt-3 text-sm text-gray-400">
+            {{ t(postProcessingResetMode === 'last' ? 'step3.undoProcessingHint' : 'step3.resetAllHint') }}
+          </DialogDescription>
+          <p
+            v-if="postProcessingResetError"
+            class="mt-3 text-sm text-danger"
+            role="alert"
+          >
+            {{ postProcessingResetError }}
+          </p>
+          <div class="mt-5 flex flex-wrap justify-end gap-2">
+            <Button
+              variant="secondary"
+              :disabled="resettingPostProcessing"
+              @click="closePostProcessingReset"
+            >
+              {{ t('common.cancel') }}
+            </Button>
+            <Button
+              variant="danger"
+              :loading="resettingPostProcessing"
+              data-test="step3-reset-confirm"
+              @click="resetPostProcessing"
+            >
+              {{ postProcessingResetTitle }}
+            </Button>
+          </div>
+        </DialogPanel>
+      </div>
+    </Dialog>
   </div>
 </template>
 
@@ -200,6 +250,7 @@ import { onBeforeRouteLeave, useRouter, useRoute } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import { useI18n } from 'vue-i18n';
 import { Film } from 'lucide-vue-next';
+import { Dialog, DialogDescription, DialogPanel, DialogTitle } from '@headlessui/vue';
 import { useProjectStore } from '@/stores/project';
 import { useProcessStore } from '@/stores/process';
 import { usePlayerStore } from '@/stores/player';
@@ -329,10 +380,54 @@ const frameToolbar = ref<HTMLElement | null>(null);
 const frameEditorRef = ref<InstanceType<typeof SeedreamImageEraser> | null>(null);
 const stayButton = ref<InstanceType<typeof Button> | null>(null);
 const navigationPending = ref(false);
+const postProcessingResetMode = ref<'all' | 'last' | null>(null);
+const postProcessingResetOpen = computed(() => postProcessingResetMode.value !== null);
+const postProcessingResetTitle = computed(() => t(postProcessingResetMode.value === 'last' ? 'step3.undoProcessing' : 'step3.resetAll'));
+const resettingPostProcessing = ref(false);
+const postProcessingResetError = ref('');
 let resolveNavigation: ((allowed: boolean) => void) | null = null;
 
+function openPostProcessingReset(mode: 'all' | 'last' = 'all') {
+  if (currentStep.value !== 3 || !projectStore.isStepCompleted(2) || processStore.isProcessing
+    || visibilityUpdating.value || frameEditorLoading.value || frameEditorSaving.value || navigationPending.value
+    || postProcessingResetOpen.value || frameEditorRef.value?.busy
+    || (mode === 'last' && !currentProject.value?.steps?.['3']?.can_undo_processing)) return;
+  postProcessingResetError.value = '';
+  postProcessingResetMode.value = mode;
+}
+
+function closePostProcessingReset() {
+  if (!resettingPostProcessing.value) postProcessingResetMode.value = null;
+}
+
+async function resetPostProcessing() {
+  const project = currentProject.value;
+  if (!project || !postProcessingResetOpen.value || resettingPostProcessing.value) return;
+  resettingPostProcessing.value = true;
+  const undoing = postProcessingResetMode.value === 'last';
+  postProcessingResetError.value = '';
+  playerStore.pause();
+  try {
+    const success = await (undoing ? api.process.undoPostProcessing(project.id) : api.process.resetPostProcessing(project.id));
+    if (!success) throw new Error('Step 3 restore failed');
+    closeFrameEditor();
+    if (processStore.taskStatus?.step === 3) {
+      processStore.currentTask = null;
+      processStore.taskStatus = null;
+    }
+    const updated = await projectStore.loadProject(project.id);
+    processStore.applyStepParams(3, { processed: Boolean(updated?.steps?.['3']?.completed), processing_time: 0 });
+    postProcessingResetMode.value = null;
+  } catch {
+    postProcessingResetError.value = t(undoing ? 'step3.undoProcessingFailed' : 'step3.resetAllFailed');
+  } finally {
+    resettingPostProcessing.value = false;
+  }
+}
+
 function beforeFrameNavigation(): boolean | Promise<boolean> {
-  if (visibilityUpdating.value || frameEditorLoading.value || frameEditorSaving.value || navigationPending.value || frameEditorRef.value?.busy) return false;
+  if (visibilityUpdating.value || frameEditorLoading.value || frameEditorSaving.value || navigationPending.value
+    || postProcessingResetOpen.value || frameEditorRef.value?.busy) return false;
   closeFramePicker();
   if (!frameEditor.value) return true;
   if (!frameEditorRef.value?.dirty) {
@@ -368,7 +463,7 @@ function beforeUnload(event: BeforeUnloadEvent) {
 }
 
 function onToolShortcut(event: KeyboardEvent) {
-  if (event.defaultPrevented) return;
+  if (event.defaultPrevented || postProcessingResetOpen.value) return;
   if (frameRetouchEnabled.value && frameEditor.value && frameEditorTool.value !== 'browse'
     && (event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && !event.isComposing
     && event.key.toLowerCase() === 's') {

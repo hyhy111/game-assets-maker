@@ -43,12 +43,26 @@ def start_frame_edit_generation(project: Path, step: int) -> None:
     _atomic_write(_base(project, step) / "current", uuid4().hex.encode("ascii"))
 
 
-@contextmanager
+def current_frame_edit_generation(project: Path, step: int) -> str | None:
+    marker = _safe(_base(project, step) / "current")
+    return marker.read_text(encoding="ascii").strip() if marker.is_file() else None
+
+
 def new_frame_edit_generation(project: Path, step: int):
+    return use_frame_edit_generation(project, step, uuid4().hex)
+
+
+@contextmanager
+def use_frame_edit_generation(project: Path, step: int, generation: str | None):
     """Restore the old baseline if publishing a replacement sequence fails."""
     marker = _safe(_base(project, step) / "current")
     previous = marker.read_bytes() if marker.is_file() else None
-    start_frame_edit_generation(project, step)
+    if generation is None:
+        marker.unlink(missing_ok=True)
+    elif isinstance(generation, str) and _GENERATION.fullmatch(generation):
+        _atomic_write(marker, generation.encode("ascii"))
+    else:
+        raise ValueError("FRAME_EDIT_INVALID_BACKUP")
     try:
         yield
     except BaseException:

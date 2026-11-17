@@ -242,7 +242,7 @@
           class="h-5 w-5 mr-2"
           aria-hidden="true"
         />
-        {{ isStepCompleted ? t('step3.reProcess') : t('step3.startProcessing') }}
+        {{ t('step3.startProcessing') }}
       </Button>
 
       <Button
@@ -257,6 +257,24 @@
           aria-hidden="true"
         />
         {{ t('common.cancelProcessing') }}
+      </Button>
+      <Button
+        variant="secondary"
+        block
+        :disabled="!stepStatus?.can_undo_processing || isProcessing"
+        data-test="step3-undo"
+        @click="emit('undo-post-processing')"
+      >
+        {{ t('step3.undoProcessing') }}
+      </Button>
+      <Button
+        variant="secondary"
+        block
+        :disabled="!step2Completed || isProcessing"
+        data-test="step3-reset"
+        @click="emit('reset-post-processing')"
+      >
+        {{ t('step3.resetAll') }}
       </Button>
     </div>
   </div>
@@ -278,6 +296,7 @@ const projectStore = useProjectStore();
 const processStore = useProcessStore();
 const playerStore = usePlayerStore();
 const { t } = useI18n();
+const emit = defineEmits<{ 'reset-post-processing': []; 'undo-post-processing': [] }>();
 
 const { s3Params, isProcessing, taskStatus } = storeToRefs(processStore);
 
