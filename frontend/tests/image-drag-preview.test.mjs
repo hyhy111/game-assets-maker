@@ -95,7 +95,7 @@ test('generated image detail drags can hide the native preview while retaining t
   writeSeedreamImageDrag(f.transfer, payload, f.source, path, 'hidden');
   assert.equal(previews.length, 1);
   assert.match(previews[0].style.cssText, /opacity:\s*0\b/);
-  assert.ok(f.elements.some(element => element.connected && element.textContent === '+'));
+  assert.ok(f.elements.some(element => element.connected && element.style.cssText.includes('box-shadow:')));
   const data = new Map(f.transfers);
   assert.equal(data.get('text/plain'), path);
   assert.deepEqual(readImageDrop({ files: [], getData: type => data.get(type) ?? '' }), { kind: 'candidate', candidate: payload });
@@ -129,6 +129,7 @@ test('pointer decoration never replaces the native drag bitmap or intercepts dro
   ]);
   const effect = f.elements[0];
   assert.ok(effect.connected);
+  assert.match(effect.style.cssText, /center \/ 10px 1\.5px no-repeat,.*center \/ 1\.5px 10px no-repeat/);
   assert.match(effect.style.cssText, /pointer-events:\s*none/);
   f.listeners.get('dragover')({ clientX: 100, clientY: 200 });
   assert.equal(effect.style.transform, 'translate(112px, 212px)');
@@ -206,7 +207,7 @@ test('local image drags show the plus without a thumbnail and preserve the path 
   assert.equal(element.textContent, undefined);
   assert.match(element.style.cssText, /opacity:\s*0\b/);
   assert.deepEqual([x, y], [0, 0]);
-  assert.ok(f.elements.some(element => element.connected && element.textContent === '+'));
+  assert.ok(f.elements.some(element => element.connected && element.style.cssText.includes('box-shadow:')));
   // External agent inputs receive the usable file path, not internal metadata.
   assert.equal(new Map(f.transfers).get('text/plain'), path);
   // A WebView that retains only text on re-entry still resolves the source ID.

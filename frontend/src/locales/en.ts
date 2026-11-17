@@ -334,7 +334,7 @@ export default {
       expandTasks: 'Show all',
       collapseTasks: 'Collapse',
       promptTasksDialog: 'All tasks with this prompt',
-      stackSamePrompts: 'Stack cards with the same prompt',
+      stackSamePrompts: 'Group by prompt',
       favoriteMedia: 'Favorite this image or video',
       unfavoriteMedia: 'Remove from favorites',
     },

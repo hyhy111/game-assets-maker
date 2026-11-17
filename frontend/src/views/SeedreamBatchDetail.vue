@@ -152,10 +152,7 @@
               :data-test="`seedream-image-${selectedSucceededAttempt.index}`"
               draggable="false"
             >
-            <MediaPreviewDragHint
-              v-if="canDragImage(selectedSucceededAttempt)"
-              class="group-hover/preview:opacity-100"
-            />
+            <MediaPreviewDragHint v-if="canDragImage(selectedSucceededAttempt)" />
             <RecentMediaFavoriteButton
               class="absolute right-3 top-3 z-[2]"
               :favorite="isFavorite(imageMediaKey(batch.local_id, selectedSucceededAttempt.local_id))"

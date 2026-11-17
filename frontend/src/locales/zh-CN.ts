@@ -331,7 +331,7 @@ export default {
       expandTasks: '展开全部',
       collapseTasks: '收起任务',
       promptTasksDialog: '同一提示词的全部任务',
-      stackSamePrompts: '叠放提示词相同卡片',
+      stackSamePrompts: '按提示词分组',
       favoriteMedia: '收藏当前图片或视频',
       unfavoriteMedia: '取消收藏',
     },

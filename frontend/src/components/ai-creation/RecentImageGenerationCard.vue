@@ -26,10 +26,7 @@
           v-else
           class="grid h-full place-items-center text-sm text-gray-500"
         >{{ statusText }}</span>
-        <MediaPreviewDragHint
-          v-if="canDragImage(selectedAttempt)"
-          class="group-hover/preview:opacity-100 group-focus-visible/preview:opacity-100"
-        />
+        <MediaPreviewDragHint v-if="canDragImage(selectedAttempt)" />
         <div class="pointer-events-none absolute left-2 right-14 top-2 flex flex-wrap items-start gap-1">
           <span
             class="media-overlay-badge media-overlay-status"
@@ -69,7 +66,7 @@
             { 'control-tooltip cursor-grab active:cursor-grabbing': canDragImage(attempt) },
           ]"
           :data-tooltip="canDragImage(attempt) ? t('aiCreation.recent.dragImageToVideoFrame') : undefined"
-          :data-tooltip-delay="canDragImage(attempt) ? 1000 : undefined"
+          :data-tooltip-delay="canDragImage(attempt) ? 500 : undefined"
           :aria-label="`${t('seedream.detail.candidateImage')} ${index + 1}`"
           :aria-pressed="selectedAttempt?.index === attempt.index"
           :data-test="`recent-image-thumbnail-${attempt.index}`"

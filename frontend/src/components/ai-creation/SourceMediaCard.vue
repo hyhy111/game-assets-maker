@@ -17,10 +17,7 @@
         draggable="false"
         class="h-full w-full object-contain"
       >
-      <MediaPreviewDragHint
-        v-if="item.kind === 'image'"
-        class="group-hover/preview:opacity-100 group-focus-visible/preview:opacity-100"
-      />
+      <MediaPreviewDragHint v-if="item.kind === 'image'" />
       <span class="media-overlay-badge absolute left-2 top-2">{{ t('aiCreation.sourceMedia.local') }}</span>
     </button>
     <RouterLink

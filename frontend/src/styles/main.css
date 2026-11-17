@@ -158,19 +158,20 @@
   }
 
   .media-preview-drag-hint {
-    @apply pointer-events-none absolute inset-0 grid place-items-center bg-black/45 opacity-0 transition-opacity duration-150 motion-reduce:duration-0;
+    @apply pointer-events-none absolute inset-0 grid place-items-center bg-black/45 opacity-0;
   }
 
   .media-preview-drag-hint > span {
     @apply rounded-md border border-primary/35 bg-dark-surface px-2.5 py-1.5 text-xs font-medium text-primary;
   }
 
-  .group\/preview:hover .media-preview-drag-hint {
+  .media-preview-drag-hint[data-follow-pointer] {
+    @apply opacity-100 transition-opacity duration-150 motion-reduce:duration-0;
     transition-delay: 3s;
   }
 
-  .group\/preview:focus-visible .media-preview-drag-hint,
-  .group\/source:focus-visible .media-preview-drag-hint {
+  .group\/preview:focus-visible .media-preview-drag-hint:not([data-dragging]) {
+    @apply opacity-100 transition-opacity duration-150 motion-reduce:duration-0;
     transition-delay: 0s;
   }
 

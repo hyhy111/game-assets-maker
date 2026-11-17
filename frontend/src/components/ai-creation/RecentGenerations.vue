@@ -23,7 +23,13 @@
           </button>
         </div>
       </div>
-      <div class="flex flex-wrap items-center gap-4">
+      <div class="flex flex-wrap items-center gap-2">
+        <Switch
+          v-model="stackSamePrompts"
+          :label="t('aiCreation.recent.stackSamePrompts')"
+          compact
+          data-test="recent-stack-same-prompts"
+        />
         <Button
           variant="secondary"
           size="sm"
@@ -38,14 +44,9 @@
           />
           {{ t('aiCreation.sourceMedia.import') }}
         </Button>
-        <Switch
-          v-model="stackSamePrompts"
-          :label="t('aiCreation.recent.stackSamePrompts')"
-          data-test="recent-stack-same-prompts"
-        />
         <button
           type="button"
-          class="flex items-center gap-1.5 rounded-lg border border-dark-border bg-dark-surface px-3 py-2 text-sm text-gray-400 transition-colors hover:border-gray-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-50 icon-button control-tooltip"
+          class="flex !h-[34px] items-center gap-1.5 rounded-lg border border-dark-border bg-dark-surface px-3 !py-1.5 text-sm text-gray-400 transition-colors hover:border-gray-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-50 icon-button control-tooltip"
           :disabled="loading"
           data-test="recent-refresh"
           :aria-label="t('aiCreation.sourceMedia.refresh')"

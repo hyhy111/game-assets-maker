@@ -105,10 +105,10 @@ function startImageDragEffect(source: HTMLElement, hideNativePreviewFor?: DataTr
     const effect = document.createElement('span');
     const blankPreview = hideNativePreviewFor ? document.createElement('span') : null;
     effect.setAttribute('aria-hidden', 'true');
-    effect.textContent = '+';
     effect.style.cssText = 'position:fixed;left:0;top:0;width:28px;height:28px;'
-      + 'display:grid;place-items:center;border-radius:50%;border:1px solid #FFBD5C;'
-      + 'background:rgba(36,36,36,0.85);color:#FFBD5C;font:20px/1 sans-serif;'
+      + 'border-radius:50%;border:1px solid #FFBD5C;color:#FFBD5C;'
+      + 'background:linear-gradient(currentColor,currentColor) center / 10px 1.5px no-repeat,'
+      + 'linear-gradient(currentColor,currentColor) center / 1.5px 10px no-repeat rgba(36,36,36,0.85);'
       + 'box-shadow:0 0 14px rgba(255,189,92,0.45);pointer-events:none;'
       + 'user-select:none;visibility:hidden;z-index:2147483647;';
     const move = (event: DragEvent) => {

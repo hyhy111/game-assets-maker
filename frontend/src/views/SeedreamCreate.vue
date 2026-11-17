@@ -35,6 +35,7 @@
               @select="selectReferenceImage"
               @clear="clearReferenceImage"
               @drop-image="dropCandidateReference"
+              @drop-source-image="dropSourceReference"
               @drop-file="dropReferenceFile"
               @drop-error="referenceError = t($event)"
             />
@@ -624,6 +625,10 @@ async function dropCandidateReference(candidate: SeedreamImageDragPayload) {
   }
 }
 
+async function dropSourceReference(id: string) {
+  referenceError.value = await workspace.handoffSourceImage(id, 'reference') ? '' : t('aiCreation.imageUnavailable');
+}
+
 async function dropReferenceFile(file: File) {
   referenceError.value = '';
   if (!await workspace.importDroppedImage(file, 'reference')) {
@@ -642,9 +647,7 @@ async function onReferenceDrop(event: DragEvent) {
   const result = readImageDrop(event.dataTransfer);
   if (result.kind === 'candidate') void dropCandidateReference(result.candidate);
   else if (result.kind === 'file') void dropReferenceFile(result.file);
-  else if (result.kind === 'source') {
-    referenceError.value = await workspace.handoffSourceImage(result.id, 'reference') ? '' : t('aiCreation.imageUnavailable');
-  }
+  else if (result.kind === 'source') await dropSourceReference(result.id);
   else referenceError.value = t(result.key);
 }
 const copyTitle = computed(() => copied.value ? t('common.copied') : t('common.copy'));

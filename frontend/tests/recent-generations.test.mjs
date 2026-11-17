@@ -353,7 +353,7 @@ test('image task cards use one main preview with a selectable thumbnail strip', 
   assert.doesNotMatch(mainPreview, /data-tooltip=/);
   const thumbnailButtons = [...html.matchAll(/<button[^>]*data-test="recent-image-thumbnail-\d+"[^>]*>/g)];
   assert.equal(thumbnailButtons.length, 3);
-  for (const [button] of thumbnailButtons) assert.match(button, /data-tooltip="长按拖拽"[^>]*data-tooltip-delay="1000"/);
+  for (const [button] of thumbnailButtons) assert.match(button, /data-tooltip="长按拖拽"[^>]*data-tooltip-delay="500"/);
   assert.match(html, /aria-pressed="true"[^>]*data-test="recent-image-thumbnail-0"/);
   assert.doesNotMatch(html, /3\/3/);
   assert.doesNotMatch(html, /gridTemplateRows|thumbnailGridStyle|thumbnailItemClass/);
