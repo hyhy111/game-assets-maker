@@ -86,7 +86,15 @@
             >
               <div class="text-center">
                 <Film class="w-16 h-16 mx-auto mb-4 opacity-30" />
-                <p>{{ hiddenFrames.length > 0 ? t('frameVisibility.allHidden') : t('common.loading') }}</p>
+                <p
+                  v-if="previewLoadFailed"
+                  role="alert"
+                >
+                  {{ t('previewCleanup.loadFailed') }}
+                </p>
+                <p v-else>
+                  {{ hiddenFrames.length > 0 ? t('frameVisibility.allHidden') : t('common.loading') }}
+                </p>
               </div>
             </div>
           </div>
@@ -368,6 +376,7 @@ const paramsLoaded = ref(false);
 const hiddenFrames = ref<string[]>([]);
 const hiddenFramePreviews = ref<HiddenFramePreview[]>([]);
 const frameVisibilityError = ref('');
+const previewLoadFailed = ref(false);
 const timelineFrameCount = ref(0);
 const visibilityUpdating = ref(false);
 let frameLoadRequestId = 0;
@@ -619,6 +628,7 @@ async function loadFramesForStep(step: number) {
   );
 
   // Clear current frames to show loading state
+  previewLoadFailed.value = false;
   playerStore.loadFrames([]);
   timelineFrameCount.value = 0;
   // Determine which step's frames to show
@@ -642,7 +652,8 @@ async function loadFramesForStep(step: number) {
       sourceStep,
       1,
       500, // Increase page size to see more frames in sequence
-      !(step === 2 && sourceStep === 1) // Disable cache only if previewing Step 1 results in Step 2
+      !(step === 2 && sourceStep === 1), // Disable cache only if previewing Step 1 results in Step 2
+      step === 1,
     );
 
     if (!isCurrentRequest()) return false;
@@ -684,6 +695,7 @@ async function loadFramesForStep(step: number) {
     playerStore.loadFrames([]);
     timelineFrameCount.value = 0;
   }
+  if (step === 1) previewLoadFailed.value = true;
   return false;
 }
 

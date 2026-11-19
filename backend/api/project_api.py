@@ -21,6 +21,7 @@ from backend.api.project_paths import (
     sanitize_segment,
     split_project_id,
 )
+from backend.api.project_preview_cache import preview_cache_cleanup, visible_preview_frames
 from src.utils.app_config import default_projects_root
 from src.utils.file_operations import rename_path
 
@@ -97,6 +98,18 @@ class ProjectAPI:
             for role, count in sorted(role_counts.items(), key=lambda item: item[0].lower())
         ]
 
+    def get_preview_cleanup_plan(self, created_from: str, created_to: str) -> dict[str, Any]:
+        return preview_cache_cleanup(self._projects_root, self.get_projects(), created_from, created_to)
+
+    def clean_project_preview_frames(
+        self, created_from: str, created_to: str, project_ids: list[str]
+    ) -> dict[str, Any]:
+        if not isinstance(project_ids, list) or any(not isinstance(project_id, str) for project_id in project_ids):
+            raise ValueError("INVALID_PREVIEW_PROJECTS")
+        return preview_cache_cleanup(
+            self._projects_root, self.get_projects(), created_from, created_to, set(project_ids)
+        )
+
     def get_project(self, project_id: str) -> dict[str, Any] | None:
         """Get single project by ID"""
         project_path = self._get_project_path(project_id)
@@ -159,9 +172,8 @@ class ProjectAPI:
                 steps[step_num]["completed"] = True
 
         # Step 1: Check cache/01_frames_cache and output/01_frames
-        step1_cache = project_path / "cache" / "01_frames_cache"
         step1_output = project_path / "output" / "01_frames"
-        cache_frames = list(step1_cache.glob("frame_*.png")) if step1_cache.exists() else []
+        cache_frames = visible_preview_frames(project_path)
         output_frames = list(step1_output.glob("frame_*.png")) if step1_output.exists() else []
         # New projects use the processed flag for navigation. File existence means
         # preview data is available, not that Step 1 has been accepted.

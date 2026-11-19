@@ -519,8 +519,6 @@ class SeedanceAPI:
                 repository,
                 ResultDownloader(repository),
                 CacheManager(repository, self._project_api),
-                config,
-                config_saver=lambda seedance: save_app_config({"seedance": seedance}),
                 platform=platform,
                 platform_downloader=(
                     ResultDownloader(repository, PlatformArtifactTransport(self._platform_client))

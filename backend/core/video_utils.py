@@ -57,29 +57,30 @@ def process_video_to_cache(
     frame_count = 0
     saved_count = 0
 
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            break
+    try:
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
 
-        if frame_count % frame_interval == 0:
-            # Convert BGR to RGB
-            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            img = Image.fromarray(frame_rgb)
+            if frame_count % frame_interval == 0:
+                # Convert BGR to RGB
+                frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                img = Image.fromarray(frame_rgb)
 
-            # Save frame
-            frame_filename = f"frame_{saved_count:06d}.png"
-            frame_path = Path(cache_dir) / frame_filename
-            img.save(frame_path, "PNG")
+                # Save frame
+                frame_filename = f"frame_{saved_count:06d}.png"
+                frame_path = Path(cache_dir) / frame_filename
+                img.save(frame_path, "PNG")
 
-            saved_count += 1
+                saved_count += 1
 
-            if progress_callback:
-                progress_callback(saved_count, target_frames)
+                if progress_callback:
+                    progress_callback(saved_count, target_frames)
 
-        frame_count += 1
-
-    cap.release()
+            frame_count += 1
+    finally:
+        cap.release()
 
     return {"total_frames": saved_count, "video_fps": video_fps, "target_fps": fps, "duration": duration}
 

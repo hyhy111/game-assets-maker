@@ -16,6 +16,8 @@ from src.utils.storage_locations import DEFAULT_PROJECT_DIR, StorageLocations, s
 
 CONFIG_ENV_VAR = "GAM_CONFIG"
 _CONFIG_WRITE_LOCK = threading.Lock()
+# Keep the retired Seedance fields fixed for older settings clients.
+_RETIRED_SEEDANCE_KEYS = {"retention_days", "last_cleanup_at"}
 
 # Export the current platform capability for existing configuration consumers.
 BACKGROUND_REMOVAL_MODELS = background_models()
@@ -51,7 +53,7 @@ DEFAULT_APP_CONFIG: dict[str, Any] = {
         "default_return_last_frame": True,
         "default_priority": 0,
         "default_expires_after": 172800,
-        "retention_days": 90,
+        "retention_days": 0,
         "last_cleanup_at": None,
     },
     "seedream": {
@@ -246,7 +248,7 @@ def merge_config_update(current: dict[str, Any], update: dict[str, Any]) -> dict
 
 def _merge_known_keys(target: dict[str, Any], update: dict[str, Any]) -> None:
     for key, value in update.items():
-        if key not in target:
+        if key not in target or key in _RETIRED_SEEDANCE_KEYS:
             continue
         if key == "ark_audit_enabled":
             target[key] = value is True

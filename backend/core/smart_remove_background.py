@@ -315,10 +315,13 @@ def batch_remove_background(
         needs_refinement,
         validate_alpha_refine_params,
     )
-    from src.utils.background_models import is_birefnet
+    from src.core.rembg_model import validate_model
+    from src.utils.background_models import LITE_MODEL, is_birefnet
 
     model = (params or {}).get("model", "u2net")
     use_birefnet = is_birefnet(model)
+    if not use_birefnet:
+        validate_model(model)
     refine_settings = validate_alpha_refine_params(params or {})
     do_refine = needs_refinement(refine_settings)
     from backend.core.gpu_runtime import GPUWorker, runtime_status
@@ -333,7 +336,7 @@ def batch_remove_background(
     if use_gpu is None:
         status = runtime_status()
         use_gpu = (
-            sys.platform == "win32" and model.endswith("-onnx") and status.get("gpu_ready", status["phase"] == "ready")
+            sys.platform == "win32" and model == LITE_MODEL and status.get("gpu_ready", status["phase"] == "ready")
         )
     try:
         if use_gpu:
@@ -378,7 +381,6 @@ def _process_background_frames(
 ):
     from backend.core import birefnet, birefnet_onnx
     from backend.core.alpha_refine import defringe_rgba, refine_alpha
-    from src.utils.background_models import STANDARD_MODEL
 
     for i, frame_path in enumerate(frames):
         if cancel_event is not None and cancel_event.is_set():
@@ -395,8 +397,6 @@ def _process_background_frames(
                 if gpu_worker is None:
                     if model == birefnet_onnx.MODEL_ID:
                         result = birefnet_onnx.remove_background(frame_path)
-                    elif model == STANDARD_MODEL:
-                        result = birefnet_onnx.remove_background(frame_path, model)
                     else:
                         result = birefnet.remove_background(frame_path)
                 bg_hsv = None

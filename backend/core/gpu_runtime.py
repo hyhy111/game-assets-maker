@@ -12,13 +12,21 @@ import threading
 import uuid
 import zipfile
 from contextlib import suppress
-from functools import lru_cache
+from functools import lru_cache, partial
+from html.parser import HTMLParser
 from pathlib import Path, PurePosixPath
+from urllib.parse import unquote, urljoin, urlsplit
 
-from src.utils.data_paths import data_root
+import requests
+
+from src.utils.data_paths import DATA_ROOT_ENV_VAR, INSTALLED_MODE, data_mode, data_root
 from src.utils.file_operations import DOWNLOAD_RENAME_DELAYS, rename_path
 
 GPU_COMPONENTS = tuple(json.loads(Path(__file__).with_name("gpu_components.json").read_text()))
+_GPU_MIRROR_INDEXES = {
+    "huawei": "https://repo.huaweicloud.com/repository/pypi/simple/",
+}
+GPU_SOURCES = {"aliyun", "pypi", *_GPU_MIRROR_INDEXES}
 _LOCK = threading.RLock()
 _STATUS = {}
 # Cover preparation probes and all project tasks with one native session budget.
@@ -32,12 +40,55 @@ class GPURuntimeError(RuntimeError):
         self.code = code
 
 
-def runtime_root():
+def runtime_root() -> Path:
+    if (
+        sys.platform == "win32"
+        and getattr(sys, "frozen", False)
+        and data_mode() == INSTALLED_MODE
+        and not os.environ.get(DATA_ROOT_ENV_VAR)
+    ):
+        return Path(sys.executable).resolve().parent / "runtime" / "cuda13-cp312"
     return data_root() / "runtime" / "cuda13-cp312"
 
 
 def runtime_cache_dir():
     return runtime_root() / "wheels"
+
+
+def normalize_gpu_source(source):
+    # Older clients sent "tuna" as an alias for the Aliyun source.
+    return "aliyun" if source == "tuna" else source
+
+
+class _WheelLinks(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.links = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "a" and (href := dict(attrs).get("href")):
+            self.links.append(href)
+
+
+def _component_url(record, source):
+    if source == "aliyun":
+        return record["mirror_url"]
+    if source == "pypi":
+        return record["url"]
+
+    index = f"{_GPU_MIRROR_INDEXES[source]}{record['name']}/"
+    with requests.get(index, headers={"Accept": "text/html"}, timeout=(10, 20)) as response:
+        response.raise_for_status()
+        links = _WheelLinks()
+        links.feed(response.text)
+        for href in links.links:
+            url = urlsplit(urljoin(response.url, href))
+            if url.scheme != "https" or not url.hostname or unquote(url.path.rsplit("/", 1)[-1]) != record["filename"]:
+                continue
+            digest = url.fragment.removeprefix("sha256=") if url.fragment.startswith("sha256=") else None
+            if digest is None or digest.lower() == record["sha256"]:
+                return url._replace(fragment="").geturl()
+    raise ValueError(f"Selected mirror does not have the pinned file: {record['filename']}")
 
 
 @lru_cache(maxsize=2048)
@@ -83,7 +134,8 @@ def runtime_status():
         saved = json.loads((root / "download-state.json").read_text(encoding="utf-8"))
     except (OSError, ValueError):
         saved = {}
-    result["source"] = "pypi" if saved.get("source") == "pypi" else "aliyun"
+    source = normalize_gpu_source(saved.get("source"))
+    result["source"] = source if isinstance(source, str) and source in GPU_SOURCES else "aliyun"
     result["downloaded_bytes"] = saved.get("downloaded_bytes", 0)
     if not status and not ready and result["downloaded_bytes"]:
         result["phase"] = "paused"
@@ -95,9 +147,8 @@ def prepare_runtime(source, model=None, cancel_event=None):
     from src.core.model_download import ModelDownloadCancelledError
     from src.core.resumable_download import Resource, ResumableResourceDownloader
 
-    if source == "tuna":
-        source = "aliyun"
-    if source not in {"aliyun", "pypi"}:
+    source = normalize_gpu_source(source)
+    if source not in GPU_SOURCES:
         raise ValueError("Unknown GPU component source")
     root = runtime_root()
     downloaders = [
@@ -135,7 +186,7 @@ def prepare_runtime(source, model=None, cancel_event=None):
                 update()
 
             downloader.acquire(
-                record["mirror_url"] if source == "aliyun" else record["url"],
+                partial(_component_url, record, source),
                 source,
                 progress,
                 cancel_event=cancel_event,

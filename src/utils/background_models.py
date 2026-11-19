@@ -3,11 +3,10 @@
 import sys
 
 LITE_MODEL = "birefnet-lite-onnx"
-STANDARD_MODEL = "birefnet-standard-onnx"
 
 
 def background_models() -> tuple[str, ...]:
-    return ("u2net", STANDARD_MODEL, LITE_MODEL) if sys.platform == "win32" else ("u2net", "birefnet-comfy")
+    return ("u2net", LITE_MODEL) if sys.platform == "win32" else ("u2net", "birefnet-comfy")
 
 
 def default_background_model() -> str:
@@ -15,4 +14,4 @@ def default_background_model() -> str:
 
 
 def is_birefnet(model: str) -> bool:
-    return model in ("birefnet-comfy", LITE_MODEL, STANDARD_MODEL)
+    return model in ("birefnet-comfy", LITE_MODEL)

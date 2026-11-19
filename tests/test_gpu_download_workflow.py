@@ -24,6 +24,11 @@ def wait_finished(api):
     return api.get_gpu_runtime_status()
 
 
+@pytest.fixture(autouse=True)
+def compatible_gpu(monkeypatch):
+    monkeypatch.setattr(ProcessAPI, "detect_gpu_compatibility", lambda _self: {"state": "compatible"})
+
+
 @pytest.fixture
 def small_gpu_download(monkeypatch, tmp_path):
     from backend.core import birefnet_onnx
@@ -144,6 +149,61 @@ def test_persistent_progress_file_conflict_reports_gpu_preparation_failure(monke
         api.shutdown()
 
 
+@pytest.mark.parametrize("state", ["no_nvidia", "unsupported", "driver", "unknown"])
+def test_ineligible_hardware_does_not_start_a_download(monkeypatch, tmp_path, small_gpu_download, state):
+    _, _, requests = small_gpu_download
+    api = ProcessAPI(projects_root=tmp_path)
+    monkeypatch.setattr(api, "detect_gpu_compatibility", lambda: {"state": state})
+    try:
+        status = api.prepare_gpu_runtime(source="huawei")
+        assert status["device"] == {"state": state}
+        assert status["phase"] == "needs_download"
+        assert api._gpu_prepare_future is None
+        assert requests == []
+        assert not gpu_runtime.runtime_cache_dir().exists()
+    finally:
+        api.shutdown()
+
+
+def test_huawei_resolves_pinned_wheel_and_is_remembered(monkeypatch, tmp_path, small_gpu_download):
+    from tests.test_resumable_model_workflow import Response
+
+    wheel, payload, _ = small_gpu_download
+    record = dict(gpu_runtime.GPU_COMPONENTS[0], name="test-component")
+    monkeypatch.setattr(gpu_runtime, "GPU_COMPONENTS", (record,))
+    index_url = "https://repo.huaweicloud.com/repository/pypi/simple/test-component/"
+    file_url = "https://cdn.example/files/a.whl"
+    links = (
+        '<a href="https://cdn.example/files/other.whl">other</a>'
+        '<a href="https://cdn.example/wrong/a.whl#sha256=bad">bad digest</a>'
+        f'<a href="//cdn.example/files/a.whl#sha256={record["sha256"]}">correct</a>'
+    )
+    calls = []
+
+    def get(url, **_kwargs):
+        calls.append(url)
+        if url == index_url:
+            return nullcontext(SimpleNamespace(url=url, text=links, raise_for_status=lambda: None))
+        assert url == file_url
+        return Response(payload, headers={"Content-Length": str(len(payload))})
+
+    monkeypatch.setattr("requests.get", get)
+    api = ProcessAPI(projects_root=tmp_path)
+    try:
+        api.prepare_gpu_runtime(source="huawei")
+        status = wait_finished(api)
+        assert status["phase"] == "ready", status["error"]
+        assert status["source"] == "huawei"
+        assert wheel.read_bytes() == payload
+        assert calls == [index_url, file_url]
+
+        api.prepare_gpu_runtime(source="huawei")
+        assert wait_finished(api)["phase"] == "ready"
+        assert calls == [index_url, file_url]
+    finally:
+        api.shutdown()
+
+
 @pytest.mark.parametrize("initial_source", ["aliyun", "tuna"])
 @pytest.mark.parametrize("action", ["cancel", "shutdown", "network"])
 def test_multifile_restart_changes_source_and_retains_valid_prefix(monkeypatch, tmp_path, action, initial_source):
@@ -260,6 +320,8 @@ def test_bad_component_retries_only_bad_file_and_rejects_foreign_source(monkeypa
     try:
         with pytest.raises(ValueError):
             api.prepare_gpu_runtime(source="modelscope")
+        with pytest.raises(ValueError):
+            api.prepare_gpu_runtime(source="tsinghua")
         api.prepare_gpu_runtime(source="aliyun")
         wait_finished(api)
         assert api.get_gpu_runtime_status()["phase"] == "failed"
@@ -315,7 +377,7 @@ def test_explicit_source_downloads_fixed_files_once_and_remembers_source(monkeyp
         api.prepare_gpu_runtime(source="aliyun")
         wait_finished(api)
         status = api.get_gpu_runtime_status()
-        assert status["downloaded_bytes"] == 6
+        assert status["downloaded_bytes"] == 6, status["error"]
         assert status["source"] == "aliyun"
         assert requests == ["/mirror/a", "/mirror/b"]
         api.shutdown()

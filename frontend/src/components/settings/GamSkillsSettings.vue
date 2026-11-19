@@ -1,7 +1,7 @@
 <template>
   <SeedancePanel
     id="gam-skills"
-    class="mb-5"
+    class="min-w-0"
     :title="t('skillsInstall.title')"
     :description="t('skillsInstall.description')"
     data-test="gam-skills-settings"

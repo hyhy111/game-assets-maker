@@ -100,7 +100,6 @@ def _make_seedance_manager(tmp_path: Path):
         repository,
         object(),
         object(),
-        {"retention_days": 90, "last_cleanup_at": None},
     )
     return manager, repository
 

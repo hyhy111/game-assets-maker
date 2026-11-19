@@ -67,10 +67,10 @@ Game Assets Maker（GAM）是一款开源桌面工具，面向独立游戏开发
 | 步骤 | 怎么操作 | 重点检查 |
 | --- | --- | --- |
 | **01 帧提取** | 选择起止帧、帧提取间隔，点击“开始提取”。 | 起势和收招是否完整，循环是否顺畅。 |
-| **02 背景移除** | Windows 可选择 U²-Net、BiRefNet Lite FP16（默认）或标准 FP16；macOS 保留 BiRefNet（Comfy-Org/MPS）。首次使用时按提示下载所选权重。U²-Net 仅显示 Alpha Matting 参数，BiRefNet 仅显示边缘去色参数。 | 头发、武器、细线和半透明边缘。 |
+| **02 抠图** | Windows 可选择 U²-Net 或 BiRefNet Lite FP16（默认）；macOS 可选择 U²-Net 或 BiRefNet（Comfy-Org/MPS）。首次使用时按提示下载所选权重。U²-Net 仅显示 Alpha Matting 参数，BiRefNet 仅显示边缘去色参数。 | 头发、武器、细线和半透明边缘。 |
 | **03 后处理** | 按需启用挖孔、缩减边缘和帧对齐。 | 轮廓细节、跳跃高度和有意位移。 |
 
-Windows 可在步骤 02 独立准备可选 NVIDIA 加速组件，准备期间 CPU 仍可用；完成后从下一任务生效。模型大小、来源、续传和错误反馈见 [模型说明](MODELS.md)。
+Windows 会在步骤 02 检测 NVIDIA 显卡与驱动。兼容当前 CUDA 组件且抠图模型就绪时，可以下载并启用 cuda加速。准备期间可用 CPU 抠图，验证通过后下一批优先使用 GPU。模型大小、来源、续传和错误反馈见 [模型说明](MODELS.md)。
 
 每步完成后先播放检查。步骤 02 / 03 可隐藏异常帧，也可恢复；重新抽帧会使下游旧处理结果失效。模型就绪后，本地处理可以离线进行。重新去背整批成功后会替换当前结果，并清除步骤 03 的结果和手修。
 
@@ -80,7 +80,7 @@ Windows 可在步骤 02 独立准备可选 NVIDIA 加速组件，准备期间 CP
 
 步骤 02 完成后，切换到步骤 03 页面即可点击 **预览右下角的魔棒或橡皮擦**，自动暂停并在当前预览中修整，无需先运行步骤 03；工具参数与操作按钮同排显示在画布上方，按钮靠右，预览窗内显示简要操作提示。魔棒点击选区、Shift 点击追加、Delete 删除；橡皮擦用左键拖动擦除。滚轮缩放、中键拖动画布，空格仍控制播放。保留当前预览背景、缩放和平移，背景仍可切换。点击“保存当前帧”后标记为已完成处理，动画卡片的第三个状态图标变绿，并保持工具选中，撤销记录以此次保存为起点；切回浏览工具保留未保存修改。播放、切帧、切步骤或离开页面前，未保存修改会提示保存、放弃或留在当前帧。没有选区时，按 Esc 可退出工具并放弃未保存的修改。手修只影响当前帧。两次批处理之间可以多次修整同一帧或不同帧，每轮都从各帧的最新保存结果继续。W / E / V 分别切换魔棒、橡皮擦和移动工具；选中魔棒或橡皮擦时，⌘S / Ctrl+S 保存当前帧；+ / - 调整当前工具的颜色容差或橡皮擦大小。橡皮擦默认大小 3px、羽化 1px；魔棒删除会完全清除选区，并向选区外侧羽化；羽化为 0 时仅清除选区。工具栏的“恢复批处理版本”会恢复当前帧在最近一次批处理完成时的画面。首次批处理前以步骤 02 结果为基准。恢复可撤销，点击保存才写入结果。旧备份无法确认基准时，完成一次步骤 03 批处理即可建立新的恢复点。
 
-“开始批处理”会在当前结果上依次执行已开启的挖孔、缩减边缘和帧对齐。整批成功后替换当前结果，取消或失败时保留当前结果。重复执行同一操作可能累积效果。左侧的“还原修改”会撤销最近一次批处理，恢复该轮开始前的帧序列，包括当时已保存的手修。“重置所有修改”将当前动作的所有帧恢复到步骤 02 的去背结果。两项操作均需确认。
+“开始批处理”会在当前结果上依次执行已开启的挖孔、缩减边缘和帧对齐。整批成功后替换当前结果，取消或失败时保留当前结果。重复执行同一操作可能累积效果。左侧的“还原本次修改”会撤销最近一次批处理，恢复该轮开始前的帧序列，包括当时已保存的手修。“重置为初始状态”将当前动作的所有帧恢复到步骤 02 的去背结果。两项操作均需确认。
 
 #### 3. 裁剪与导出
 
@@ -199,7 +199,7 @@ In AI Creation, choose **Import local media** under Source Media to select multi
 | Step | Action | Check |
 | --- | --- | --- |
 | **01 Extract frames** | Choose the start, end, and extraction interval, then start extraction. | Complete motion and a clean loop. |
-| **02 Remove background** | Choose U²-Net (rembg) or BiRefNet (Comfy-Org) and download the weights on first use. U²-Net shows only Alpha Matting controls; BiRefNet shows only edge-defringe controls. | Hair, weapons, thin lines, and soft edges. |
+| **02 Remove background** | Choose U²-Net or BiRefNet Lite FP16 on Windows, or U²-Net or BiRefNet (Comfy-Org) on macOS. Download the weights on first use. U²-Net shows Alpha Matting controls and BiRefNet shows edge-defringe controls. | Hair, weapons, thin lines, and soft edges. |
 | **03 Post-process** | Enable hole punching, edge shrink, and frame alignment as needed. | Outline detail, jump height, and intentional movement. |
 
 Play the result after each step. You can hide and restore unwanted frames in steps 02 / 03. Re-extracting frames invalidates older downstream results. Once the model is ready, local processing works offline. A successful background removal run replaces the current result and clears Step 03 results and manual edits.

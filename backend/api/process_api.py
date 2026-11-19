@@ -20,6 +20,7 @@ import numpy as np
 from filelock import FileLock
 
 from backend.api.project_paths import project_video_path, resolve_project_path
+from backend.api.project_preview_cache import ensure_preview_frames, preview_directory, visible_preview_frames
 from backend.core.alpha_refine import validate_alpha_refine_params
 from backend.core.background_color import batch_punch_holes_color, validate_color_params
 from backend.core.edge_shrink import shrink_frame, validate_edge_shrink_params
@@ -45,7 +46,7 @@ from backend.core.video_utils import (
     selected_frame_indices,
 )
 from src.utils.app_config import default_projects_root, load_app_config
-from src.utils.background_models import background_models, is_birefnet
+from src.utils.background_models import LITE_MODEL, background_models, is_birefnet
 from src.utils.data_paths import data_root
 from src.utils.file_operations import rename_path
 
@@ -190,11 +191,11 @@ class ProcessAPI:
 
         task_id = str(uuid.uuid4())
         task = Task(task_id, project_id, step, params)
-        gpu_status = self.get_gpu_runtime_status() if step == 2 and params.get("model", "").endswith("-onnx") else {}
+        gpu_status = self.get_gpu_runtime_status() if step == 2 and params.get("model") == LITE_MODEL else {}
         task.gpu_ready = (
             step == 2
             and sys.platform == "win32"
-            and params.get("model", "").endswith("-onnx")
+            and params.get("model") == LITE_MODEL
             and gpu_status.get("gpu_ready", gpu_status.get("phase") == "ready")
         )
         task.execution_device = "gpu" if task.gpu_ready else "cpu"
@@ -262,11 +263,14 @@ class ProcessAPI:
         if not video_path or not Path(video_path).exists():
             raise ValueError("Video file not found")
 
-        cache_dir = project_path / "cache" / "01_frames_cache"
+        cache_dir = preview_directory(project_path)
         output_dir = project_path / "output" / "01_frames"
 
-        # Cache should already be populated during project creation
-        # Just export frames with the specified range and interval
+        def rebuild_progress(current, total):
+            if task.cancelled:
+                raise InterruptedError("Task cancelled")
+            progress = min(49, int(current * 50 / max(1, total)))
+            self._emit_progress(task.task_id, progress, current, total, "running")
 
         def progress_callback(current, total):
             if task.cancelled:
@@ -279,6 +283,10 @@ class ProcessAPI:
 
         # Send initial progress
         self._emit_progress(task.task_id, 0, 0, 100, "running")
+        if not ensure_preview_frames(self._projects_root, project_path, video_path, rebuild_progress):
+            raise ValueError("Video file not found")
+        if task.cancelled:
+            raise InterruptedError("Task cancelled")
 
         # Export frames with range and interval
         export_frames_step1(
@@ -845,9 +853,8 @@ class ProcessAPI:
             ):
                 params["frame_overrides"] = {}
             merged = {**saved, **params}
-            cache_dir = self._get_project_path(project_id) / "cache" / "01_frames_cache"
             selected_frame_indices(
-                len(list(cache_dir.glob("frame_*.png"))),
+                len(visible_preview_frames(self._get_project_path(project_id))),
                 merged.get("start_frame", 0),
                 merged.get("end_frame", -1),
                 merged.get("frame_interval", 1),
@@ -915,16 +922,30 @@ class ProcessAPI:
 
         return runtime_status()
 
-    def prepare_gpu_runtime(self, model: str = "birefnet-lite-onnx", source: str | None = None) -> dict:
-        from backend.core.gpu_runtime import _status, activate_runtime, prepare_runtime
+    def detect_gpu_compatibility(self) -> dict:
+        from backend.core.cuda_compatibility import detect_cuda_compatibility
+
+        return detect_cuda_compatibility()
+
+    def prepare_gpu_runtime(self, model: str = LITE_MODEL, source: str | None = None) -> dict:
+        from backend.core.gpu_runtime import (
+            GPU_SOURCES,
+            _status,
+            activate_runtime,
+            normalize_gpu_source,
+            prepare_runtime,
+        )
 
         validate_background_model(model)
-        if sys.platform != "win32" or not model.endswith("-onnx"):
+        if sys.platform != "win32" or model != LITE_MODEL:
             raise ValueError("NVIDIA components are only supported by Windows ONNX models")
-        if source == "tuna":
-            source = "aliyun"
-        if source is not None and source not in {"aliyun", "pypi"}:
+        source = normalize_gpu_source(source)
+        if source is not None and (not isinstance(source, str) or source not in GPU_SOURCES):
             raise ValueError("Unknown GPU component source")
+        if source is not None:
+            device = self.detect_gpu_compatibility()
+            if device["state"] != "compatible":
+                return {**self.get_gpu_runtime_status(), "device": device}
         with self._control_lock:
             if self._gpu_prepare_future is None or self._gpu_prepare_future.done():
                 self._gpu_prepare_cancel.clear()
@@ -932,7 +953,6 @@ class ProcessAPI:
                 self._gpu_prepare_future = self.executor.submit(
                     activate_runtime if source is None else prepare_runtime,
                     **({} if source is None else {"source": source}),
-                    model=None if model == "birefnet-lite-onnx" else model,
                     cancel_event=self._gpu_prepare_cancel,
                 )
         return self.get_gpu_runtime_status()

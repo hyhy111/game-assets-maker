@@ -713,6 +713,25 @@ class API:
         """Get project by ID (name)"""
         return self._project_api.get_project(project_id)
 
+    def get_preview_cleanup_plan(self, created_from: str = "", created_to: str = "") -> dict[str, Any]:
+        """Estimate the rebuildable Step 1 frame cache for a creation-date range."""
+        return self._project_api.get_preview_cleanup_plan(created_from, created_to)
+
+    @_project_write()
+    def clean_project_preview_frames(
+        self, created_from: str, created_to: str, project_ids: list[str]
+    ) -> dict[str, Any]:
+        """Remove only the preview frames of the animations confirmed by the user."""
+        if self._storage_migration_coordinator.restart_required:
+            raise ValueError("PREVIEW_CLEANUP_RESTART")
+        process = self._process_api_instance
+        if process is not None and (
+            process.has_active_writes()
+            or any(task.future is not None and not task.future.done() for task in process.tasks.values())
+        ):
+            raise ValueError("PREVIEW_CLEANUP_BUSY")
+        return self._project_api.clean_project_preview_frames(created_from, created_to, project_ids)
+
     @_project_write()
     def create_project(self, role: str, action: str, video_path: str, frame_interval: int = 1) -> dict[str, Any]:
         """Create a new project"""
@@ -784,9 +803,20 @@ class API:
     # ==================== Frame API ====================
 
     def get_frames(
-        self, project_id: str, step: int, page: int = 1, page_size: int = 50, use_cache: bool = True
+        self,
+        project_id: str,
+        step: int,
+        page: int = 1,
+        page_size: int = 50,
+        use_cache: bool = True,
+        rebuild_preview: bool = False,
     ) -> dict[str, Any]:
         """Get frames for a project at specific step"""
+        if step == 1 and use_cache and rebuild_preview:
+            with self._project_mutation_lock:
+                if self._storage_migration_coordinator.restart_required:
+                    raise ValueError("PREVIEW_CLEANUP_RESTART")
+                return self._frame_api.get_frames(project_id, step, page, page_size, use_cache, rebuild_preview=True)
         return self._frame_api.get_frames(project_id, step, page, page_size, use_cache)
 
     def get_frame_image(self, frame_path: str) -> str:
@@ -875,6 +905,9 @@ class API:
 
     def get_gpu_runtime_status(self) -> dict[str, Any]:
         return self._process_api.get_gpu_runtime_status()
+
+    def detect_gpu_compatibility(self) -> dict[str, Any]:
+        return self._process_api.detect_gpu_compatibility()
 
     def prepare_gpu_runtime(self, model: str = "birefnet-lite-onnx", source: str | None = None) -> dict[str, Any]:
         return self._process_api.prepare_gpu_runtime(model, source)

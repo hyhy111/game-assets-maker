@@ -49,7 +49,6 @@
             v-if="canRegenerate"
             variant="primary"
             data-test="seedream-regenerate"
-            :tooltip="t('buttonHints.regenerate')"
             @click="regenerate"
           >
             <RotateCw
@@ -72,7 +71,6 @@
             variant="secondary"
             :loading="retryingDownloads"
             data-test="seedream-retry-all-downloads"
-            :tooltip="t('seedream.detail.retryAllDownloads')"
             @click="retryAllDownloads"
           >
             <Download

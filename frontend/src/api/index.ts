@@ -8,6 +8,7 @@ import type {
   CreateProjectData,
   RoleSummary,
   ProjectRenameResult,
+  PreviewCleanupSummary,
   LegacyMigrationRequest,
   LegacyMigrationResult,
   LegacyProjectImportResult,
@@ -27,6 +28,8 @@ import type {
   GamSkillsInstallResult,
   BackgroundColor,
   ModelStatus,
+  GpuCompatibility,
+  GpuDownloadSource,
   GpuRuntimeStatus,
   ModelDownloadSource,
   ProjectTrimStatus,
@@ -145,6 +148,14 @@ export const projectApi = {
     return callApi<Project | null>('get_project', 'getProject', projectId);
   },
 
+  async getPreviewCleanupPlan(createdFrom: string, createdTo: string): Promise<PreviewCleanupSummary> {
+    return callApi<PreviewCleanupSummary>('get_preview_cleanup_plan', 'getPreviewCleanupPlan', createdFrom, createdTo);
+  },
+
+  async cleanPreviewFrames(createdFrom: string, createdTo: string, projectIds: string[]): Promise<PreviewCleanupSummary> {
+    return callApi<PreviewCleanupSummary>('clean_project_preview_frames', 'cleanPreviewFrames', createdFrom, createdTo, projectIds);
+  },
+
   async createProject(data: CreateProjectData): Promise<Project> {
     return callApi<Project>(
       'create_project',
@@ -211,9 +222,11 @@ export const frameApi = {
     step: number,
     page: number = 1,
     pageSize: number = 50,
-    useCache: boolean = true
+    useCache: boolean = true,
+    rebuildPreview: boolean = false,
   ): Promise<FramesResponse> {
-    return callApi<FramesResponse>('get_frames', 'getFrames', projectId, step, page, pageSize, useCache);
+    return callApi<FramesResponse>('get_frames', 'getFrames', projectId, step, page, pageSize, useCache,
+      ...(rebuildPreview ? [true] : []));
   },
 
   async getEditableFrame(projectId: string, filename: string, step: number = 3): Promise<EditableFrame> {
@@ -312,7 +325,11 @@ export const processApi = {
     return callApi<GpuRuntimeStatus>('get_gpu_runtime_status', 'getGpuRuntimeStatus');
   },
 
-  async prepareGpuRuntime(model: string, source?: 'aliyun' | 'pypi'): Promise<GpuRuntimeStatus> {
+  async detectGpuCompatibility(): Promise<GpuCompatibility> {
+    return callApi<GpuCompatibility>('detect_gpu_compatibility', 'detectGpuCompatibility');
+  },
+
+  async prepareGpuRuntime(model: string, source?: GpuDownloadSource | 'tuna'): Promise<GpuRuntimeStatus> {
     return callApi<GpuRuntimeStatus>('prepare_gpu_runtime', 'prepareGpuRuntime', model, source);
   },
 

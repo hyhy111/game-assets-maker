@@ -77,3 +77,5 @@ Thumbs.db
 
 # Imported original media when running from source
 /source-media/
+
+runtime

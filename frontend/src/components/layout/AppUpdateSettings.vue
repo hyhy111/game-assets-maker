@@ -1,6 +1,6 @@
 <template>
   <SeedancePanel
-    class="mb-5"
+    class="min-w-0"
     :title="t('updates.title')"
     data-test="app-update-settings"
   >

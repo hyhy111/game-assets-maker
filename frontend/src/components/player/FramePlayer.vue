@@ -403,11 +403,10 @@ function handleKeydown(e: KeyboardEvent) {
   } else if (previewing.value && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
     e.preventDefault();
     emit('previewStep', e.key === 'ArrowLeft' ? -1 : 1);
-  } else if (e.key === ' ' && e.target instanceof Element && e.target.closest('button')) {
-    return;
-  } else if (e.key === ' ' && !e.repeat) {
+  } else if (e.key === ' ') {
+    // Keep playback available after a button click, without activating that button again.
     e.preventDefault();
-    playerStore.togglePlay();
+    if (!e.repeat) playerStore.togglePlay();
   } else if (e.key === 'ArrowRight' && !props.editing) {
     e.preventDefault();
     if (heldArrowKey !== 'ArrowRight') {

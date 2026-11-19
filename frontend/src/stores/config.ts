@@ -56,7 +56,7 @@ export const useConfigStore = defineStore('config', () => {
           default_return_last_frame: false,
           default_priority: 0,
           default_expires_after: 172800,
-          retention_days: 90,
+          retention_days: 0,
           last_cleanup_at: null,
         },
         processing: {

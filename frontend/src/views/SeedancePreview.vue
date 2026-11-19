@@ -59,7 +59,6 @@
           <Button
             v-if="canCancel"
             variant="secondary"
-            :tooltip="t('seedance.tasks.cancel')"
             @click="cancelTask"
           >
             <StopCircle
@@ -73,7 +72,6 @@
             variant="secondary"
             icon-only
             :aria-label="t('buttonHints.retryDownload')"
-            :tooltip="t('buttonHints.retryDownload')"
             @click="retryDownload"
           >
             <Download
@@ -84,7 +82,6 @@
           <Button
             v-if="task.cache_status === 'complete'"
             variant="primary"
-            :tooltip="t('buttonHints.regenerate')"
             @click="regenerate"
           >
             <RotateCw
@@ -96,7 +93,6 @@
           <Button
             v-if="canContinue"
             variant="primary"
-            :tooltip="t('buttonHints.continueGeneration')"
             @click="continueFromReturnedFrame"
           >
             <ArrowRightFromLine

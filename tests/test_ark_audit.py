@@ -270,7 +270,7 @@ def test_video_manager_distinguishes_create_poll_and_download(tmp_path, enabled)
 
     transport = FakeTransport(VideoResponse(200, {}, b'{"id":"remote123","status":"queued"}'))
     client = VideoClient("secret-api-key", transport=transport, audit=ArkAudit(path))
-    manager = SeedanceTaskManager(client, repository, Downloader(), object(), {"retention_days": 90})
+    manager = SeedanceTaskManager(client, repository, Downloader(), object())
     task = manager.create(SeedanceRequest(first_frame=first_frame, prompt="secret prompt"))
     assert task["remote_id"] == "remote123"
     client._transport = FakeTransport(
@@ -301,7 +301,7 @@ def test_video_create_lost_response_stays_unknown_in_audit(tmp_path):
             raise OSError("secret provider detail")
 
     client = VideoClient("secret-api-key", transport=BrokenTransport(), audit=ArkAudit(path))
-    manager = SeedanceTaskManager(client, repository, object(), object(), {"retention_days": 90})
+    manager = SeedanceTaskManager(client, repository, object(), object())
     task = manager.create(SeedanceRequest(first_frame=first_frame))
     assert task["remote_status"] == "submission_unknown"
     assert [event["phase"] for event in _events(path)] == ["intent", "failure", "local_unknown"]

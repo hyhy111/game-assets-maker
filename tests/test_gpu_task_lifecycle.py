@@ -71,12 +71,12 @@ def prepare(api, model):
     pytest.fail("Model not ready")
 
 
-@pytest.mark.parametrize("model", ["birefnet-lite-onnx", "birefnet-standard-onnx"])
 @pytest.mark.parametrize(
     "code", ["GPU_MODEL_INITIALIZATION_FAILED", "GPU_OUT_OF_MEMORY", "GPU_PROCESS_FAILED", "GPU_PROTOCOL_FAILED"]
 )
-def test_failed_gpu_frame_and_remaining_frames_retry_same_model_on_cpu(workflow, monkeypatch, tmp_path, model, code):
+def test_failed_gpu_frame_and_remaining_frames_retry_same_model_on_cpu(workflow, monkeypatch, tmp_path, code):
     api, project, cpu_calls = workflow
+    model = "birefnet-lite-onnx"
     script = tmp_path / "worker.py"
     script.write_text(
         "import json,sys\nfor line in sys.stdin:\n print(json.dumps({'error': {'code': "
@@ -100,7 +100,7 @@ def test_failed_gpu_frame_and_remaining_frames_retry_same_model_on_cpu(workflow,
     assert status["execution_device"] == "cpu"
     assert status["gpu_fallback"]["code"] == code
     assert len(cpu_calls) == 3
-    assert all(("standard" in path) == ("standard" in model) for path in cpu_calls)
+    assert all(path.endswith(f"{model}.onnx") for path in cpu_calls)
     assert len(workers) == 1 and workers[0].process.poll() is not None
     assert api.get_step_params("hero/idle", 2)["result_model"] == model
     assert sorted(p.name for p in (project / "output/02_no_bg").glob("*.png")) == ["0.png", "1.png", "2.png"]
@@ -172,7 +172,7 @@ def test_cancel_or_cpu_failure_keeps_transparency_postprocessing_and_edits(workf
         return result
 
     monkeypatch.setattr(gpu_runtime, "GPUWorker", worker)
-    model = "birefnet-standard-onnx"
+    model = "birefnet-lite-onnx"
     prepare(api, model)
     api.save_step_params("hero/idle", 2, {"processed": True, "result_model": "u2net"})
     api.save_step_params("hero/idle", 3, {"processed": True, "enabled": True})
@@ -245,13 +245,12 @@ def test_concurrent_projects_wait_for_gpu_and_shutdown_reaps_owner(workflow, mon
 
     monkeypatch.setattr(gpu_runtime, "GPUWorker", worker)
     prepare(api, "birefnet-lite-onnx")
-    prepare(api, "birefnet-standard-onnx")
     first = api.start_processing("hero/idle", 2, {"model": "birefnet-lite-onnx"})
     deadline = time.monotonic() + 5
     while not marker.exists() and time.monotonic() < deadline:
         time.sleep(0.01)
     assert marker.exists()
-    second = api.start_processing("hero/run", 2, {"model": "birefnet-standard-onnx"})
+    second = api.start_processing("hero/run", 2, {"model": "birefnet-lite-onnx"})
     time.sleep(0.2)
     assert len(workers) == 1
     assert api.cancel_task(second)
@@ -275,10 +274,10 @@ def test_gpu_spawn_failure_retries_cpu_without_poisoning_model(workflow, monkeyp
         raise gpu_runtime.GPURuntimeError("GPU_NATIVE_LOAD_FAILED", "DLL unavailable")
 
     monkeypatch.setattr(gpu_runtime, "GPUWorker", unavailable)
-    prepare(api, "birefnet-standard-onnx")
-    task = api.start_processing("hero/idle", 2, {"model": "birefnet-standard-onnx"})
+    prepare(api, "birefnet-lite-onnx")
+    task = api.start_processing("hero/idle", 2, {"model": "birefnet-lite-onnx"})
     api.tasks[task].future.result(timeout=10)
     assert api.get_task_status(task)["status"] == "completed"
     assert api.get_task_status(task)["gpu_fallback"]["code"] == "GPU_NATIVE_LOAD_FAILED"
-    assert api.get_model_status("birefnet-standard-onnx")["phase"] == "ready"
+    assert api.get_model_status("birefnet-lite-onnx")["phase"] == "ready"
     assert len(cpu_calls) == 3

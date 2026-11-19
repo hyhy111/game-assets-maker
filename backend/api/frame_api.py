@@ -15,6 +15,7 @@ from PIL import Image
 
 from backend.api.frame_visibility import get_hidden_frame_names, restore_hidden_frames, set_frame_hidden
 from backend.api.project_paths import media_url_for_path, resolve_project_path
+from backend.api.project_preview_cache import ensure_preview_frames, visible_preview_frames
 from backend.core.frame_edit_history import (
     initial_frame,
     remember_backup_step,
@@ -51,18 +52,24 @@ class FrameAPI:
             return frame_path
 
     def get_frames(
-        self, project_id: str, step: int, page: int = 1, page_size: int = 50, use_cache: bool = True
+        self,
+        project_id: str,
+        step: int,
+        page: int = 1,
+        page_size: int = 50,
+        use_cache: bool = True,
+        rebuild_preview: bool = False,
     ) -> dict[str, Any]:
         """Get frames for a project at specific step with pagination"""
         project_path = resolve_project_path(self._projects_root, project_id)
 
-        # Determine directory based on step
+        cache_frames = []
         if step == 1:
-            # Step 1: always show cache frames for preview so users can adjust range/interval
-            cache_dir = project_path / "cache" / "01_frames_cache"
-            output_dir = project_path / "output" / "01_frames"
-
-            frames_dir = cache_dir if use_cache and cache_dir.exists() else output_dir
+            if use_cache:
+                if rebuild_preview:
+                    ensure_preview_frames(self._projects_root, project_path)
+                cache_frames = visible_preview_frames(project_path)
+            frames_dir = project_path / "output" / "01_frames"
         elif step == 2:
             frames_dir = project_path / "output" / "02_no_bg"
         elif step == 3:
@@ -70,7 +77,7 @@ class FrameAPI:
         else:
             return {"success": False, "error": "Invalid step"}
 
-        if not frames_dir.exists():
+        if not cache_frames and not frames_dir.exists():
             return {
                 "success": True,
                 "frames": [],
@@ -83,7 +90,7 @@ class FrameAPI:
             }
 
         # Step 2/3 share a project-level non-destructive visibility list.
-        all_frame_files = sorted(frames_dir.glob("*.png"))
+        all_frame_files = sorted(cache_frames or frames_dir.glob("*.png"))
         hidden_frames = set(get_hidden_frame_names(project_path)) if step in {2, 3} else set()
         frame_files = []
         hidden_previews = []

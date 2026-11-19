@@ -188,7 +188,7 @@
             :loading="saving"
             :disabled="saving || loading || !dirty"
             data-test="seedream-eraser-apply"
-            :tooltip="magicWandEnabled ? t('buttonHints.saveFrame') : t('seedream.detail.applyEraser')"
+            :tooltip="magicWandEnabled ? t('buttonHints.saveFrame') : undefined"
             :icon-only="magicWandEnabled"
             @click="apply"
           >

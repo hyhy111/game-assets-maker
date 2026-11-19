@@ -35,8 +35,10 @@
     </SeedancePageBar>
 
     <main class="seedance-container">
-      <AppUpdateSettings />
-      <GamSkillsSettings />
+      <div class="mb-5 grid items-stretch gap-5 lg:grid-cols-2">
+        <AppUpdateSettings />
+        <GamSkillsSettings />
+      </div>
       <p
         v-if="settingsError"
         class="mb-5 rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-danger"
@@ -165,192 +167,190 @@
           </div>
         </SeedancePanel>
 
-        <SeedancePanel
-          class="xl:col-span-2"
-          :title="t('storage.title')"
-          :description="t('storage.description')"
-        >
-          <div class="grid gap-4">
-            <label class="text-sm text-gray-300">
-              {{ t('storage.projectDir') }}
-              <span class="mt-2 flex flex-col gap-2 sm:flex-row">
-                <input
-                  :value="projectDisplayPath"
-                  class="seedance-control min-w-0 flex-1"
-                  readonly
-                  data-test="storage-project-dir"
-                >
-                <Button
-                  type="button"
-                  class="h-[42px] shrink-0"
-                  icon-only
-                  :aria-label="t('storage.projectDir')"
-                  :tooltip="t('storage.projectDir')"
-                  @click="selectStorageDirectory('project_dir')"
-                >
-                  <FolderOpen
-                    class="h-5 w-5"
-                    aria-hidden="true"
-                  />
-                </Button>
-              </span>
-              <span class="mt-2 block text-xs text-[var(--seedance-muted)]">
-                {{ t('storage.projectDirHint') }}
-              </span>
-            </label>
-            <label class="text-sm text-gray-300">
-              {{ t('storage.aiCacheDir') }}
-              <span class="mt-2 flex flex-col gap-2 sm:flex-row">
-                <input
-                  :value="cacheDisplayPath"
-                  class="seedance-control min-w-0 flex-1"
-                  readonly
-                  data-test="storage-cache-dir"
-                >
-                <Button
-                  type="button"
-                  class="h-[42px] shrink-0"
-                  icon-only
-                  :aria-label="t('storage.aiCacheDir')"
-                  :tooltip="t('storage.aiCacheDir')"
-                  @click="selectStorageDirectory('cache_dir')"
-                >
-                  <FolderOpen
-                    class="h-5 w-5"
-                    aria-hidden="true"
-                  />
-                </Button>
-              </span>
-              <span class="mt-2 block text-xs text-[var(--seedance-muted)]">
-                {{ t('storage.aiCacheDirHint') }}
-              </span>
-            </label>
-          </div>
-          <p
-            v-if="migrationError"
-            class="mt-3 text-sm text-danger"
-            data-test="storage-migration-error"
+        <div class="grid gap-5 lg:grid-cols-2 xl:col-span-2">
+          <SeedancePanel
+            :title="t('seedream.settings.defaults')"
+            :description="t('seedream.settings.defaultsDescription')"
           >
-            {{ t('storage.migrationFailed') }}: {{ migrationError }}
-          </p>
-        </SeedancePanel>
+            <div class="grid gap-4 sm:grid-cols-2">
+              <label class="text-sm text-gray-300">
+                {{ t('settings.defaultModel') }}
+                <Select
+                  v-model="seedreamDraft.default_model"
+                  class="mt-2"
+                  :options="seedreamModelOptions"
+                  :aria-label="t('settings.defaultModel')"
+                  data-test="seedream-settings-model"
+                  @update:model-value="fixSeedreamDefault"
+                />
+              </label>
+              <label class="text-sm text-gray-300">
+                {{ t('seedream.create.resolution') }}
+                <Select
+                  v-model="seedreamDraft.default_resolution"
+                  class="mt-2"
+                  :options="seedreamResolutionOptions"
+                  :aria-label="t('seedream.create.resolution')"
+                  data-test="seedream-settings-resolution"
+                />
+              </label>
+              <label class="text-sm text-gray-300">
+                {{ t('seedream.create.ratio') }}
+                <Select
+                  v-model="seedreamDraft.default_ratio"
+                  class="mt-2"
+                  :options="seedreamRatioOptions"
+                  :aria-label="t('seedream.create.ratio')"
+                  data-test="seedream-settings-ratio"
+                />
+              </label>
+              <label class="text-sm text-gray-300">
+                {{ t('seedream.settings.defaultCount') }}
+                <Select
+                  v-model="seedreamDraft.default_count"
+                  class="mt-2"
+                  :options="seedreamCountOptions"
+                  :aria-label="t('seedream.settings.defaultCount')"
+                  data-test="seedream-settings-count"
+                />
+              </label>
+            </div>
+            <p class="mt-3 text-xs leading-5 text-[var(--seedance-muted)]">
+              {{ t('seedream.settings.defaultCountHint') }}
+            </p>
+          </SeedancePanel>
 
-        <SeedancePanel
-          class="xl:col-span-2"
-          :title="t('seedance.settings.defaults')"
-          :description="t('seedance.settings.defaultsDescription')"
-        >
-          <div class="grid gap-4 sm:grid-cols-2">
-            <label class="text-sm text-gray-300">
-              {{ t('settings.defaultModel') }}
-              <Select
-                v-model="draft.default_model"
-                class="mt-2"
-                :options="seedanceModelOptions"
-                :aria-label="t('settings.defaultModel')"
-                @update:model-value="correctDefault"
+          <SeedancePanel
+            :title="t('seedance.settings.defaults')"
+            :description="t('seedance.settings.defaultsDescription')"
+          >
+            <div class="grid gap-4 sm:grid-cols-2">
+              <label class="text-sm text-gray-300">
+                {{ t('settings.defaultModel') }}
+                <Select
+                  v-model="draft.default_model"
+                  class="mt-2"
+                  :options="seedanceModelOptions"
+                  :aria-label="t('settings.defaultModel')"
+                  @update:model-value="correctDefault"
+                />
+              </label>
+              <label class="text-sm text-gray-300">
+                {{ t('seedance.settings.resolution') }}
+                <Select
+                  v-model="draft.default_resolution"
+                  class="mt-2"
+                  :options="seedanceResolutionOptions"
+                  :aria-label="t('seedance.settings.resolution')"
+                />
+              </label>
+              <label class="text-sm text-gray-300">
+                {{ t('seedance.create.ratio') }}
+                <Select
+                  v-model="draft.default_ratio"
+                  class="mt-2"
+                  :options="seedanceRatioOptions"
+                  :aria-label="t('seedance.create.ratio')"
+                />
+              </label>
+              <label class="text-sm text-gray-300">
+                {{ t('seedance.create.duration') }}
+                <Select
+                  v-model="draft.default_duration"
+                  class="mt-2"
+                  :options="seedanceDurationOptions"
+                  :aria-label="t('seedance.create.duration')"
+                />
+              </label>
+            </div>
+            <div class="mt-5 flex flex-wrap gap-6">
+              <Switch
+                v-model="draft.default_generate_audio"
+                :label="t('seedance.create.generateAudio')"
               />
-            </label>
-            <label class="text-sm text-gray-300">
-              {{ t('seedance.settings.resolution') }}
-              <Select
-                v-model="draft.default_resolution"
-                class="mt-2"
-                :options="seedanceResolutionOptions"
-                :aria-label="t('seedance.settings.resolution')"
+              <Switch
+                v-model="draft.default_return_last_frame"
+                :label="t('seedance.create.returnLastFrame')"
               />
-            </label>
-            <label class="text-sm text-gray-300">
-              {{ t('seedance.create.ratio') }}
-              <Select
-                v-model="draft.default_ratio"
-                class="mt-2"
-                :options="seedanceRatioOptions"
-                :aria-label="t('seedance.create.ratio')"
-              />
-            </label>
-            <label class="text-sm text-gray-300">
-              {{ t('seedance.create.duration') }}
-              <Select
-                v-model="draft.default_duration"
-                class="mt-2"
-                :options="seedanceDurationOptions"
-                :aria-label="t('seedance.create.duration')"
-              />
-            </label>
-          </div>
-          <div class="mt-5 flex flex-wrap gap-6">
-            <Switch
-              v-model="draft.default_generate_audio"
-              :label="t('seedance.create.generateAudio')"
-            />
-            <Switch
-              v-model="draft.default_return_last_frame"
-              :label="t('seedance.create.returnLastFrame')"
-            />
-          </div>
-        </SeedancePanel>
+            </div>
+          </SeedancePanel>
+        </div>
 
-        <SeedancePanel
-          class="xl:col-span-2"
-          :title="t('seedream.settings.defaults')"
-          :description="t('seedream.settings.defaultsDescription')"
-        >
-          <div class="grid gap-4 sm:grid-cols-2">
-            <label class="text-sm text-gray-300">
-              {{ t('settings.defaultModel') }}
-              <Select
-                v-model="seedreamDraft.default_model"
-                class="mt-2"
-                :options="seedreamModelOptions"
-                :aria-label="t('settings.defaultModel')"
-                data-test="seedream-settings-model"
-                @update:model-value="fixSeedreamDefault"
-              />
-            </label>
-            <label class="text-sm text-gray-300">
-              {{ t('seedream.create.resolution') }}
-              <Select
-                v-model="seedreamDraft.default_resolution"
-                class="mt-2"
-                :options="seedreamResolutionOptions"
-                :aria-label="t('seedream.create.resolution')"
-                data-test="seedream-settings-resolution"
-              />
-            </label>
-            <label class="text-sm text-gray-300">
-              {{ t('seedream.create.ratio') }}
-              <Select
-                v-model="seedreamDraft.default_ratio"
-                class="mt-2"
-                :options="seedreamRatioOptions"
-                :aria-label="t('seedream.create.ratio')"
-                data-test="seedream-settings-ratio"
-              />
-            </label>
-            <label class="text-sm text-gray-300">
-              {{ t('seedream.settings.defaultCount') }}
-              <Select
-                v-model="seedreamDraft.default_count"
-                class="mt-2"
-                :options="seedreamCountOptions"
-                :aria-label="t('seedream.settings.defaultCount')"
-                data-test="seedream-settings-count"
-              />
-            </label>
-          </div>
-          <p class="mt-3 text-xs leading-5 text-[var(--seedance-muted)]">
-            {{ t('seedream.settings.defaultCountHint') }}
-          </p>
-        </SeedancePanel>
+        <div class="grid gap-5 lg:grid-cols-2 xl:col-span-2">
+          <SeedancePanel
+            :title="t('storage.title')"
+            :description="t('storage.description')"
+          >
+            <div class="grid gap-4">
+              <label class="text-sm text-gray-300">
+                {{ t('storage.projectDir') }}
+                <span class="mt-2 flex flex-col gap-2 sm:flex-row">
+                  <input
+                    :value="projectDisplayPath"
+                    class="seedance-control min-w-0 flex-1"
+                    readonly
+                    data-test="storage-project-dir"
+                  >
+                  <Button
+                    type="button"
+                    class="h-[42px] shrink-0"
+                    icon-only
+                    :aria-label="t('storage.projectDir')"
+                    :tooltip="t('storage.projectDir')"
+                    @click="selectStorageDirectory('project_dir')"
+                  >
+                    <FolderOpen
+                      class="h-5 w-5"
+                      aria-hidden="true"
+                    />
+                  </Button>
+                </span>
+                <span class="mt-2 block text-xs text-[var(--seedance-muted)]">
+                  {{ t('storage.projectDirHint') }}
+                </span>
+              </label>
+              <label class="text-sm text-gray-300">
+                {{ t('storage.aiCacheDir') }}
+                <span class="mt-2 flex flex-col gap-2 sm:flex-row">
+                  <input
+                    :value="cacheDisplayPath"
+                    class="seedance-control min-w-0 flex-1"
+                    readonly
+                    data-test="storage-cache-dir"
+                  >
+                  <Button
+                    type="button"
+                    class="h-[42px] shrink-0"
+                    icon-only
+                    :aria-label="t('storage.aiCacheDir')"
+                    :tooltip="t('storage.aiCacheDir')"
+                    @click="selectStorageDirectory('cache_dir')"
+                  >
+                    <FolderOpen
+                      class="h-5 w-5"
+                      aria-hidden="true"
+                    />
+                  </Button>
+                </span>
+                <span class="mt-2 block text-xs text-[var(--seedance-muted)]">
+                  {{ t('storage.aiCacheDirHint') }}
+                </span>
+              </label>
+            </div>
+            <p
+              v-if="migrationError"
+              class="mt-3 text-sm text-danger"
+              data-test="storage-migration-error"
+            >
+              {{ t('storage.migrationFailed') }}: {{ migrationError }}
+            </p>
+          </SeedancePanel>
 
-        <SeedancePanel
-          class="xl:col-span-2"
-          :title="t('settings.processingDefaults')"
-          :description="t('settings.processingDefaultsDescription')"
-        >
-          <div class="grid gap-4 sm:grid-cols-2">
-            <label class="text-sm text-gray-300">
+          <SeedancePanel
+            :title="t('settings.processingDefaults')"
+            :description="t('settings.processingDefaultsDescription')"
+          >
+            <label class="block max-w-sm text-sm text-gray-300">
               {{ t('settings.defaultBackgroundModel') }}
               <Select
                 v-model="processingDraft.background_model"
@@ -360,97 +360,16 @@
                 data-test="processing-background-model"
               />
             </label>
-          </div>
-          <p class="mt-3 text-xs leading-5 text-[var(--seedance-muted)]">
-            {{ t('settings.defaultBackgroundModelHint') }}
-          </p>
-        </SeedancePanel>
+            <p class="mt-3 text-xs leading-5 text-[var(--seedance-muted)]">
+              {{ t('settings.defaultBackgroundModelHint') }}
+            </p>
+          </SeedancePanel>
+        </div>
 
-        <SeedancePanel
+        <ProjectPreviewCleanup
           class="xl:col-span-2"
-          :title="t('seedance.settings.cacheManagement')"
-          :description="t('seedance.settings.cacheDescription')"
-        >
-          <div class="grid gap-5 xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,.8fr)]">
-            <div>
-              <label class="block text-sm text-gray-300">
-                {{ t('seedance.settings.retention') }}
-                <Select
-                  v-model="draft.retention_days"
-                  class="mt-2"
-                  :options="retentionOptions"
-                  :aria-label="t('seedance.settings.retention')"
-                />
-              </label>
-              <p
-                v-if="retentionDisabled"
-                class="mt-2 text-sm text-[var(--seedance-muted)]"
-              >
-                {{ t('seedance.ui.retentionDisabled') }}
-              </p>
-            </div>
-
-            <div class="rounded-xl border border-[var(--seedance-border)] bg-black/15 p-4">
-              <dl class="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <dt class="text-[var(--seedance-muted)]">
-                    {{ t('seedance.settings.totalBytes') }}
-                  </dt>
-                  <dd class="mt-1 text-lg font-semibold text-white">
-                    {{ formatBytes(cache?.total_bytes) }}
-                  </dd>
-                </div>
-                <div>
-                  <dt class="text-[var(--seedance-muted)]">
-                    {{ t('seedance.settings.clearableBytes') }}
-                  </dt>
-                  <dd class="mt-1 text-lg font-semibold text-white">
-                    {{ formatBytes(cache?.clearable_bytes) }}
-                  </dd>
-                </div>
-                <div>
-                  <dt class="text-[var(--seedance-muted)]">
-                    {{ t('seedance.settings.taskCount') }}
-                  </dt>
-                  <dd class="mt-1 text-gray-200">
-                    {{ cache?.task_count ?? 0 }}
-                  </dd>
-                </div>
-                <div>
-                  <dt class="text-[var(--seedance-muted)]">
-                    {{ t('seedance.settings.protectedTaskCount') }}
-                  </dt>
-                  <dd class="mt-1 text-gray-200">
-                    {{ cache?.protected_task_count ?? 0 }}
-                  </dd>
-                </div>
-              </dl>
-              <Button
-                class="mt-5"
-                block
-                type="button"
-                variant="danger"
-                :disabled="retentionDisabled"
-                :loading="cleaning"
-                :tooltip="t('buttonHints.cleanCache')"
-                @click="openCacheCleanConfirmation"
-              >
-                <Trash2
-                  class="h-5 w-5 mr-2"
-                  aria-hidden="true"
-                />
-                {{ t('seedance.settings.clearCache') }}
-              </Button>
-              <p
-                v-if="cleaned"
-                class="mt-3 text-sm text-gray-300"
-              >
-                {{ t('seedance.ui.released') }} {{ formatBytes(cleaned.bytes_released) }};
-                {{ cleaned.protected_tasks_skipped }} {{ t('seedance.ui.protectedSkipped') }}
-              </p>
-            </div>
-          </div>
-        </SeedancePanel>
+          :disabled="saving || executingMigration || restartRequired"
+        />
       </form>
     </main>
 
@@ -495,51 +414,6 @@
             @click="saveCliGeneration(true)"
           >
             {{ t('common.confirm') }}
-          </Button>
-        </div>
-      </div>
-    </div>
-
-    <div
-      v-if="confirmCacheClean"
-      ref="cacheCleanModalRoot"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="clean-cache-title"
-      aria-describedby="clean-cache-description"
-      @keydown="onCacheCleanKeydown"
-      @click.self="closeCacheCleanConfirmation"
-    >
-      <div class="max-w-md rounded-xl border border-dark-border bg-dark-surface p-6">
-        <h2
-          id="clean-cache-title"
-          class="text-lg font-semibold text-white"
-        >
-          {{ t('seedance.settings.clearCache') }}
-        </h2>
-        <p
-          id="clean-cache-description"
-          class="mt-3 text-gray-300"
-        >
-          {{ t('seedance.settings.clearCacheConfirmation') }}
-        </p>
-        <div class="mt-5 flex justify-end gap-2">
-          <Button
-            type="button"
-            variant="secondary"
-            @click="closeCacheCleanConfirmation"
-          >
-            {{ t('common.cancel') }}
-          </Button>
-          <Button
-            type="button"
-            variant="danger"
-            :loading="cleaning"
-            :disabled="cleaning"
-            @click="clean"
-          >
-            {{ t('seedance.settings.clearCache') }}
           </Button>
         </div>
       </div>
@@ -768,7 +642,7 @@
 </template>
 
 <script setup lang="ts">
-import { Save, FolderOpen, Trash2 } from 'lucide-vue-next';
+import { Save, FolderOpen } from 'lucide-vue-next';
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { onBeforeRouteLeave, useRouter } from 'vue-router';
@@ -779,6 +653,7 @@ import Switch from '@/components/common/Switch.vue';
 import Header from '@/components/layout/Header.vue';
 import AppUpdateSettings from '@/components/layout/AppUpdateSettings.vue';
 import GamSkillsSettings from '@/components/settings/GamSkillsSettings.vue';
+import ProjectPreviewCleanup from '@/components/settings/ProjectPreviewCleanup.vue';
 import SeedancePageBar from '@/components/seedance/SeedancePageBar.vue';
 import SeedancePanel from '@/components/seedance/SeedancePanel.vue';
 import { trapModalTab } from '@/modal-focus';
@@ -797,7 +672,6 @@ import { useSeedanceStore } from '@/stores/seedance';
 import { useSeedreamStore } from '@/stores/seedream';
 import type {
   ProcessingSettings,
-  SeedanceCacheCleanResult,
   SeedanceSettings,
   SeedreamSettings,
   StorageMigrationProgress,
@@ -814,11 +688,8 @@ const configStore = useConfigStore();
 const projectStore = useProjectStore();
 const apiKey = ref('');
 const connectionResult = ref('');
-const cleaned = ref<SeedanceCacheCleanResult | null>(null);
 const confirmClear = ref(false);
 const clearModalRoot = ref<HTMLElement | null>(null);
-const confirmCacheClean = ref(false);
-const cacheCleanModalRoot = ref<HTMLElement | null>(null);
 const confirmLeave = ref(false);
 const leaveError = ref('');
 const leaveModalRoot = ref<HTMLElement | null>(null);
@@ -835,12 +706,10 @@ const cliGenerationModalRoot = ref<HTMLElement | null>(null);
 let cliGenerationTrigger: HTMLElement | null = null;
 const initialLoadComplete = ref(false);
 const seedanceSettingsLoaded = ref(Boolean(store.settings));
-const cleaning = ref(false);
 const clearingKey = ref(false);
 const saveFeedback = ref('');
 const allowedCounts = ALLOWED_COUNTS;
 let clearTrigger: HTMLElement | null = null;
-let cacheCleanTrigger: HTMLElement | null = null;
 let leaveTrigger: HTMLElement | null = null;
 let allowPendingNavigation = false;
 const appDraft = reactive({
@@ -856,7 +725,7 @@ const seedreamDraft = reactive<SeedreamSettings>({
   default_resolution: '2K',
   default_ratio: '16:9',
 });
-const draft = reactive<Omit<SeedanceSettings, 'api_key_configured' | 'last_cleanup_at' | 'default_priority' | 'default_expires_after'>>({
+const draft = reactive<Omit<SeedanceSettings, 'api_key_configured' | 'retention_days' | 'last_cleanup_at' | 'default_priority' | 'default_expires_after'>>({
   cache_dir: '',
   default_model: 'mini',
   default_resolution: '720p',
@@ -864,7 +733,6 @@ const draft = reactive<Omit<SeedanceSettings, 'api_key_configured' | 'last_clean
   default_duration: 4,
   default_generate_audio: true,
   default_return_last_frame: true,
-  retention_days: 0,
 });
 // Storage-location drafts hold the *configured* values; the inputs display
 // the resolved absolute paths. Edits stay draft-only until Save is clicked.
@@ -884,7 +752,6 @@ const settingsReady = computed(() => Boolean(
   && !seedreamStore.error
   && !configStore.error
 ));
-const cache = computed(() => store.cacheStatus);
 const supported = computed(() => MODEL_RESOLUTIONS[draft.default_model]);
 const seedanceModelOptions = computed(() => [
   { value: 'standard', label: t('seedance.models.standard') },
@@ -899,7 +766,6 @@ const seedanceRatioOptions = computed(() => [
   { value: '4:3', label: '4:3' },
 ]);
 const seedanceDurationOptions = computed(() => DURATION_OPTIONS.map(value => ({ value, label: t('seedance.ui.seconds', { value }) })));
-const retentionDisabled = computed(() => draft.retention_days === 0);
 const seedreamAllowedRatios = ALLOWED_RATIOS;
 const seedreamSupportedResolutions = computed(() => SEEDREAM_MODEL_RESOLUTIONS[seedreamDraft.default_model]);
 const seedreamModelOptions = computed(() => [
@@ -909,20 +775,12 @@ const seedreamModelOptions = computed(() => [
 const seedreamResolutionOptions = computed(() => seedreamSupportedResolutions.value.map(value => ({ value, label: value })));
 const seedreamRatioOptions = computed(() => seedreamAllowedRatios.map(value => ({ value, label: value })));
 const seedreamCountOptions = computed(() => allowedCounts.map(value => ({ value, label: String(value) })));
-const retentionOptions = computed(() => [
-  { value: 0, label: t('seedance.ui.never') },
-  ...[7, 30, 90, 180].map(value => ({ value, label: t('seedance.ui.days', { value }) })),
-]);
 // Labels mirror backgroundModelName in model-status.ts; kept inline because the
 // source-evaluation tests run this setup without module imports.
 const backgroundModelOptions = computed(() => [
   { value: 'u2net', label: 'U²-Net' },
   ...(configStore.config?.background_models?.includes('birefnet-lite-onnx')
-    ? [
-      { value: 'birefnet-lite-onnx', label: 'BiRefNet Lite FP16' },
-      ...(configStore.config?.background_models?.includes('birefnet-standard-onnx')
-        ? [{ value: 'birefnet-standard-onnx', label: 'BiRefNet Standard FP16' }] : []),
-    ]
+    ? [{ value: 'birefnet-lite-onnx', label: 'BiRefNet Lite FP16' }]
     : [{ value: 'birefnet-comfy', label: 'BiRefNet' }]),
 ]);
 const currentSnapshot = computed(() => JSON.stringify({
@@ -963,9 +821,8 @@ const settingsError = computed(() => {
 
 onMounted(async () => {
   seedanceSettingsLoaded.value = false;
-  const [settingsLoaded, , , , storageResult] = await Promise.all([
+  const [settingsLoaded, , , storageResult] = await Promise.all([
     store.loadSettings(),
-    store.loadCacheStatus(),
     configStore.loadConfig(),
     seedreamStore.loadSettings(),
     api.storage.getSettings(),
@@ -1009,7 +866,6 @@ watch(() => configStore.config, (value) => {
 
 onBeforeUnmount(() => {
   closeClearConfirmation();
-  closeCacheCleanConfirmation();
 });
 
 onBeforeRouteLeave((to) => {
@@ -1159,28 +1015,6 @@ async function clearKey() {
     closeClearConfirmation();
     saveFeedback.value = t('seedance.settings.saved');
   }
-}
-
-async function openCacheCleanConfirmation() {
-  if (retentionDisabled.value) return;
-  cacheCleanTrigger = document.activeElement as HTMLElement;
-  confirmCacheClean.value = true;
-  await nextTick();
-  cacheCleanModalRoot.value?.querySelector<HTMLElement>('button:not([disabled])')?.focus();
-}
-
-function closeCacheCleanConfirmation() {
-  confirmCacheClean.value = false;
-  cacheCleanTrigger?.focus();
-  cacheCleanTrigger = null;
-}
-
-function onCacheCleanKeydown(event: KeyboardEvent) {
-  if (event.key === 'Escape') {
-    closeCacheCleanConfirmation();
-    return;
-  }
-  if (cacheCleanModalRoot.value) trapModalTab(event, cacheCleanModalRoot.value);
 }
 
 async function save() {
@@ -1351,13 +1185,5 @@ function closeApp() {
   // PyWebView does not reliably route a plain JS window close to the native
   // window.
   api.lifecycle.closeApp();
-}
-
-async function clean() {
-  if (retentionDisabled.value) return;
-  cleaning.value = true;
-  cleaned.value = await store.cleanCache(draft.retention_days);
-  cleaning.value = false;
-  if (cleaned.value) closeCacheCleanConfirmation();
 }
 </script>

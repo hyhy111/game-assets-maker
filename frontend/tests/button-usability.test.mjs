@@ -12,6 +12,21 @@ const project = {
   steps: { 1: { completed: true }, 2: { completed: true }, 3: { completed: true } },
 };
 
+test('both batch trim modes expose the shared delayed tooltip on the homepage and batch trim page', async () => {
+  for (const view of ['views/ProjectManager.vue', 'views/BatchTrim.vue']) {
+    const html = await renderSfc(view, {
+      piniaState: { project: { projects: [project] } },
+    });
+    for (const hint of ['所有帧裁剪到相同尺寸', '每帧极致裁剪并生成 offset 数据']) {
+      const button = [...html.matchAll(/<button\b[^>]*>/g)]
+        .map(match => match[0]).find(tag => tag.includes(`data-tooltip="${hint}"`));
+      assert.ok(button, `${view} missing tooltip: ${hint}`);
+      assert.match(button, /class="[^"]*\bcontrol-tooltip\b/);
+      assert.doesNotMatch(button, /\stitle=/);
+    }
+  }
+});
+
 test('start and end frame controls use solid green and red circles', async () => {
   const html = await renderSfc('views/Editor/Step1Extract.vue');
   const start = html.match(/<button[^>]*data-test="set-start-frame"[^>]*>([\s\S]*?)<\/button>/)?.[1];

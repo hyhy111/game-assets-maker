@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import json
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import nullcontext
 from datetime import UTC, datetime, timedelta
+from os import utime
 from pathlib import Path
 from shutil import rmtree
 from time import sleep
@@ -99,14 +101,43 @@ def _succeeded_task(
     return repository.update(task.local_id, mark_succeeded)
 
 
-def _asset_bytes(repository: TaskRepository, task: SeedanceTask) -> int:
-    task_dir = repository.cache_root / "tasks" / task.local_id
-    return sum(
-        path.stat().st_size
-        for directory in (task_dir / "input", task_dir / "output")
-        for path in directory.rglob("*")
-        if path.is_file() and not path.is_symlink()
-    )
+def _old_image(repository: TaskRepository, task: SeedanceTask, name: str = "thumbnail.jpg") -> Path:
+    path = _write_image(repository.resolve_asset(task.local_id, f"output/{name}"))
+    timestamp = (datetime.now(UTC) - timedelta(days=10)).timestamp()
+    utime(path, (timestamp, timestamp))
+    return path
+
+
+def test_seedance_startup_keeps_aged_media_with_legacy_retention(tmp_path, runtime_config_path):
+    from backend.api.seedance_api import SeedanceAPI
+    from src.utils.ai_cache_paths import ai_video_cache_root
+
+    cache_dir = tmp_path / "cache"
+    legacy_config = {"seedance": {"cache_dir": str(cache_dir), "retention_days": 90, "last_cleanup_at": None}}
+    runtime_config_path.parent.mkdir(parents=True, exist_ok=True)
+    runtime_config_path.write_text(json.dumps(legacy_config), encoding="utf-8")
+
+    repository = TaskRepository(ai_video_cache_root(str(cache_dir)))
+    source = _write_image(tmp_path / "first.png")
+    task = repository.create_draft(SeedanceRequest(first_frame=source, prompt="keep me"))
+    old = datetime.now(UTC) - timedelta(days=180)
+    task = _succeeded_task(repository, task, finished_at=old.isoformat())
+    files = [
+        _write_image(repository.resolve_asset(task.local_id, f"output/{name}"))
+        for name in ("thumbnail.jpg", "continuation_frame.png", "returned_last_frame.png")
+    ]
+    for path in files:
+        utime(path, (old.timestamp(), old.timestamp()))
+    expected = [path.read_bytes() for path in files]
+
+    api = SeedanceAPI(project_api=FakeProjectAPI(), client_factory=lambda _: object())
+    try:
+        api.set_window(None)
+        assert api.get_settings()["retention_days"] == 0
+        assert api.clean_cache()["data"]["files_removed"] == 0
+        assert [path.read_bytes() for path in files] == expected
+    finally:
+        api.shutdown()
 
 
 def test_download_writes_valid_video_and_returned_last_frame_atomically(
@@ -248,6 +279,7 @@ def test_cache_status_counts_all_task_files_but_only_eligible_assets_as_clearabl
 ):
     old = _succeeded_task(repository, task)
     (repository.cache_root / "tasks" / old.local_id / "output" / "video.mp4").write_bytes(b"old-video")
+    old_preview = _old_image(repository, old)
     active = repository.create_draft(
         SeedanceRequest(first_frame=repository.resolve_asset(old.local_id, old.input_paths["first_frame"]))
     )
@@ -268,6 +300,7 @@ def test_cache_status_counts_all_task_files_but_only_eligible_assets_as_clearabl
     )
     protected = _succeeded_task(repository, protected, handoffs=[{"project_id": "project-1"}])
     (repository.cache_root / "tasks" / protected.local_id / "output" / "video.mp4").write_bytes(b"protected")
+    _old_image(repository, protected)
     cache_manager = CacheManager(repository, FakeProjectAPI({"project-1"}))
 
     status = cache_manager.status()
@@ -281,25 +314,45 @@ def test_cache_status_counts_all_task_files_but_only_eligible_assets_as_clearabl
         "total_bytes": expected_total,
         "task_count": 4,
         "protected_task_count": 1,
-        "clearable_bytes": _asset_bytes(repository, old),
+        "clearable_bytes": old_preview.stat().st_size,
     }
 
 
-def test_cleanup_uses_finished_at_cutoff_and_preserves_task_metadata(repository: TaskRepository, task: SeedanceTask):
+def test_cleanup_preserves_originals(repository: TaskRepository, task: SeedanceTask):
     old = _succeeded_task(repository, task)
     old_dir = repository.cache_root / "tasks" / old.local_id
-    (old_dir / "output" / "video.mp4").write_bytes(b"old-video")
-    (old_dir / "output" / "video.mp4.part").write_bytes(b"partial")
-    released = _asset_bytes(repository, old)
+    originals = [
+        old_dir / old.input_paths["first_frame"],
+        _write_image(old_dir / "input" / "last_frame.png"),
+        _old_image(repository, old, "returned_last_frame.png"),
+        _old_image(repository, old, "unknown.png"),
+        old_dir / "output" / "video.mp4",
+        old_dir / "output" / "video.mp4.part",
+    ]
+    originals[-2].write_bytes(b"old-video")
+    originals[-1].write_bytes(b"partial")
+    originals_before = {path: path.read_bytes() for path in originals}
+    old = repository.update(
+        old.local_id,
+        lambda current: (
+            setattr(current, "download_status", "downloaded"),
+            current.output_paths.update(video="output/video.mp4", returned_last_frame="output/returned_last_frame.png"),
+        ),
+    )
+    preview = _old_image(repository, old)
+    continuation = _old_image(repository, old, "continuation_frame.png")
+    new_preview = _write_image(old_dir / "output" / "thumbnail.png")
+    released = preview.stat().st_size + continuation.stat().st_size
     recent = repository.create_draft(
         SeedanceRequest(first_frame=repository.resolve_asset(old.local_id, old.input_paths["first_frame"]))
     )
     recent = _succeeded_task(repository, recent, finished_at=(datetime.now(UTC) - timedelta(days=6)).isoformat())
-    (repository.cache_root / "tasks" / recent.local_id / "output" / "video.mp4").write_bytes(b"recent")
+    recent_task_preview = _old_image(repository, recent)
     active = repository.create_draft(
         SeedanceRequest(first_frame=repository.resolve_asset(old.local_id, old.input_paths["first_frame"]))
     )
     (repository.cache_root / "tasks" / active.local_id / "output" / "partial.part").write_bytes(b"active")
+    active_preview = _old_image(repository, active)
     unknown = repository.create_draft(
         SeedanceRequest(first_frame=repository.resolve_asset(old.local_id, old.input_paths["first_frame"]))
     )
@@ -317,21 +370,25 @@ def test_cleanup_uses_finished_at_cutoff_and_preserves_task_metadata(repository:
 
     stored = repository.get(old.local_id)
     assert result == {
-        "files_removed": 3,
+        "files_removed": 2,
         "bytes_released": released,
         "tasks_cleared": 1,
         "protected_tasks_skipped": 0,
     }
-    assert stored.download_status == "cleared"
-    assert stored.cache_status == "cleared"
+    assert stored.download_status == "downloaded"
+    assert stored.cache_status == "complete"
+    assert stored.output_paths == old.output_paths
     assert stored.request["prompt"] == "keep me"
     assert stored.remote["usage"] == {"total_tokens": 12}
     assert stored.error == {"code": "previous", "message": "preserve this"}
     assert stored.handoffs == []
     assert (old_dir / "task.json").exists()
-    assert not any(path.is_file() for path in (old_dir / "input").rglob("*"))
-    assert not any(path.is_file() for path in (old_dir / "output").rglob("*"))
-    assert (repository.cache_root / "tasks" / recent.local_id / "output" / "video.mp4").exists()
+    assert {path: path.read_bytes() for path in originals} == originals_before
+    assert not preview.exists()
+    assert not continuation.exists()
+    assert new_preview.exists()
+    assert recent_task_preview.exists()
+    assert active_preview.exists()
     assert (repository.cache_root / "tasks" / active.local_id / "output" / "partial.part").exists()
     assert (repository.cache_root / "tasks" / unknown.local_id / "output" / "partial.part").exists()
 
@@ -341,25 +398,29 @@ def test_cleanup_keeps_task_json_and_skips_protected(repository: TaskRepository,
     protected_dir = repository.cache_root / "tasks" / protected.local_id
     video_path = protected_dir / "output" / "video.mp4"
     video_path.write_bytes(b"protected")
+    preview = _old_image(repository, protected)
     cache_manager = CacheManager(repository, FakeProjectAPI({"project-1"}))
 
     result = cache_manager.clean(older_than_days=7)
 
     assert result["protected_tasks_skipped"] == 1
+    assert preview.exists()
     assert video_path.exists()
     assert (protected_dir / "task.json").exists()
 
 
-def test_cleanup_can_explicitly_clear_protected_task(repository: TaskRepository, task: SeedanceTask):
+def test_cleanup_override_removes_only_derived_images(repository: TaskRepository, task: SeedanceTask):
     protected = _succeeded_task(repository, task, handoffs=[{"project_id": "project-1"}])
     video_path = repository.cache_root / "tasks" / protected.local_id / "output" / "video.mp4"
     video_path.write_bytes(b"protected")
+    preview = _old_image(repository, protected)
 
     result = CacheManager(repository, FakeProjectAPI({"project-1"})).clean(older_than_days=7, allow_protected=True)
 
     assert result["protected_tasks_skipped"] == 0
-    assert not video_path.exists()
-    assert repository.get(protected.local_id).cache_status == "cleared"
+    assert not preview.exists()
+    assert video_path.exists()
+    assert repository.get(protected.local_id).cache_status == "complete"
 
 
 def test_cleanup_does_not_follow_an_asset_directory_symlink(
@@ -369,10 +430,10 @@ def test_cleanup_does_not_follow_an_asset_directory_symlink(
     task_dir = repository.cache_root / "tasks" / task.local_id
     external_dir = tmp_path / "external"
     external_dir.mkdir()
-    external_file = external_dir / "outside.png"
+    external_file = external_dir / "thumbnail.png"
     external_file.write_bytes(b"outside")
-    rmtree(task_dir / "input")
-    (task_dir / "input").symlink_to(external_dir, target_is_directory=True)
+    rmtree(task_dir / "output")
+    (task_dir / "output").symlink_to(external_dir, target_is_directory=True)
 
     result = CacheManager(repository, FakeProjectAPI()).clean(older_than_days=7)
 
@@ -380,7 +441,7 @@ def test_cleanup_does_not_follow_an_asset_directory_symlink(
     assert external_file.exists()
 
 
-def test_cache_ignores_task_directory_aliased_as_input_root(
+def test_cache_ignores_task_directory_aliased_as_output_root(
     repository: TaskRepository, task: SeedanceTask, monkeypatch: pytest.MonkeyPatch
 ):
     task = _succeeded_task(repository, task)
@@ -388,8 +449,8 @@ def test_cache_ignores_task_directory_aliased_as_input_root(
     task_json = task_dir / "task.json"
     lock_path = task_dir / ".task.lock"
     lock_path.touch()
-    rmtree(task_dir / "input")
-    (task_dir / "input").symlink_to(task_dir, target_is_directory=True)
+    rmtree(task_dir / "output")
+    (task_dir / "output").symlink_to(task_dir, target_is_directory=True)
     monkeypatch.setattr(repository, "task_lock", lambda local_id: nullcontext())
     cache_manager = CacheManager(repository, FakeProjectAPI())
 
@@ -413,6 +474,7 @@ def test_cleanup_skips_assets_while_a_download_claim_is_in_progress(
     part_path = task_dir / "output" / "video.mp4.part"
     video_path.write_bytes(_video_bytes(tmp_path / "completed.mp4"))
     part_path.write_bytes(b"in-progress-download")
+    preview = _old_image(repository, task)
     cache_manager = CacheManager(repository, FakeProjectAPI())
 
     status = cache_manager.status()
@@ -425,6 +487,7 @@ def test_cleanup_skips_assets_while_a_download_claim_is_in_progress(
     assert repository.get(task.local_id).download_status == "downloading"
     assert video_path.exists()
     assert part_path.exists()
+    assert preview.exists()
 
 
 def test_downloader_does_not_finalize_a_claim_cleared_during_download(

@@ -79,6 +79,20 @@ def test_removed_default_fps_is_ignored():
     assert "default_fps" not in merge_app_config({"default_fps": 24})
 
 
+def test_legacy_seedance_retention_stays_disabled_on_load_and_save(runtime_config_path: Path):
+    legacy = {"retention_days": 90, "last_cleanup_at": "2026-01-01T00:00:00Z", "default_duration": 6}
+    runtime_config_path.parent.mkdir(parents=True, exist_ok=True)
+    runtime_config_path.write_text(json.dumps({"seedance": legacy}), encoding="utf-8")
+
+    loaded = load_app_config()["seedance"]
+    saved = save_app_config({"seedance": legacy})["seedance"]
+
+    for settings in (loaded, saved):
+        assert settings["retention_days"] == 0
+        assert settings["last_cleanup_at"] is None
+        assert settings["default_duration"] == 6
+
+
 def test_paid_generation_confirmation_defaults_on_and_can_be_disabled(runtime_config_path: Path):
     assert load_app_config()["paid_generation_confirmation_enabled"] is True
 

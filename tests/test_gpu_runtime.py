@@ -5,16 +5,35 @@ import pytest
 from backend.core.gpu_runtime import activate_runtime, runtime_status
 
 
-@pytest.mark.parametrize("model", ["birefnet-lite-onnx", "birefnet-standard-onnx"])
+def test_windows_bundle_uses_runtime_beside_executable_and_honors_override(monkeypatch, tmp_path):
+    from backend.core.gpu_runtime import runtime_cache_dir
+
+    install_dir = tmp_path / "自定义 GAM 安装"
+    launch_dir = tmp_path / "launch"
+    launch_dir.mkdir()
+    monkeypatch.chdir(launch_dir)
+    monkeypatch.setattr("sys.platform", "win32")
+    monkeypatch.setattr("sys.frozen", True, raising=False)
+    monkeypatch.setattr("sys.executable", str(install_dir / "game-assets-maker.exe"))
+    monkeypatch.delenv("GAM_DATA_MODE", raising=False)
+    monkeypatch.delenv("GAM_DATA_ROOT", raising=False)
+
+    assert runtime_cache_dir() == install_dir / "runtime" / "cuda13-cp312" / "wheels"
+
+    override = tmp_path / "GPU data"
+    monkeypatch.setenv("GAM_DATA_ROOT", str(override))
+    assert runtime_cache_dir() == override / "runtime" / "cuda13-cp312" / "wheels"
+
+
 @pytest.mark.parametrize("mutation", ["delete", "wrong_digest", "wrong_size"])
-def test_gpu_adapter_rejects_changed_model_before_sending_frame(monkeypatch, tmp_path, model, mutation):
+def test_gpu_adapter_rejects_changed_model_before_sending_frame(monkeypatch, tmp_path, mutation):
     import sys
 
     import onnxruntime
 
     from backend.api.process_api import ProcessAPI
     from backend.core import birefnet_onnx, gpu_runtime
-    from tests.test_standard_model_workflow import wait_ready
+    from tests.test_onnx_model_workflow import wait_ready
 
     monkeypatch.setattr("sys.platform", "win32")
     monkeypatch.setenv("GAM_DATA_ROOT", str(tmp_path))
@@ -22,9 +41,7 @@ def test_gpu_adapter_rejects_changed_model_before_sending_frame(monkeypatch, tmp
     digest = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
     monkeypatch.setattr(birefnet_onnx, "WEIGHTS_BYTES", 3)
     monkeypatch.setattr(birefnet_onnx, "WEIGHTS_SHA256", digest)
-    monkeypatch.setitem(
-        birefnet_onnx.MODEL_SPECS, model, {"bytes": 3, "sha256": digest, "repository": "fixture", "revision": "fixture"}
-    )
+    model = birefnet_onnx.MODEL_ID
     monkeypatch.setattr(onnxruntime, "InferenceSession", lambda *_args, **_kwargs: object())
     path = birefnet_onnx.model_path(model)
     path.parent.mkdir(parents=True)
@@ -56,7 +73,7 @@ def test_gpu_adapter_rejects_changed_model_before_sending_frame(monkeypatch, tmp
 
 
 @pytest.mark.parametrize("preparation_phase", ["ready", "downloading", "failed"])
-def test_both_models_use_task_device_snapshot_and_close_worker(monkeypatch, tmp_path, preparation_phase):
+def test_lite_uses_task_device_snapshot_and_closes_worker(monkeypatch, tmp_path, preparation_phase):
     import time
 
     from PIL import Image
@@ -106,22 +123,22 @@ def test_both_models_use_task_device_snapshot_and_close_worker(monkeypatch, tmp_
     monkeypatch.setattr(birefnet_onnx, "remove_background", cpu)
     api = ProcessAPI(model_loader=FakeModelLoader(available=True), projects_root=tmp_path)
     try:
-        for model in ["birefnet-lite-onnx", "birefnet-standard-onnx"]:
-            api.preload_model(model)
-            for _ in range(200):
-                if api.get_model_status(model)["phase"] == "ready":
-                    break
-                time.sleep(0.01)
-            for device, alpha in [("cpu", 64), ("gpu", 128)]:
-                task = api.start_processing("hero/idle", 2, {"model": model})
-                api.tasks[task].future.result(timeout=5)
-                assert api.get_task_status(task)["status"] == "completed"
-                assert api.get_task_status(task)["execution_device"] == device
-                assert calls[-2:] == [(device, model), (device, model)]
-                with Image.open(project / "output/02_no_bg/1.png") as result:
-                    assert result.size == (24, 16) and result.getpixel((0, 0))[3] == alpha
-                assert api.get_step_params("hero/idle", 2)["result_model"] == model
-        assert len(closed) == 2
+        model = birefnet_onnx.MODEL_ID
+        api.preload_model(model)
+        for _ in range(200):
+            if api.get_model_status(model)["phase"] == "ready":
+                break
+            time.sleep(0.01)
+        for device, alpha in [("cpu", 64), ("gpu", 128)]:
+            task = api.start_processing("hero/idle", 2, {"model": model})
+            api.tasks[task].future.result(timeout=5)
+            assert api.get_task_status(task)["status"] == "completed"
+            assert api.get_task_status(task)["execution_device"] == device
+            assert calls[-2:] == [(device, model), (device, model)]
+            with Image.open(project / "output/02_no_bg/1.png") as result:
+                assert result.size == (24, 16) and result.getpixel((0, 0))[3] == alpha
+            assert api.get_step_params("hero/idle", 2)["result_model"] == model
+        assert len(closed) == 1
     finally:
         api.shutdown()
 

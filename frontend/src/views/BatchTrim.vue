@@ -37,18 +37,20 @@
           >
             <button
               type="button"
+              class="control-tooltip"
               :class="{ active: trimMode === 'global' }"
               :aria-pressed="trimMode === 'global'"
-              :title="t('batchTrim.uniformSizeDesc')"
+              :data-tooltip="t('batchTrim.uniformSizeDesc')"
               @click="trimMode = 'global'"
             >
               {{ t('batchTrim.uniformSize') }}
             </button>
             <button
               type="button"
+              class="control-tooltip"
               :class="{ active: trimMode === 'individual' }"
               :aria-pressed="trimMode === 'individual'"
-              :title="t('batchTrim.tightCropDesc')"
+              :data-tooltip="t('batchTrim.tightCropDesc')"
               @click="trimMode = 'individual'"
             >
               {{ t('batchTrim.tightCrop') }}

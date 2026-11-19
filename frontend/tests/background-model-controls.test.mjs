@@ -11,7 +11,7 @@ test('Step 2 uses segmented model controls and shows only U2Net alpha-matting se
   const u2net = html.match(/<button[^>]*data-test="background-model-u2net"[^>]*>/)?.[0];
   const birefnet = html.match(/<button[^>]*data-test="background-model-birefnet-comfy"[^>]*>/)?.[0];
 
-  const modelGroup = html.match(/<div[^>]*role="group"[^>]*aria-label="去背模型"[\s\S]*?<\/div>/)?.[0];
+  const modelGroup = html.match(/<div[^>]*role="group"[^>]*aria-label="抠图模型"[\s\S]*?<\/div>/)?.[0];
 
   assert.ok(modelGroup, 'models use a segmented control group');
   assert.ok(u2net, 'U2Net has a segmented model button');
@@ -41,7 +41,7 @@ test('segmented model choices remain disabled during processing', async () => {
   }
 });
 
-for (const model of ['birefnet-comfy', 'birefnet-standard-onnx']) {
+for (const model of ['birefnet-comfy', 'birefnet-lite-onnx']) {
   test(`${model} submission keeps defringe settings and resets every hidden parameter`, async () => {
     const project = {
       id: 'hero/idle', role: 'hero', action: 'idle', name: 'idle', path: '/projects/hero/idle',
@@ -201,22 +201,22 @@ test('U2Net submission keeps alpha-matting settings and resets every hidden para
 });
 
 
-test('Windows offers both FP16 models and switches their edge controls', async () => {
+test('Windows offers Lite FP16 and U2-Net and rejects the removed model', async () => {
   let bindings;
   const html = await renderSfc('views/Editor/Step2Background.vue', {
     piniaState: {
-      config: { config: { background_models: ['u2net', 'birefnet-standard-onnx', 'birefnet-lite-onnx'], processing: { background_model: 'birefnet-lite-onnx' } } },
+      config: { config: { background_models: ['u2net', 'birefnet-lite-onnx'], processing: { background_model: 'birefnet-lite-onnx' } } },
       process: { s2Params: { model: 'birefnet-lite-onnx', defringe_enabled: false } },
     },
     configureSetup(value) { bindings = value; },
   });
   assert.match(html, /background-model-birefnet-lite-onnx/);
-  assert.match(html, /background-model-birefnet-standard-onnx/);
-  assert.match(html, /BiRefNet Standard FP16/);
+  assert.match(html, /background-model-u2net/);
+  assert.doesNotMatch(html, /background-model-birefnet-standard-onnx|BiRefNet Standard FP16/);
   assert.doesNotMatch(html, /background-model-birefnet-comfy/);
   assert.match(html, /边缘去色/);
   bindings.setModel('birefnet-standard-onnx');
-  assert.equal(bindings.selectedModel.value, 'birefnet-standard-onnx');
+  assert.equal(bindings.selectedModel.value, 'birefnet-lite-onnx');
   bindings.setModel('u2net');
   assert.equal(bindings.selectedModel.value, 'u2net');
   bindings.setModel('birefnet-lite-onnx');
@@ -224,22 +224,10 @@ test('Windows offers both FP16 models and switches their edge controls', async (
 });
 
 
-test('standard model displays edge parameters without Alpha Matting', async () => {
-  const html = await renderSfc('views/Editor/Step2Background.vue', {
-    piniaState: {
-      config: { config: { background_models: ['u2net', 'birefnet-standard-onnx', 'birefnet-lite-onnx'] } },
-      process: { s2Params: { model: 'birefnet-standard-onnx', defringe_enabled: false } },
-    },
-  });
-  assert.match(html, /边缘去色/);
-  assert.doesNotMatch(html, /aria-label="Alpha Matting"/);
-});
-
-
-test('standard download card shows pinned decimal size before explicit download', async () => {
+test('Lite download card shows pinned decimal size before explicit download', async () => {
   const html = await renderSfc('components/editor/ModelStatusCard.vue', {
-    props: { status: { model: 'birefnet-standard-onnx', phase: 'needs_download', downloaded_bytes: null, total_bytes: null, error: null } },
+    props: { status: { model: 'birefnet-lite-onnx', phase: 'needs_download', downloaded_bytes: null, total_bytes: null, error: null } },
   });
-  assert.match(html, /489.7 MB/);
+  assert.match(html, /114.5 MB/);
   assert.match(html, /下载模型/);
 });

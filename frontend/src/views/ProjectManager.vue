@@ -234,7 +234,6 @@
                 <button
                   type="button"
                   class="rounded-lg p-2 text-gray-500 transition-colors hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                  :title="t('common.refresh')"
                   :aria-label="t('common.refresh')"
                   @click="loadProjects"
                 >
@@ -247,7 +246,6 @@
                   <MenuButton
                     type="button"
                     class="rounded-lg p-2 text-gray-500 transition-colors hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                    :title="t('projectManager.moreActions')"
                     :aria-label="t('projectManager.moreActions')"
                   >
                     <MoreVertical class="h-4 w-4" />
@@ -405,8 +403,9 @@
                   <button
                     type="button"
                     role="radio"
-                    class="h-full rounded-md px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
+                    class="control-tooltip h-full rounded-md px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
                     :class="trimMode === 'global' ? 'bg-primary/20 text-primary-200 shadow-sm' : 'text-gray-500 hover:text-gray-200'"
+                    :data-tooltip="t('batchTrim.uniformSizeDesc')"
                     :aria-checked="trimMode === 'global'"
                     :disabled="trimmingRole !== null"
                     @click="trimMode = 'global'"
@@ -416,8 +415,9 @@
                   <button
                     type="button"
                     role="radio"
-                    class="h-full rounded-md px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
+                    class="control-tooltip h-full rounded-md px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
                     :class="trimMode === 'individual' ? 'bg-primary/20 text-primary-200 shadow-sm' : 'text-gray-500 hover:text-gray-200'"
+                    :data-tooltip="t('batchTrim.tightCropDesc')"
                     :aria-checked="trimMode === 'individual'"
                     :disabled="trimmingRole !== null"
                     @click="trimMode = 'individual'"
@@ -1537,13 +1537,13 @@ async function openProject(project: Project) {
   try {
     projectStore.setCurrentProject(project);
 
-    // Preload step 1 frames so the editor opens with images ready
-    const response = await api.frame.getFrames(project.id, 1, 1, 500, true);
-    if (response.success && response.frames.length > 0) {
-      playerStore.loadFrames(response.frames);
-      // Urgent preload first 6 frames before switching UI
-      const urgent = response.frames.slice(0, 6);
-      await playerStore.preloadFrames(urgent, 3);
+    // Leave a cleared preview cache for the editor to rebuild with its loading state visible.
+    if (project.steps?.['1']?.data_ready) {
+      const response = await api.frame.getFrames(project.id, 1, 1, 500, true);
+      if (response.success && response.frames.length > 0) {
+        playerStore.loadFrames(response.frames);
+        await playerStore.preloadFrames(response.frames.slice(0, 6), 3);
+      }
     }
 
     router.push('/editor');

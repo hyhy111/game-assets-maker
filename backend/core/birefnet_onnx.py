@@ -9,7 +9,7 @@ import numpy as np
 from PIL import Image, ImageChops
 
 from src.core.resumable_download import Resource, ResumableResourceDownloader
-from src.utils.background_models import LITE_MODEL, STANDARD_MODEL
+from src.utils.background_models import LITE_MODEL
 from src.utils.data_paths import models_root
 
 MODEL_ID = LITE_MODEL
@@ -20,30 +20,13 @@ WEIGHTS_SOURCES = {
     source: f"https://{host}/onnx-community/BiRefNet_lite-ONNX/resolve/{REVISION}/onnx/model_fp16.onnx"
     for source, host in (("modelscope", "modelscope.cn/models"), ("huggingface", "huggingface.co"))
 }
-MODEL_SPECS = {
-    STANDARD_MODEL: {
-        "revision": "7ad37b089f4e810d5a1bb1b08ae9c35435a7d5bd",
-        "bytes": 489_666_272,
-        "sha256": "3654c741eb80bd926ada8fed1713b506ccf8d30eb1f6487e87eb9f234f33df09",
-        "repository": "onnx-community/BiRefNet-ONNX",
-    },
-}
 _LOCK = threading.RLock()
 
 
 def model_spec(model=MODEL_ID):
-    if model == MODEL_ID:
-        return {"bytes": WEIGHTS_BYTES, "sha256": WEIGHTS_SHA256, "sources": WEIGHTS_SOURCES}
-    if model not in MODEL_SPECS:
+    if model != MODEL_ID:
         raise ValueError("Unsupported ONNX background-removal model")
-    spec = MODEL_SPECS[model]
-    return {
-        **spec,
-        "sources": {
-            source: f"https://{host}/{spec['repository']}/resolve/{spec['revision']}/onnx/model_fp16.onnx"
-            for source, host in (("modelscope", "modelscope.cn/models"), ("huggingface", "huggingface.co"))
-        },
-    }
+    return {"bytes": WEIGHTS_BYTES, "sha256": WEIGHTS_SHA256, "sources": WEIGHTS_SOURCES}
 
 
 def model_path(model=MODEL_ID) -> Path:

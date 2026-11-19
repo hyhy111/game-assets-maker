@@ -56,7 +56,6 @@ const APPROXIMATE_MODEL_SIZE_MB: Record<string, number> = {
   u2net: 176,
   'birefnet-comfy': 424,
   'birefnet-lite-onnx': Number((114538221 / 1_000_000).toFixed(1)),
-  'birefnet-standard-onnx': Number((489666272 / 1_000_000).toFixed(1)),
 };
 
 export function modelStatusPresentation(status: ModelStatus): ModelStatusPresentation {
@@ -87,11 +86,10 @@ export function backgroundModelName(model: string): string {
   if (model === 'u2net') return 'U²-Net';
   if (model === 'birefnet-comfy') return 'BiRefNet';
   if (model === 'birefnet-lite-onnx') return 'BiRefNet Lite FP16';
-  if (model === 'birefnet-standard-onnx') return 'BiRefNet Standard FP16';
   return model;
 }
 
 
 export function isBiRefNet(model: string): boolean {
-  return model === 'birefnet-comfy' || model === 'birefnet-lite-onnx' || model === 'birefnet-standard-onnx';
+  return model === 'birefnet-comfy' || model === 'birefnet-lite-onnx';
 }

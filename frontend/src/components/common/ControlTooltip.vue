@@ -27,10 +27,10 @@ let hoverTarget: HTMLElement | null = null;
 let hoverTimer: number | undefined;
 
 function hide() {
+  const element = trigger.value ?? hoverTarget;
   window.clearTimeout(hoverTimer);
   hoverTarget = null;
   hoverTimer = undefined;
-  const element = trigger.value;
   if (element) {
     const descriptions = (element.getAttribute('aria-describedby') || '').split(/\s+/)
       .filter(id => id && id !== 'gam-control-tooltip');
@@ -47,28 +47,12 @@ function hide() {
 
 function show(event: Event) {
   const element = event.target instanceof Element
-    ? event.target.closest<HTMLElement>('.control-tooltip, button[title]') : null;
+    ? event.target.closest<HTMLElement>('.control-tooltip, button[title], a[title]') : null;
   if (!element || element.getAttribute('aria-expanded') === 'true') return;
   const hovering = event.type === 'pointerover';
   if (trigger.value === element || (hovering && hoverTarget === element)) return;
   hide();
-  const delay = hovering ? Number(element.dataset.tooltipDelay) : 0;
-  if (Number.isFinite(delay) && delay > 0) {
-    hoverTarget = element;
-    hoverTimer = window.setTimeout(() => {
-      hoverTarget = null;
-      hoverTimer = undefined;
-      if (element.matches(':hover')) void reveal(element);
-    }, delay);
-    return;
-  }
-  void reveal(element);
-}
-
-async function reveal(element: HTMLElement) {
-  if (!element.isConnected || element.getAttribute('aria-expanded') === 'true') return;
-  const label = element.getAttribute('data-tooltip') || element.getAttribute('aria-label') || element.getAttribute('title');
-  if (!label) return;
+  // Suppress the native tooltip during the delay as well as while our tooltip is visible.
   originalTitle = element.getAttribute('title');
   if (originalTitle !== null) {
     if (!element.hasAttribute('aria-label')) {
@@ -77,9 +61,31 @@ async function reveal(element: HTMLElement) {
     }
     element.removeAttribute('title');
   }
+  const configuredDelay = Number(element.dataset.tooltipDelay ?? 500);
+  const delay = hovering ? (Number.isFinite(configuredDelay) ? configuredDelay : 500) : 0;
+  if (Number.isFinite(delay) && delay > 0) {
+    hoverTarget = element;
+    hoverTimer = window.setTimeout(() => {
+      hoverTimer = undefined;
+      if (element.matches(':hover')) void reveal(element);
+      else hide();
+    }, delay);
+    return;
+  }
+  void reveal(element);
+}
+
+async function reveal(element: HTMLElement) {
+  if (!element.isConnected || element.getAttribute('aria-expanded') === 'true') {
+    hide();
+    return;
+  }
+  const label = element.getAttribute('data-tooltip') || element.getAttribute('aria-label') || element.getAttribute('title');
+  if (!label) return;
   const descriptions = element.getAttribute('aria-describedby');
   element.setAttribute('aria-describedby', [descriptions, 'gam-control-tooltip'].filter(Boolean).join(' '));
   trigger.value = element;
+  hoverTarget = null;
   text.value = label;
   await nextTick();
   if (trigger.value !== element || !tooltip.value) return;

@@ -21,7 +21,7 @@
             playerStore.canvasBgColor === colorKey ? 'border-primary scale-110' : 'border-dark-border hover:border-gray-500'
           ]"
           :style="{ backgroundColor: colorValue }"
-          :title="colorKey"
+          :aria-label="colorKey"
           @click="playerStore.setCanvasBgColor(colorKey)"
         />
       </div>
@@ -249,7 +249,6 @@
         v-if="isProcessing"
         variant="danger"
         block
-        :tooltip="t('common.cancelProcessing')"
         @click="cancelProcessing"
       >
         <Square

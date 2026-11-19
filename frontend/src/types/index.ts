@@ -42,6 +42,14 @@ export interface ProjectRenameResult {
   idMap: Record<string, string>;
 }
 
+export interface PreviewCleanupSummary {
+  project_ids: string[];
+  frame_count: number;
+  bytes: number;
+  skipped: number;
+  failed: number;
+}
+
 export interface RoleSummary {
   name: string;
   projectCount: number;
@@ -195,19 +203,27 @@ export interface AudioSaveResult {
   error?: string;
 }
 
-export type BackgroundRemovalModel = 'u2net' | 'birefnet-comfy' | 'birefnet-lite-onnx' | 'birefnet-standard-onnx';
+export type BackgroundRemovalModel = 'u2net' | 'birefnet-comfy' | 'birefnet-lite-onnx';
 
 export type ModelDownloadSource = 'modelscope' | 'github' | 'huggingface';
 
 export type ModelPhase = 'needs_download' | 'paused' | 'verifying' | 'downloading' | 'initializing' | 'ready' | 'failed';
+
+export type GpuDownloadSource = 'aliyun' | 'huawei' | 'pypi';
+
+export interface GpuCompatibility {
+  state: 'compatible' | 'no_nvidia' | 'unsupported' | 'driver' | 'unknown';
+  name?: string;
+}
 
 export interface GpuRuntimeStatus {
   phase: 'needs_download' | 'downloading' | 'verifying' | 'initializing' | 'paused' | 'ready' | 'failed';
   error: { code: string; message: string } | null;
   total_bytes: number;
   downloaded_bytes?: number;
-  source?: 'aliyun' | 'pypi';
+  source?: GpuDownloadSource;
   gpu_ready?: boolean;
+  device?: GpuCompatibility;
 }
 
 export interface ModelStatusError {
@@ -492,8 +508,8 @@ export interface SeedanceSettings {
   default_return_last_frame: boolean;
   default_priority: number;
   default_expires_after: number;
-  retention_days: number;
-  last_cleanup_at: string | null;
+  readonly retention_days: 0;
+  readonly last_cleanup_at: null;
 }
 
 export type SeedanceSettingsUpdate = Partial<Omit<SeedanceSettings, 'api_key_configured'>> & {

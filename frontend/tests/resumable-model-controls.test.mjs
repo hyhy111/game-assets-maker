@@ -35,12 +35,12 @@ test('Windows pause and verification text leave Mac download controls intact', a
 });
 
 
-test('Standard displays the same decimal download size before and during preparation', async () => {
+test('Lite displays the same decimal download size before and during preparation', async () => {
   for (const phase of ['needs_download', 'downloading', 'paused']) {
     const html = await renderSfc('components/editor/ModelStatusCard.vue', {
-      props: { status: { model: 'birefnet-standard-onnx', phase, source: 'huggingface', downloaded_bytes: 1000000, total_bytes: 489666272, error: null } },
+      props: { status: { model: 'birefnet-lite-onnx', phase, source: 'huggingface', downloaded_bytes: 1000000, total_bytes: 114538221, error: null } },
     });
-    assert.match(html, /489.7 MB/);
+    assert.match(html, /114.5 MB/);
     if (phase !== 'downloading') assert.match(html, /Hugging Face/);
     assert.doesNotMatch(html, /PyPI/);
   }

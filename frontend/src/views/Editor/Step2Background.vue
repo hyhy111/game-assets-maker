@@ -46,6 +46,7 @@
       v-if="selectedModel.endsWith('-onnx')"
       :model="selectedModel"
       :model-ready="modelStatus.phase === 'ready'"
+      :cpu-running="taskStatus?.step === 2 && taskStatus.status === 'running' && taskStatus.execution_device === 'cpu'"
     />
 
     <!-- Canvas Background Color Selector -->
@@ -60,7 +61,7 @@
             playerStore.canvasBgColor === colorKey ? 'border-primary scale-110' : 'border-dark-border hover:border-gray-500'
           ]"
           :style="{ backgroundColor: colorValue }"
-          :title="colorKey"
+          :aria-label="colorKey"
           @click="playerStore.setCanvasBgColor(colorKey)"
         />
       </div>
@@ -309,7 +310,6 @@
         v-if="isProcessing"
         variant="danger"
         block
-        :tooltip="t('common.cancelProcessing')"
         @click="cancelProcessing"
       >
         <Square
@@ -354,7 +354,7 @@ const modelOptions = computed(() => [...(configStore.config?.background_models ?
   .reverse().map(value => ({ value, label: backgroundModelName(value) })));
 
 function setModel(value: string | number) {
-  if ((value === 'u2net' || value === 'birefnet-comfy' || value === 'birefnet-lite-onnx' || value === 'birefnet-standard-onnx')
+  if ((value === 'u2net' || value === 'birefnet-comfy' || value === 'birefnet-lite-onnx')
     && modelOptions.value.some(option => option.value === value)) s2Params.value.model = value;
 }
 

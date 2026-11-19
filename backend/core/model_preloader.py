@@ -13,13 +13,12 @@ from backend.core import birefnet, birefnet_onnx
 from src.core.model_download import ModelDownloadCancelledError
 from src.core.rembg_model import U2NET_SOURCES
 from src.utils.app_config import load_app_config, save_app_config
-from src.utils.background_models import LITE_MODEL, STANDARD_MODEL, background_models
+from src.utils.background_models import LITE_MODEL, background_models
 
 MODEL_SOURCES = {
     "u2net": U2NET_SOURCES.keys(),
     birefnet.MODEL_ID: birefnet.WEIGHTS_SOURCES.keys(),
     birefnet_onnx.MODEL_ID: birefnet_onnx.WEIGHTS_SOURCES.keys(),
-    STANDARD_MODEL: birefnet_onnx.model_spec(STANDARD_MODEL)["sources"].keys(),
 }
 
 
@@ -93,7 +92,7 @@ class RembgModelLoader:
 
 class BackgroundModelLoader(RembgModelLoader):
     def recovery_status(self, model):
-        if model in (LITE_MODEL, STANDARD_MODEL):
+        if model == LITE_MODEL:
             return birefnet_onnx.resource_downloader(model).state()
         return {}
 
@@ -106,17 +105,17 @@ class BackgroundModelLoader(RembgModelLoader):
     def remember_source(self, model, source):
         if sys.platform == "win32":
             save_app_config({"model_download_source": source})
-        if model in (LITE_MODEL, STANDARD_MODEL):
+        if model == LITE_MODEL:
             birefnet_onnx.resource_downloader(model).remember_source(source)
 
     def download_verifiable(self, model, progress, source, cancel_event, verifying):
-        if model in (LITE_MODEL, STANDARD_MODEL):
+        if model == LITE_MODEL:
             birefnet_onnx.download_weights(progress, source, cancel_event, model=model, verifying=verifying)
         else:
             self.download(model, progress, source, cancel_event)
 
     def is_available(self, model: str) -> bool:
-        if model in (LITE_MODEL, STANDARD_MODEL):
+        if model == LITE_MODEL:
             return birefnet_onnx.weights_available(model)
         if model == birefnet.MODEL_ID:
             return birefnet.weights_available()
@@ -129,7 +128,7 @@ class BackgroundModelLoader(RembgModelLoader):
         source: str,
         cancel_event: threading.Event | None = None,
     ) -> None:
-        if model in (LITE_MODEL, STANDARD_MODEL):
+        if model == LITE_MODEL:
             birefnet_onnx.download_weights(progress, source, cancel_event, model)
         elif model == birefnet.MODEL_ID:
             birefnet.download_weights(progress, source, cancel_event)
@@ -137,7 +136,7 @@ class BackgroundModelLoader(RembgModelLoader):
             super().download(model, progress, source, cancel_event)
 
     def initialize(self, model: str) -> None:
-        if model in (LITE_MODEL, STANDARD_MODEL):
+        if model == LITE_MODEL:
             birefnet_onnx.get_session(model)
         elif model == birefnet.MODEL_ID:
             birefnet.get_session()
@@ -177,7 +176,7 @@ class ModelPreloader:
                     if phase == "needs_download" and recovery.get("downloaded_bytes"):
                         self._statuses[model]["phase"] = "paused"
             if (
-                model in (LITE_MODEL, STANDARD_MODEL)
+                model == LITE_MODEL
                 and self._statuses[model]["phase"] == "ready"
                 and not self._loader.is_available(model)
             ):
@@ -205,7 +204,7 @@ class ModelPreloader:
                 return status
             if source is not None:
                 getattr(self._loader, "remember_source", lambda *_: None)(model, source)
-                if model in (LITE_MODEL, STANDARD_MODEL):
+                if model == LITE_MODEL:
                     self._publish(model, source=source)
             phase: ModelPhase = "downloading" if needs_download else "initializing"
             status = self._publish(model, phase=phase, downloaded_bytes=None, total_bytes=None, error=None)
@@ -258,7 +257,7 @@ class ModelPreloader:
             self._loader.initialize(model)
             self._publish(model, phase="ready", error=None)
         except ModelDownloadCancelledError:
-            if model in (LITE_MODEL, STANDARD_MODEL):
+            if model == LITE_MODEL:
                 self._publish(model, phase="paused", error=None)
             else:
                 self._publish(model, phase="needs_download", downloaded_bytes=None, total_bytes=None, error=None)

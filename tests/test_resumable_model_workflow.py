@@ -258,82 +258,21 @@ def test_modified_partial_is_restarted_instead_of_appended(model, monkeypatch):
         api.shutdown()
 
 
-def test_model_category_source_shared_between_models_and_filtered_for_u2net(model, monkeypatch):
+def test_model_source_is_remembered_and_filtered_for_u2net(model, monkeypatch):
     monkeypatch.setattr("requests.get", lambda *_a, **_k: Response(b"abc"))
     api = ProcessAPI(projects_root=model)
     try:
-        assert api.get_model_status("birefnet-standard-onnx")["phase"] == "needs_download"
+        with pytest.raises(ValueError, match="source"):
+            api.preload_model(MODEL, source="pypi")
         api.preload_model(MODEL, source="huggingface")
         assert wait(api)["phase"] == "ready"
-        assert api.get_model_status("birefnet-standard-onnx")["source"] == "huggingface"
-        assert api.preload_model("birefnet-standard-onnx")["source"] == "huggingface"
         assert api.get_model_status("u2net")["source"] == "modelscope"
-        with pytest.raises(ValueError):
-            api.preload_model("birefnet-standard-onnx", source="pypi")
     finally:
         api.shutdown()
     api = ProcessAPI(projects_root=model)
     try:
-        assert api.get_model_status("birefnet-standard-onnx")["source"] == "huggingface"
-        assert api.preload_model("birefnet-standard-onnx")["phase"] == "needs_download"
         assert api.get_model_status(MODEL)["source"] == "huggingface"
-    finally:
-        api.shutdown()
-
-
-def test_standard_resume_uses_its_own_identity_and_preserves_lite(model, monkeypatch):
-    import hashlib
-
-    standard = "birefnet-standard-onnx"
-    monkeypatch.setitem(
-        birefnet_onnx.MODEL_SPECS,
-        standard,
-        {
-            "bytes": 3,
-            "sha256": hashlib.sha256(b"xyz").hexdigest(),
-            "revision": "fixture",
-            "repository": "onnx-community/BiRefNet-ONNX",
-        },
-    )
-    responses = iter(
-        [
-            Response(b"abc"),
-            Response(b"x", interrupt=True),
-            Response(b"yz", 206, {"ETag": '"abc-v1"', "Content-Range": "bytes 1-2/3"}),
-        ]
-    )
-    calls = []
-
-    def get(url, **kwargs):
-        calls.append((url, kwargs["headers"]))
-        return next(responses)
-
-    def standard_status(api, phases):
-        for _ in range(400):
-            status = api.get_model_status(standard)
-            if status["phase"] in phases:
-                return status
-            time.sleep(0.005)
-        raise AssertionError(status)
-
-    monkeypatch.setattr("requests.get", get)
-    api = ProcessAPI(projects_root=model)
-    try:
-        api.preload_model(MODEL, source="huggingface")
+        api.preload_model(MODEL)
         assert wait(api)["phase"] == "ready"
-        api.preload_model(standard, source="huggingface")
-        assert standard_status(api, ("failed",))["downloaded_bytes"] == 1
-    finally:
-        api.shutdown()
-    api = ProcessAPI(projects_root=model)
-    try:
-        assert api.get_model_status(standard)["phase"] == "paused"
-        assert api.get_model_status(standard)["source"] == "huggingface"
-        api.retry_model(standard, source="modelscope")
-        assert standard_status(api, ("ready", "failed"))["phase"] == "ready"
-        assert calls[-1][1]["Range"] == "bytes=1-"
-        assert "/BiRefNet-ONNX/" in calls[-1][0]
-        assert birefnet_onnx.model_path(standard).read_bytes() == b"xyz"
-        assert birefnet_onnx.model_path().read_bytes() == b"abc"
     finally:
         api.shutdown()

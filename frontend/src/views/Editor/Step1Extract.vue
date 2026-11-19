@@ -153,7 +153,6 @@
         v-if="isProcessing"
         variant="danger"
         block
-        :tooltip="t('common.cancelProcessing')"
         @click="cancelProcessing"
       >
         <Square

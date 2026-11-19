@@ -174,7 +174,7 @@ for (const editing of [false, true]) {
       };
       assert.equal(press(' ').defaultPrevented,true);
       assert.equal(playToggles,1);
-      assert.equal(press(' ',{repeat:true}).defaultPrevented,undefined);
+      assert.equal(press(' ',{repeat:true}).defaultPrevented,true);
       assert.equal(playToggles,1);
       const zoom = store.zoom;
       press('ArrowUp'); assert.equal(store.zoom,zoom * 1.2);
@@ -183,6 +183,48 @@ for (const editing of [false, true]) {
       handleKeyup({key:'ArrowRight'});
       press('ArrowLeft'); assert.equal(store.currentIndex,1);
       handleKeyup({key:'ArrowLeft'});
+    } finally {
+      if (previousElement === undefined) delete globalThis.Element;
+      else globalThis.Element = previousElement;
+    }
+  });
+}
+
+for (const editing of [false, true]) {
+  test(`Space toggles playback after a button receives focus in ${editing ? 'retouch' : 'browse'} mode`, async () => {
+    const {store,props,handleKeydown} = await player(editing);
+    const previousElement = globalThis.Element;
+    globalThis.Element = class {
+      constructor(tagName, parent = null) { this.tagName = tagName; this.parent = parent; }
+      closest(selector) {
+        return selector.split(',').map(s => s.trim()).includes(this.tagName)
+          ? this : this.parent?.closest(selector) ?? null;
+      }
+    };
+    try {
+      let playToggles = 0;
+      store.togglePlay = () => { playToggles += 1; };
+      const press = (target, options = {}) => {
+        const event = {key:' ',target,preventDefault(){ this.defaultPrevented = true; },...options};
+        handleKeydown(event);
+        return event;
+      };
+      const button = new Element('button');
+      for (const target of [button, new Element('svg', button)]) {
+        const before = playToggles;
+        assert.equal(press(target).defaultPrevented,true, 'Space must suppress native button activation');
+        assert.equal(playToggles,before + 1);
+        assert.equal(press(target,{repeat:true}).defaultPrevented,true);
+        assert.equal(playToggles,before + 1, 'holding Space must not toggle again');
+      }
+      const before = playToggles;
+      for (const tag of ['input','textarea','select','[contenteditable="true"]']) {
+        assert.equal(press(new Element(tag)).defaultPrevented,undefined);
+      }
+      press(button,{defaultPrevented:true});
+      props.keyboardDisabled = true;
+      assert.equal(press(button).defaultPrevented,undefined);
+      assert.equal(playToggles,before);
     } finally {
       if (previousElement === undefined) delete globalThis.Element;
       else globalThis.Element = previousElement;

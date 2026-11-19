@@ -122,6 +122,11 @@ class ResumableResourceDownloader:
         # Weak validators and Last-Modified cannot prove byte-for-byte identity.
         if not isinstance(etag, str) or not etag.startswith('"') or not etag.endswith('"'):
             offset = 0
+        # Resolve mirror indexes only when the verified local files cannot satisfy the request.
+        if callable(url):
+            if cancel_event is not None and cancel_event.is_set():
+                raise ModelDownloadCancelledError()
+            url = url()
         for _attempt in range(2):
             if cancel_event is not None and cancel_event.is_set():
                 raise ModelDownloadCancelledError()
