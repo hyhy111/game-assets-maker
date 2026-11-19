@@ -500,3 +500,9 @@ def test_edge_shrink_respects_transparent_holes_and_original_alpha():
     assert refined[2, 4] == 100
     assert refined[2, 2] == 183
     assert not (refined > alpha).any()
+
+
+@pytest.fixture(autouse=True)
+def macos_background_model_compatibility(monkeypatch):
+    """These legacy Comfy workflow cases exercise the retained macOS backend."""
+    monkeypatch.setattr("sys.platform", "darwin")

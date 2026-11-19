@@ -195,11 +195,20 @@ export interface AudioSaveResult {
   error?: string;
 }
 
-export type BackgroundRemovalModel = 'u2net' | 'birefnet-comfy';
+export type BackgroundRemovalModel = 'u2net' | 'birefnet-comfy' | 'birefnet-lite-onnx' | 'birefnet-standard-onnx';
 
 export type ModelDownloadSource = 'modelscope' | 'github' | 'huggingface';
 
-export type ModelPhase = 'needs_download' | 'downloading' | 'initializing' | 'ready' | 'failed';
+export type ModelPhase = 'needs_download' | 'paused' | 'verifying' | 'downloading' | 'initializing' | 'ready' | 'failed';
+
+export interface GpuRuntimeStatus {
+  phase: 'needs_download' | 'downloading' | 'verifying' | 'initializing' | 'paused' | 'ready' | 'failed';
+  error: { code: string; message: string } | null;
+  total_bytes: number;
+  downloaded_bytes?: number;
+  source?: 'aliyun' | 'pypi';
+  gpu_ready?: boolean;
+}
 
 export interface ModelStatusError {
   code: 'MODEL_DOWNLOAD_FAILED' | 'MODEL_INITIALIZATION_FAILED';
@@ -212,6 +221,7 @@ export interface ModelStatus {
   downloaded_bytes: number | null;
   total_bytes: number | null;
   error: ModelStatusError | null;
+  source?: ModelDownloadSource | null;
 }
 
 /**
@@ -293,6 +303,8 @@ export interface BackgroundColor {
 export type ProcessParams = Step1Params | Step2Params | Step3Params;
 
 export interface TaskStatus {
+  execution_device?: 'cpu' | 'gpu';
+  gpu_fallback?: { code: string; message: string } | null;
   success: boolean;
   task_id?: string;
   status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
@@ -308,6 +320,7 @@ export interface TaskStatus {
  * Config types
  */
 export interface AppConfig {
+  background_models?: BackgroundRemovalModel[];
   language: string;
   theme: string;
   logger_enabled: boolean;

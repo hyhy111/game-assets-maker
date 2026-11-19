@@ -291,7 +291,9 @@ export const useProcessStore = defineStore('process', () => {
           progress: detail.progress,
           current: detail.current,
           total: detail.total,
-          error: undefined
+          error: undefined,
+          execution_device: detail.execution_device,
+          gpu_fallback: detail.gpu_fallback
         } as TaskStatus;
       }
     }) as EventListener);

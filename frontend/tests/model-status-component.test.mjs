@@ -61,9 +61,15 @@ test('only step 2 owns the model card and model preparation', async () => {
 });
 
 test('model card keeps the selected source for download and retry', async () => {
-  const source = await readFile(new URL('../src/components/editor/ModelStatusCard.vue', import.meta.url), 'utf8');
-  assert.match(source, /<Select\s+v-model="source"/);
-  assert.match(source, /@click="\$emit\('retry', source\)"/);
+  const selected = [];
+  let bindings;
+  await renderSfc('components/editor/ModelStatusCard.vue', {
+    props: { status: status('needs_download'), onRetry: source => selected.push(source) },
+    configureSetup(value) { bindings = value; },
+  });
+  bindings.source.value = 'github';
+  bindings.requestDownload();
+  assert.deepEqual(selected, ['github']);
 });
 
 

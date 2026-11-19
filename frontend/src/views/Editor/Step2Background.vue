@@ -42,6 +42,12 @@
       @cancel="processStore.cancelModelDownload()"
     />
 
+    <GpuRuntimeCard
+      v-if="selectedModel.endsWith('-onnx')"
+      :model="selectedModel"
+      :model-ready="modelStatus.phase === 'ready'"
+    />
+
     <!-- Canvas Background Color Selector -->
     <div class="space-y-2">
       <label class="block text-sm font-medium text-gray-300">{{ t('step2.previewBgColor') }}</label>
@@ -181,7 +187,7 @@
 
     <!-- Edge Defringe -->
     <div
-      v-if="selectedModel === 'birefnet-comfy'"
+      v-if="isBiRefNet(selectedModel)"
       class="space-y-4"
     >
       <div class="flex items-center justify-between">
@@ -236,6 +242,15 @@
       <p class="text-xs text-gray-500">
         {{ t('step2.processedFrames', { current: taskStatus?.current ?? 0, total: taskStatus?.total ?? 0 }) }}
       </p>
+    </div>
+
+    <div
+      v-if="taskStatus?.step === 2 && taskStatus.gpu_fallback"
+      role="status"
+      class="p-3 text-sm text-warning-400 border border-warning-400/30 rounded-lg"
+    >
+      <p>{{ t(`gpuTask.${taskStatus.gpu_fallback.code}`, t('gpuTask.unknown')) }}</p>
+      <p>{{ t(`gpuTask.${taskStatus.status === 'pending' ? 'running' : taskStatus.status}`) }}</p>
     </div>
 
     <!-- Error Message -->
@@ -319,7 +334,9 @@ import Button from '@/components/common/Button.vue';
 import Switch from '@/components/common/Switch.vue';
 import Input from '@/components/common/Input.vue';
 import ModelStatusCard from '@/components/editor/ModelStatusCard.vue';
-import { backgroundModelName, canStartStep2 } from '@/model-status';
+import GpuRuntimeCard from '@/components/editor/GpuRuntimeCard.vue';
+import { useConfigStore } from '@/stores/config';
+import { backgroundModelName, canStartStep2, isBiRefNet } from '@/model-status';
 
 const projectStore = useProjectStore();
 const processStore = useProcessStore();
@@ -332,13 +349,13 @@ const isStepCompleted = computed(() => projectStore.isStepCompleted(2));
 
 const step1Completed = computed(() => projectStore.isStepCompleted(1));
 const stepStatus = computed(() => projectStore.currentProject?.steps?.['2']);
-const modelOptions = computed(() => [
-  { value: 'birefnet-comfy', label: t('step2.recommendedModel', { model: backgroundModelName('birefnet-comfy') }) },
-  { value: 'u2net', label: backgroundModelName('u2net') },
-]);
+const configStore = useConfigStore();
+const modelOptions = computed(() => [...(configStore.config?.background_models ?? ['u2net', 'birefnet-comfy'])]
+  .reverse().map(value => ({ value, label: backgroundModelName(value) })));
 
 function setModel(value: string | number) {
-  if (value === 'u2net' || value === 'birefnet-comfy') s2Params.value.model = value;
+  if ((value === 'u2net' || value === 'birefnet-comfy' || value === 'birefnet-lite-onnx' || value === 'birefnet-standard-onnx')
+    && modelOptions.value.some(option => option.value === value)) s2Params.value.model = value;
 }
 
 const canProcess = computed(() => !isProcessing.value && visibleParamsValid.value
@@ -400,7 +417,7 @@ async function startProcessing() {
   params.alpha_threshold = step2Defaults.alpha_threshold;
   params.min_foreground_area = step2Defaults.min_foreground_area;
   params.fill_holes_max_size = step2Defaults.fill_holes_max_size;
-  if (selectedModel.value === 'birefnet-comfy') {
+  if (isBiRefNet(selectedModel.value)) {
     params.alpha_matting = step2Defaults.alpha_matting;
     params.alpha_matting_erode_size = step2Defaults.alpha_matting_erode_size;
     params.alpha_matting_background_threshold = step2Defaults.alpha_matting_background_threshold;

@@ -917,7 +917,13 @@ const retentionOptions = computed(() => [
 // source-evaluation tests run this setup without module imports.
 const backgroundModelOptions = computed(() => [
   { value: 'u2net', label: 'U²-Net' },
-  { value: 'birefnet-comfy', label: 'BiRefNet' },
+  ...(configStore.config?.background_models?.includes('birefnet-lite-onnx')
+    ? [
+      { value: 'birefnet-lite-onnx', label: 'BiRefNet Lite FP16' },
+      ...(configStore.config?.background_models?.includes('birefnet-standard-onnx')
+        ? [{ value: 'birefnet-standard-onnx', label: 'BiRefNet Standard FP16' }] : []),
+    ]
+    : [{ value: 'birefnet-comfy', label: 'BiRefNet' }]),
 ]);
 const currentSnapshot = computed(() => JSON.stringify({
   app: { ...appDraft },

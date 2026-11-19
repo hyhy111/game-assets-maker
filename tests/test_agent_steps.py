@@ -36,7 +36,7 @@ def test_save_merges_existing_values_and_preserves_other_steps(controller):
     [
         (1, {"frame_interval": True}),
         (1, {"start_frame": 5, "end_frame": 2}),
-        (2, {"alpha_matting_background_threshold": 250}),
+        (2, {"model": "u2net", "alpha_matting_background_threshold": 250}),
         (3, {"green_intensity": 6}),
         (3, {"align_h": 1}),
         (3, {"processed": True}),

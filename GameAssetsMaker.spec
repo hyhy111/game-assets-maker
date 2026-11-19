@@ -1,5 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 import sys
+import subprocess
 import tomllib
 from pathlib import Path
 
@@ -19,13 +20,26 @@ if sys.platform == 'darwin':
     from PyInstaller.building.osx import BUNDLE
 
 APP_DISPLAY_NAME = 'Game Assets Maker'
+# Keep the existing macOS collections and exclude the retired Windows backend.
+WINDOWS_BACKEND_EXCLUDES = (
+    ['torch', 'torchvision', 'safetensors', 'timm', 'einops', 'kornia',
+     'kornia_rs', 'functorch', 'torchgen'] if sys.platform == 'win32' else []
+)
+if sys.platform == 'win32':
+    subprocess.run([
+        sys.executable, '-m', 'PyInstaller', '--noconfirm',
+        '--distpath', str(Path(SPECPATH) / 'build/gpu-worker-dist'),
+        '--workpath', str(Path(SPECPATH) / 'build/gpu-worker-build'),
+        str(Path(SPECPATH) / 'GpuWorker.spec'),
+    ], check=True, cwd=SPECPATH)
 with (Path(SPECPATH) / 'pyproject.toml').open('rb') as stream:
     APP_VERSION = tomllib.load(stream)['project']['version']
 
 a = Analysis(
     ['backend/__main__.py'],
     pathex=['.'],
-    binaries=collect_dynamic_libs('torchvision', search_patterns=['*.dll', '*.dylib', '*.so', '*.pyd']),
+    binaries=[] if sys.platform == 'win32' else collect_dynamic_libs(
+        'torchvision', search_patterns=['*.dll', '*.dylib', '*.so', '*.pyd']),
     datas=[
         ('pyproject.toml', '.'),
         ('frontend/dist', 'frontend/dist'),
@@ -33,7 +47,8 @@ a = Analysis(
         ('src/core', 'src/core'),
         ('src/utils', 'src/utils'),
         ('icon', 'icon'),
-    ] + copy_metadata('rembg') + copy_metadata('pymatting') + collect_data_files('certifi'),
+    ] + ([('build/gpu-worker-dist/gpu-worker', 'gpu-worker')] if sys.platform == 'win32' else [])
+    + copy_metadata('rembg') + copy_metadata('pymatting') + collect_data_files('certifi'),
     hiddenimports=[
         'rembg',
         'rembg.session_factory',
@@ -43,10 +58,9 @@ a = Analysis(
         'PIL',
         'numpy',
         'psd_tools',
-        'safetensors._safetensors_rust',
         'src.core.image_aligning',
         'src.utils.logger',
-    ],
+    ] + (['safetensors._safetensors_rust'] if sys.platform != 'win32' else []),
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -55,7 +69,7 @@ a = Analysis(
         'pytest',
         'matplotlib',
         'pandas',
-    ],
+    ] + WINDOWS_BACKEND_EXCLUDES,
     noarchive=False,
     optimize=0,
 )
@@ -93,7 +107,8 @@ agent_analysis = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=['torch', 'torchvision', 'torchaudio', 'pytest', 'matplotlib', 'pandas'],
+    excludes=['torch', 'torchvision', 'torchaudio', 'pytest', 'matplotlib', 'pandas']
+    + WINDOWS_BACKEND_EXCLUDES,
     noarchive=False,
     optimize=0,
 )

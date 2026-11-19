@@ -44,7 +44,8 @@ from backend.core.video_utils import (
     export_frames_step1,
     selected_frame_indices,
 )
-from src.utils.app_config import default_projects_root
+from src.utils.app_config import default_projects_root, load_app_config
+from src.utils.background_models import background_models, is_birefnet
 from src.utils.data_paths import data_root
 from src.utils.file_operations import rename_path
 
@@ -79,6 +80,10 @@ class Task:
         self.error = None
         self.result = None
         self.cancelled = False
+        self.cancel_event = threading.Event()
+        self.gpu_ready = False
+        self.execution_device = "cpu"
+        self.gpu_fallback = None
         self.committed = False
         self.future: Future | None = None
         self.start_time = None
@@ -97,6 +102,8 @@ class ProcessAPI:
         self._projects_root = projects_root if projects_root is not None else default_projects_root()
         self._window = window  # PyWebView window instance
         self._model_preloader = ModelPreloader(model_loader or BackgroundModelLoader(), self._emit_model_status)
+        self._gpu_prepare_cancel = threading.Event()
+        self._gpu_prepare_future = None
         # JS events are dispatched by one daemon thread: Cocoa's evaluate_js
         # blocks on a semaphore until the main run loop services it, which
         # never happens once the window is destroyed. Executor workers must
@@ -128,6 +135,7 @@ class ProcessAPI:
 
     def _emit_progress(self, task_id: str, progress: int, current: int, total: int, status: str = "running"):
         """Emit progress to frontend via evaluate_js"""
+        task = self.tasks.get(task_id)
         js_code = f"""
             window.dispatchEvent(new CustomEvent('task-progress', {{
                 detail: {{
@@ -135,7 +143,9 @@ class ProcessAPI:
                     progress: {progress},
                     current: {current},
                     total: {total},
-                    status: '{status}'
+                    status: '{status}',
+                    execution_device: {json.dumps(task.execution_device if task else None)},
+                    gpu_fallback: {json.dumps(task.gpu_fallback if task else None)}
                 }}
             }}));
         """
@@ -180,6 +190,14 @@ class ProcessAPI:
 
         task_id = str(uuid.uuid4())
         task = Task(task_id, project_id, step, params)
+        gpu_status = self.get_gpu_runtime_status() if step == 2 and params.get("model", "").endswith("-onnx") else {}
+        task.gpu_ready = (
+            step == 2
+            and sys.platform == "win32"
+            and params.get("model", "").endswith("-onnx")
+            and gpu_status.get("gpu_ready", gpu_status.get("phase") == "ready")
+        )
+        task.execution_device = "gpu" if task.gpu_ready else "cpu"
         self.tasks[task_id] = task
 
         # Submit to thread pool
@@ -326,6 +344,11 @@ class ProcessAPI:
         if not input_dir.is_dir():
             raise ValueError("Step 1 frames not found. Please run Step 1 first.")
 
+        def fallback(error):
+            task.execution_device = "cpu"
+            task.gpu_fallback = error
+            self._emit_progress(task.task_id, task.progress, task.current, task.total)
+
         params = {**self.DEFAULT_STEP_PARAMS[2], **task.params}
         with tempfile.TemporaryDirectory(dir=input_dir.parent, prefix=".step2-") as staging:
             result = batch_remove_background(
@@ -333,6 +356,9 @@ class ProcessAPI:
                 staging,
                 params=params,
                 progress_callback=lambda current, total: self._progress(task, current, total),
+                use_gpu=task.gpu_ready,
+                cancel_event=task.cancel_event,
+                fallback_callback=fallback,
             )
             if not result["total"] or result["success"] != result["total"]:
                 raise RuntimeError(f"Background removal failed ({result['success']}/{result['total']} frames).")
@@ -616,6 +642,8 @@ class ProcessAPI:
             "total": task.total,
             "step": task.step,
             "error": task.error,
+            "execution_device": task.execution_device,
+            "gpu_fallback": task.gpu_fallback,
         }
 
         # Include processing time if task is completed
@@ -635,8 +663,10 @@ class ProcessAPI:
             if not task or task.committed or task.status not in ("pending", "running"):
                 return False
             task.cancelled = True
+            task.cancel_event.set()
             if task.future is None or task.future.cancel():
                 task.status = "cancelled"
+                self._emit_complete(task.task_id, success=False, error="Task cancelled")
             return True
 
     def shutdown(self):
@@ -645,6 +675,10 @@ class ProcessAPI:
             self.cancel_task(task_id)
 
         self._model_preloader.shutdown()
+        self._gpu_prepare_cancel.set()
+        from backend.core.gpu_runtime import close_cancelled_workers
+
+        close_cancelled_workers({self._gpu_prepare_cancel, *(task.cancel_event for task in self.tasks.values())})
 
         # Shutdown executor
         self.executor.shutdown(wait=False)
@@ -665,7 +699,6 @@ class ProcessAPI:
         },
         2: {
             # Step 2: Background removal
-            "model": "u2net",
             "post_process_mask": False,  # apply mask post-processing
             "alpha_matting": True,
             "alpha_matting_erode_size": 5,
@@ -745,10 +778,12 @@ class ProcessAPI:
     def _merge_step_params(self, step: int, config: dict[str, Any]) -> dict[str, Any]:
         saved = config.get(f"step{step}", {})
         params = {**self.DEFAULT_STEP_PARAMS.get(step, {}), **saved}
+        if step == 2 and params.get("model") not in background_models():
+            params["model"] = load_app_config()["processing"]["background_model"]
         if step == 3 and "enabled" not in saved:
             # Absence means no explicit choice; keep the resolved default out of persisted config.
             result_model = config.get("step2", {}).get("result_model", "u2net")
-            params["enabled"] = result_model != "birefnet-comfy"
+            params["enabled"] = not is_birefnet(result_model)
         return params
 
     def _read_step_params(self, project_id: str, step: int, *, migrate: bool = True) -> dict[str, Any]:
@@ -875,6 +910,37 @@ class ProcessAPI:
 
         return {}
 
+    def get_gpu_runtime_status(self) -> dict:
+        from backend.core.gpu_runtime import runtime_status
+
+        return runtime_status()
+
+    def prepare_gpu_runtime(self, model: str = "birefnet-lite-onnx", source: str | None = None) -> dict:
+        from backend.core.gpu_runtime import _status, activate_runtime, prepare_runtime
+
+        validate_background_model(model)
+        if sys.platform != "win32" or not model.endswith("-onnx"):
+            raise ValueError("NVIDIA components are only supported by Windows ONNX models")
+        if source == "tuna":
+            source = "aliyun"
+        if source is not None and source not in {"aliyun", "pypi"}:
+            raise ValueError("Unknown GPU component source")
+        with self._control_lock:
+            if self._gpu_prepare_future is None or self._gpu_prepare_future.done():
+                self._gpu_prepare_cancel.clear()
+                _status("initializing" if source is None else "downloading")
+                self._gpu_prepare_future = self.executor.submit(
+                    activate_runtime if source is None else prepare_runtime,
+                    **({} if source is None else {"source": source}),
+                    model=None if model == "birefnet-lite-onnx" else model,
+                    cancel_event=self._gpu_prepare_cancel,
+                )
+        return self.get_gpu_runtime_status()
+
+    def cancel_gpu_runtime_prepare(self) -> dict:
+        self._gpu_prepare_cancel.set()
+        return self.get_gpu_runtime_status()
+
     def get_model_status(self, model: str = "u2net") -> ModelStatus:
         validate_background_model(model)
         return self._model_preloader.get_status(model)
@@ -889,7 +955,7 @@ class ProcessAPI:
         return self._model_preloader.retry(model, source=source)
 
     def cancel_model_download(self, model: str = "u2net") -> ModelStatus:
-        """Interrupt an in-progress model download and discard its partial file."""
+        """Interrupt a model download; Windows ONNX resources retain resumable progress."""
         validate_background_model(model)
         return self._model_preloader.cancel(model)
 

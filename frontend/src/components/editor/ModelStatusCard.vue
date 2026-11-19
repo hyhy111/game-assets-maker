@@ -47,7 +47,7 @@
           variant="secondary"
           @click="$emit('cancel')"
         >
-          {{ t('modelStatus.cancel') }}
+          {{ t(status.model.endsWith('-onnx') ? 'modelStatus.pause' : 'modelStatus.cancel') }}
         </Button>
 
         <label
@@ -66,9 +66,9 @@
           class="mt-3"
           size="sm"
           variant="secondary"
-          @click="$emit('retry', source)"
+          @click="requestDownload"
         >
-          {{ t(status.phase === 'needs_download' ? 'modelStatus.download' : 'modelStatus.retry') }}
+          {{ t(status.phase === 'paused' ? 'modelStatus.resume' : status.phase === 'needs_download' ? 'modelStatus.download' : 'modelStatus.retry') }}
         </Button>
       </div>
     </div>
@@ -76,7 +76,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { AlertCircle, CheckCircle, Loader2 } from 'lucide-vue-next';
 import { useI18n } from 'vue-i18n';
 import { backgroundModelName, modelApproximateSizeMb, modelProgressPercent, modelStatusPresentation } from '@/model-status';
@@ -85,13 +85,16 @@ import Button from '@/components/common/Button.vue';
 import Select from '@/components/common/Select.vue';
 
 const props = defineProps<{ status: ModelStatus }>();
-defineEmits<{ retry: [source: ModelDownloadSource]; cancel: [] }>();
+const emit = defineEmits<{ retry: [source: ModelDownloadSource]; cancel: [] }>();
 const source = ref<ModelDownloadSource>('modelscope');
+watch(() => [props.status.model, props.status.source] as const, () => {
+  source.value = props.status.source ?? 'modelscope';
+}, { immediate: true });
 
 const { t } = useI18n();
 const sourceOptions = computed(() => [
   { value: 'modelscope', label: t('modelStatus.modelscope') },
-  props.status.model === 'birefnet-comfy'
+  props.status.model.startsWith('birefnet-')
     ? { value: 'huggingface', label: 'Hugging Face' }
     : { value: 'github', label: 'GitHub' },
 ]);
@@ -109,14 +112,15 @@ const detailText = computed(() => {
       ? t('modelStatus.firstUseHintUnknownSize')
       : t('modelStatus.firstUseHint', { size });
   }
-  if (props.status.phase === 'downloading') {
-    return progress.value === null
+  if (props.status.phase === 'downloading' || props.status.phase === 'paused') {
+    return props.status.downloaded_bytes === null || props.status.total_bytes === null
       ? t('modelStatus.indeterminateProgress')
       : t('modelStatus.progress', {
         downloaded: formatBytes(props.status.downloaded_bytes),
         total: formatBytes(props.status.total_bytes),
       });
   }
+  if (props.status.phase === 'verifying') return t('modelStatus.verifyingHint');
   if (props.status.phase === 'initializing') return t('modelStatus.initializingHint');
   if (props.status.phase === 'failed') {
     return t(`modelStatus.errors.${props.status.error?.code ?? 'UNKNOWN'}`);
@@ -124,7 +128,11 @@ const detailText = computed(() => {
   return t('modelStatus.readyHint');
 });
 
+function requestDownload() {
+  emit('retry', source.value);
+}
+
 function formatBytes(bytes: number | null): string {
-  return bytes === null ? '—' : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  return bytes === null ? '—' : `${(bytes / 1_000_000).toFixed(1)} MB`;
 }
 </script>

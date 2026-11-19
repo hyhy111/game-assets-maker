@@ -27,6 +27,7 @@ import type {
   GamSkillsInstallResult,
   BackgroundColor,
   ModelStatus,
+  GpuRuntimeStatus,
   ModelDownloadSource,
   ProjectTrimStatus,
   BatchTrimParams,
@@ -305,6 +306,18 @@ export const processApi = {
 
   async getBackgroundColor(projectId: string): Promise<BackgroundColor | null> {
     return callApi<BackgroundColor | null>('get_background_color', 'getBackgroundColor', projectId);
+  },
+
+  async getGpuRuntimeStatus(): Promise<GpuRuntimeStatus> {
+    return callApi<GpuRuntimeStatus>('get_gpu_runtime_status', 'getGpuRuntimeStatus');
+  },
+
+  async prepareGpuRuntime(model: string, source?: 'aliyun' | 'pypi'): Promise<GpuRuntimeStatus> {
+    return callApi<GpuRuntimeStatus>('prepare_gpu_runtime', 'prepareGpuRuntime', model, source);
+  },
+
+  async cancelGpuRuntimePrepare(): Promise<GpuRuntimeStatus> {
+    return callApi<GpuRuntimeStatus>('cancel_gpu_runtime_prepare', 'cancelGpuRuntimePrepare');
   },
 
   async getModelStatus(model: string = 'u2net'): Promise<ModelStatus> {

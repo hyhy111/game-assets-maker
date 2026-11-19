@@ -873,6 +873,15 @@ class API:
         """Get background color for a project"""
         return self._process_api.get_background_color(project_id)
 
+    def get_gpu_runtime_status(self) -> dict[str, Any]:
+        return self._process_api.get_gpu_runtime_status()
+
+    def prepare_gpu_runtime(self, model: str = "birefnet-lite-onnx", source: str | None = None) -> dict[str, Any]:
+        return self._process_api.prepare_gpu_runtime(model, source)
+
+    def cancel_gpu_runtime_prepare(self) -> dict[str, Any]:
+        return self._process_api.cancel_gpu_runtime_prepare()
+
     def get_model_status(self, model: str = "u2net") -> dict[str, Any]:
         """Return the shared rembg model preparation state."""
         return self._process_api.get_model_status(model)

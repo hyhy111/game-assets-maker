@@ -1,4 +1,19 @@
 export default {
+  gpuTask: {
+    running: 'GPU 失败，正在使用 CPU 继续处理；保留原模型与 1024 输入。',
+    completed: 'GPU 失败，已使用 CPU 完成；保留原模型与 1024 输入。',
+    failed: 'GPU 失败后 CPU 重试也失败，原有结果已保留。',
+    cancelled: 'CPU 回退任务已取消，原有结果已保留。',
+    GPU_OUT_OF_MEMORY: '显存不足',
+    GPU_MODEL_INITIALIZATION_FAILED: 'GPU 模型初始化失败',
+    GPU_PROCESS_FAILED: 'GPU 进程退出或超时',
+    GPU_PROTOCOL_FAILED: 'GPU 进程响应无效',
+    GPU_NATIVE_LOAD_FAILED: 'GPU 组件加载失败',
+    GPU_DEVICE_INCOMPATIBLE: 'GPU 设备或驱动不兼容',
+    GPU_INFERENCE_FAILED: 'GPU 推理失败',
+    unknown: 'GPU 加速失败',
+  },
+  gpuRuntime: { needs_download: 'NVIDIA 加速尚未准备', downloading: '正在下载 NVIDIA 加速组件', verifying: '正在校验 NVIDIA 组件 SHA-256', initializing: '正在校验和验证 NVIDIA 加速', paused: 'NVIDIA 准备已暂停', ready: 'NVIDIA 加速可用，将用于下一次任务', failed: 'NVIDIA 加速准备失败', cpuHint: '模型就绪后可继续使用 CPU。', prepare: '启用 NVIDIA 加速', resume: '继续准备', source: '组件下载来源', aliyun: '阿里云 PyPI 镜像', pypi: '官方 PyPI' },
   buttonHints: {
     autoInterval: '根据选定帧范围计算抽帧间隔',
     setStart: '将当前帧设为起始帧',
@@ -507,6 +522,11 @@ export default {
     startExtraction: '开始提取',
   },
   modelStatus: {
+    pause: '暂停下载',
+    resume: '继续下载',
+    paused: '{model} 模型下载已暂停',
+    verifying: '正在校验 {model} 模型',
+    verifyingHint: '正在检查完整文件的大小和 SHA-256，通过后才能使用。',
     downloadSource: '下载来源',
     modelscope: '魔搭 ModelScope（国内推荐）',
     download: '下载模型',
@@ -531,7 +551,6 @@ export default {
     },
   },
   step2: {
-    recommendedModel: '{model} (推荐)',
     title: '步骤 2：背景移除',
     description: '用所选模型移除背景，生成透明帧。',
     model: '去背模型',

@@ -9,6 +9,7 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
+from src.utils.background_models import background_models, default_background_model
 from src.utils.data_paths import DATA_DIR_NAME, DATA_ROOT_ENV_VAR, INSTALLED_MODE, data_mode, data_root
 from src.utils.file_operations import rename_path
 from src.utils.storage_locations import DEFAULT_PROJECT_DIR, StorageLocations, storage_locations_from_config
@@ -16,9 +17,8 @@ from src.utils.storage_locations import DEFAULT_PROJECT_DIR, StorageLocations, s
 CONFIG_ENV_VAR = "GAM_CONFIG"
 _CONFIG_WRITE_LOCK = threading.Lock()
 
-# Keep in sync with backend.core.model_preloader.MODEL_SOURCES; src must not
-# import backend, so the supported background-removal models are listed here.
-BACKGROUND_REMOVAL_MODELS = ("u2net", "birefnet-comfy")
+# Export the current platform capability for existing configuration consumers.
+BACKGROUND_REMOVAL_MODELS = background_models()
 
 # Source development keeps a dedicated workspace config so it never reads or
 # writes the installed release's per-user configuration.
@@ -60,6 +60,7 @@ DEFAULT_APP_CONFIG: dict[str, Any] = {
         "default_resolution": "2K",
         "default_ratio": "16:9",
     },
+    "model_download_source": None,
     "processing": {
         "background_model": "u2net",
     },
@@ -84,6 +85,7 @@ def get_app_config_path() -> Path:
 def merge_app_config(config: dict[str, Any] | None = None) -> dict[str, Any]:
     """Merge a partial config with application defaults."""
     merged = deepcopy(DEFAULT_APP_CONFIG)
+    merged["processing"]["background_model"] = default_background_model()
     if not config:
         return merged
 
@@ -91,8 +93,8 @@ def merge_app_config(config: dict[str, Any] | None = None) -> dict[str, Any]:
     if merged["seedance"]["default_resolution"] == "4k":
         merged["seedance"]["default_resolution"] = "1080p"
     processing = merged["processing"]
-    if not isinstance(processing, dict) or processing.get("background_model") not in BACKGROUND_REMOVAL_MODELS:
-        merged["processing"] = deepcopy(DEFAULT_APP_CONFIG["processing"])
+    if not isinstance(processing, dict) or processing.get("background_model") not in background_models():
+        merged["processing"] = {"background_model": default_background_model()}
     cache_dir = merged["seedance"].get("cache_dir")
     if isinstance(cache_dir, str) and cache_dir:
         legacy_cache = Path(cache_dir).expanduser()
@@ -182,6 +184,7 @@ def save_app_config(update: dict[str, Any]) -> dict[str, Any]:
 def public_app_config(config: dict[str, Any]) -> dict[str, Any]:
     """Return configuration that is safe to expose outside the backend."""
     public = deepcopy(config)
+    public["background_models"] = list(background_models())
     public["ark_audit_available"] = ark_audit_available()
     public["ark_audit_enabled"] = public.get("ark_audit_enabled") is True
     public["cli_generation_enabled"] = public.get("cli_generation_enabled") is True

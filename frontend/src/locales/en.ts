@@ -1,4 +1,19 @@
 export default {
+  gpuTask: {
+    running: 'GPU failed; continuing on CPU with the selected model at 1024 input.',
+    completed: 'GPU failed; completed on CPU with the selected model at 1024 input.',
+    failed: 'GPU failed and CPU retry failed. Previous results are preserved.',
+    cancelled: 'CPU fallback was cancelled. Previous results are preserved.',
+    GPU_OUT_OF_MEMORY: 'Insufficient GPU memory',
+    GPU_MODEL_INITIALIZATION_FAILED: 'GPU model initialization failed',
+    GPU_PROCESS_FAILED: 'GPU process stopped or timed out',
+    GPU_PROTOCOL_FAILED: 'Invalid GPU process response',
+    GPU_NATIVE_LOAD_FAILED: 'GPU libraries could not load',
+    GPU_DEVICE_INCOMPATIBLE: 'GPU device or driver is incompatible',
+    GPU_INFERENCE_FAILED: 'GPU inference failed',
+    unknown: 'GPU acceleration failed',
+  },
+  gpuRuntime: { needs_download: 'NVIDIA acceleration is not prepared', downloading: 'Downloading NVIDIA components', verifying: 'Checking NVIDIA component SHA-256', initializing: 'Verifying NVIDIA components and inference', paused: 'NVIDIA preparation paused', ready: 'NVIDIA ready for the next task', failed: 'NVIDIA preparation failed', cpuHint: 'CPU processing remains available when the model is ready.', prepare: 'Enable NVIDIA acceleration', resume: 'Continue preparation', source: 'Component source', aliyun: 'Alibaba Cloud PyPI mirror', pypi: 'Official PyPI' },
   buttonHints: {
     autoInterval: 'Calculate the extraction interval for the selected frame range',
     setStart: 'Set the current frame as the start frame',
@@ -510,6 +525,11 @@ export default {
     startExtraction: 'Start Extraction',
   },
   modelStatus: {
+    pause: 'Pause download',
+    resume: 'Continue download',
+    paused: '{model} model download paused',
+    verifying: 'Verifying {model} model',
+    verifyingHint: 'Checking the complete file size and SHA-256 before use.',
     downloadSource: 'Download source',
     modelscope: 'ModelScope (recommended in China)',
     download: 'Download model',
@@ -534,7 +554,6 @@ export default {
     },
   },
   step2: {
-    recommendedModel: '{model} (Recommended)',
     title: 'Step 2: Background Removal',
     description: 'Remove the background with the selected model to create transparent frames.',
     model: 'Background removal model',

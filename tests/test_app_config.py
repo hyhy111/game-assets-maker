@@ -1,5 +1,7 @@
 """Application configuration defaults for local processing."""
 
+import pytest
+
 from src.utils.app_config import DEFAULT_APP_CONFIG, load_app_config, merge_app_config, save_app_config
 
 
@@ -29,3 +31,9 @@ def test_processing_background_model_survives_public_projection(isolated_workspa
     save_app_config({"processing": {"background_model": "birefnet-comfy"}})
     public = public_app_config(load_app_config())
     assert public["processing"]["background_model"] == "birefnet-comfy"
+
+
+@pytest.fixture(autouse=True)
+def macos_background_model_compatibility(monkeypatch):
+    """These legacy Comfy workflow cases exercise the retained macOS backend."""
+    monkeypatch.setattr("sys.platform", "darwin")
