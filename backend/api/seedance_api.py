@@ -99,6 +99,23 @@ class SeedanceAPI:
                 self._replace_manager()
             return
         self._platform_client.set_token(token)
+        self._refresh_manager_platform()
+
+    def _refresh_manager_platform(self) -> None:
+        """Re-attach platform support to a manager built while unconfigured.
+
+        Mirrors SeedreamAPI._refresh_manager_platform. Without this, a manager
+        rebuilt during a logged-out window (platform=None) stays broken for the
+        rest of the process lifetime: later token pushes only take the
+        set_token path, so every platform create/cancel/poll fails with
+        "Platform generation is not configured; sign in first" even though the
+        token has long been pushed again.
+        """
+        if self._manager is None or self._manager._platform is not None:
+            return
+        if not self._platform_config.configured():
+            return
+        self._replace_manager()
 
     def set_media_base_url(self, media_base_url: str) -> None:
         self._media_base_url = media_base_url.rstrip("/")

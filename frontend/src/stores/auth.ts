@@ -48,12 +48,28 @@ export const useAuthStore = defineStore('auth', () => {
 
   // 平台源（ForFuner AI）配置随 token 变化实时推送进 Python 内存：
   // 登录/静默重登/登出/会话失效都经过 token 这一个出口，watch 全覆盖。
-  // 桥不可用时静默忽略——下次 token 变化会再推；token 本身不落盘不入日志。
-  watch(token, (value) => {
+  // 推送失败按退避重试、且每次取当前最新 token——桥未就绪或调用失败时不能静默
+  // 放弃：token 不变就再没有推送机会，Python 侧会整个会话拿不到 token，
+  // 生成时报 "Platform generation is not configured; sign in first"。
+  const PLATFORM_PUSH_RETRY_DELAYS_MS = [1_000, 3_000, 10_000];
+
+  function pushPlatformConfig(attempt: number): void {
     void api.platform
-      .setConfig(import.meta.env.VITE_APP_API_BASE_URL ?? '', value)
-      .catch(() => { /* bridge not ready yet; next token change retries */ });
-  }, { immediate: true });
+      .setConfig(import.meta.env.VITE_APP_API_BASE_URL ?? '', token.value)
+      .then(() => {
+        if (attempt > 0) logEvent(`平台配置推送第 ${attempt} 次重试成功`, 'ok');
+      })
+      .catch(() => {
+        if (attempt >= PLATFORM_PUSH_RETRY_DELAYS_MS.length) {
+          logEvent('平台配置推送失败且重试已耗尽——本次会话生成可能不可用，重启应用可恢复', 'error');
+          return;
+        }
+        logEvent(`平台配置推送失败，${PLATFORM_PUSH_RETRY_DELAYS_MS[attempt] / 1000}s 后第 ${attempt + 1} 次重试`, 'warn');
+        setTimeout(() => pushPlatformConfig(attempt + 1), PLATFORM_PUSH_RETRY_DELAYS_MS[attempt]);
+      });
+  }
+
+  watch(token, () => { pushPlatformConfig(0); }, { immediate: true });
 
   let retryingUserInfo = false;
 
