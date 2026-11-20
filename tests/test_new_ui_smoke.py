@@ -548,13 +548,20 @@ def test_hidden_frames_are_reversible_and_excluded_from_preview_and_export(api, 
     assert api.get_hidden_frames(project["id"]) == [hidden_filename]
     assert hidden_path.exists()
 
-    for step in (2, 3):
+    for step, directory in ((2, "02_no_bg"), (3, "03_hole_punched")):
         preview = api.get_frames(project["id"], step, page=1, page_size=10)
         assert preview["total"] == initial["total"] - 1
         assert hidden_filename not in {frame["filename"] for frame in preview["frames"]}
         assert preview["hidden_count"] == 1
         assert preview["timeline_total"] == initial["total"]
         assert [frame["timeline_index"] for frame in preview["frames"][:2]] == [0, 2]
+        assert preview["hidden_previews"] == [
+            {
+                "filename": hidden_filename,
+                "timeline_index": 1,
+                "url": api.get_frame_url(str(hidden_path.parent.parent / directory / hidden_filename)),
+            }
+        ]
 
     config_path = Path(project["path"]) / "cache" / "steps_config.json"
     assert json.loads(config_path.read_text(encoding="utf-8"))["hidden_frames"] == [hidden_filename]
@@ -579,6 +586,15 @@ def test_hidden_frames_are_reversible_and_excluded_from_preview_and_export(api, 
     api.set_frame_hidden(project["id"], hidden_filename, True)
     assert api.restore_hidden_frames(project["id"]) == {"success": True, "hidden_frames": []}
     assert hidden_path.exists()
+
+    frames = api.get_frames(project["id"], 2, page_size=initial["total"])["frames"]
+    filenames = [frame["filename"] for frame in frames]
+    for filename in reversed(filenames):
+        api.set_frame_hidden(project["id"], filename, True)
+    remaining = api.get_frames(project["id"], 2, page_size=1)
+    assert remaining["frames"] == []
+    assert remaining["total_pages"] == 0
+    assert [frame["filename"] for frame in remaining["hidden_previews"]] == filenames
 
 
 @pytest.mark.full

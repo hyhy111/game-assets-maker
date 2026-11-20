@@ -8,6 +8,8 @@ from backend.seedance.models import SeedanceTask
 from backend.seedance.repository import TaskRepository, utc_now_iso
 
 _TERMINAL_REMOTE_STATUSES = {"succeeded", "failed", "expired", "cancelled"}
+CONTINUATION_FRAME_PATH = "output/continuation_frame.png"
+_DERIVED_IMAGE_NAMES = (Path(CONTINUATION_FRAME_PATH).name, "thumbnail.jpg", "thumbnail.png")
 
 
 class ProjectLookup(Protocol):
@@ -35,7 +37,10 @@ class CacheManager:
             "task_count": len(tasks),
             "protected_task_count": len(protected_tasks),
             "clearable_bytes": sum(
-                self._asset_bytes(task) for task in tasks if self._is_clearable(task) and task not in protected_tasks
+                path.stat().st_size
+                for task in tasks
+                if self._is_clearable(task) and not task.handoffs
+                for path in self._derived_images(task)
             ),
         }
 
@@ -43,6 +48,7 @@ class CacheManager:
         if older_than_days < 0:
             raise ValueError("older_than_days must not be negative")
         cutoff = datetime.now(UTC) - timedelta(days=older_than_days)
+        cutoff_timestamp = cutoff.timestamp()
         result = {"files_removed": 0, "bytes_released": 0, "tasks_cleared": 0, "protected_tasks_skipped": 0}
 
         for listed_task in self._repository.list():
@@ -51,18 +57,20 @@ class CacheManager:
                 protected = self._prune_handoffs_unlocked(task)
                 if not self._finished_before(task, cutoff) or not self._is_clearable(task):
                     continue
+                # Keep recently generated or reused frames available to continuation drafts.
+                candidates = [(path, path.stat()) for path in self._derived_images(task)]
+                expired = [(path, stat.st_size) for path, stat in candidates if stat.st_mtime < cutoff_timestamp]
+                if not expired:
+                    continue
                 if protected and not allow_protected:
                     result["protected_tasks_skipped"] += 1
                     continue
 
-                removed = self._remove_assets(task)
-                if removed or task.cache_status != "cleared" or task.download_status != "cleared":
-                    task.cache_status = "cleared"
-                    task.download_status = "cleared"
-                    self._repository._write_unlocked(task)
-                    result["tasks_cleared"] += 1
-                result["files_removed"] += len(removed)
-                result["bytes_released"] += sum(size for _, size in removed)
+                for path, size in expired:
+                    path.unlink()
+                    result["files_removed"] += 1
+                    result["bytes_released"] += size
+                result["tasks_cleared"] += 1
         return result
 
     def delete_task(self, local_id: str, allow_protected: bool = False) -> None:
@@ -113,30 +121,22 @@ class CacheManager:
         task_dir = self._repository._existing_task_dir(task.local_id)
         return sum(path.stat().st_size for path in task_dir.rglob("*") if self._is_regular_file(path, task_dir))
 
-    def _asset_bytes(self, task: SeedanceTask) -> int:
-        return sum(path.stat().st_size for path in self._asset_files(task))
-
-    def _remove_assets(self, task: SeedanceTask) -> list[tuple[Path, int]]:
-        removed: list[tuple[Path, int]] = []
-        for path in self._asset_files(task):
-            size = path.stat().st_size
-            path.unlink()
-            removed.append((path, size))
-        return removed
-
-    def _asset_files(self, task: SeedanceTask) -> list[Path]:
+    def _derived_images(self, task: SeedanceTask) -> list[Path]:
         task_dir = self._repository._existing_task_dir(task.local_id)
+        root = task_dir / "output"
+        if root.is_symlink() or not root.is_dir() or root.resolve() != root:
+            return []
+        original_paths = {
+            Path(relative)
+            for relative in (task.output_paths.get("video"), task.output_paths.get("returned_last_frame"))
+            if isinstance(relative, str) and relative
+        }
+        candidates = (root / name for name in _DERIVED_IMAGE_NAMES)
         return [
             path
-            for directory_name in ("input", "output")
-            for root in (task_dir / directory_name,)
-            if self._is_asset_root(root, task_dir)
-            for path in root.rglob("*")
-            if self._is_regular_file(path, root)
+            for path in candidates
+            if self._is_regular_file(path, root) and path.relative_to(task_dir) not in original_paths
         ]
-
-    def _is_asset_root(self, root: Path, task_dir: Path) -> bool:
-        return not root.is_symlink() and root.is_dir() and self._is_within(root, task_dir)
 
     @staticmethod
     def _is_regular_file(path: Path, root: Path) -> bool:

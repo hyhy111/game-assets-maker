@@ -16,10 +16,12 @@ from backend.api.project_paths import (
     is_legacy_import_project_dir,
     is_project_dir,
     make_project_id,
+    project_video_path,
     resolve_project_path,
     sanitize_segment,
     split_project_id,
 )
+from backend.api.project_preview_cache import preview_cache_cleanup, visible_preview_frames
 from src.utils.app_config import default_projects_root
 from src.utils.file_operations import rename_path
 
@@ -56,7 +58,7 @@ class ProjectAPI:
             "legacy": legacy,
             "name": meta.get("project_name", action) if meta else action,
             "path": str(project_path),
-            "video_path": meta.get("video_path", "") if meta else "",
+            "video_path": project_video_path(project_path, meta or {}),
             "frame_interval": meta.get("frame_interval", 1) if meta else 1,
             "created_at": meta.get("timestamp", "") if meta else "",
             "modified_at": modified_at,
@@ -96,6 +98,18 @@ class ProjectAPI:
             for role, count in sorted(role_counts.items(), key=lambda item: item[0].lower())
         ]
 
+    def get_preview_cleanup_plan(self, created_from: str, created_to: str) -> dict[str, Any]:
+        return preview_cache_cleanup(self._projects_root, self.get_projects(), created_from, created_to)
+
+    def clean_project_preview_frames(
+        self, created_from: str, created_to: str, project_ids: list[str]
+    ) -> dict[str, Any]:
+        if not isinstance(project_ids, list) or any(not isinstance(project_id, str) for project_id in project_ids):
+            raise ValueError("INVALID_PREVIEW_PROJECTS")
+        return preview_cache_cleanup(
+            self._projects_root, self.get_projects(), created_from, created_to, set(project_ids)
+        )
+
     def get_project(self, project_id: str) -> dict[str, Any] | None:
         """Get single project by ID"""
         project_path = self._get_project_path(project_id)
@@ -118,7 +132,7 @@ class ProjectAPI:
             "legacy": legacy,
             "name": meta.get("project_name", action) if meta else action,
             "path": str(project_path),
-            "video_path": meta.get("video_path", "") if meta else "",
+            "video_path": project_video_path(project_path, meta or {}),
             "frame_interval": meta.get("frame_interval", 1) if meta else 1,
             "created_at": meta.get("timestamp", "") if meta else "",
             "modified_at": datetime.fromtimestamp(project_path.stat().st_mtime).isoformat(),
@@ -158,9 +172,8 @@ class ProjectAPI:
                 steps[step_num]["completed"] = True
 
         # Step 1: Check cache/01_frames_cache and output/01_frames
-        step1_cache = project_path / "cache" / "01_frames_cache"
         step1_output = project_path / "output" / "01_frames"
-        cache_frames = list(step1_cache.glob("frame_*.png")) if step1_cache.exists() else []
+        cache_frames = visible_preview_frames(project_path)
         output_frames = list(step1_output.glob("frame_*.png")) if step1_output.exists() else []
         # New projects use the processed flag for navigation. File existence means
         # preview data is available, not that Step 1 has been accepted.
@@ -176,6 +189,8 @@ class ProjectAPI:
             if not steps["2"]["completed"]:
                 steps["2"]["completed"] = len(frames) > 0
             steps["2"]["count"] = len(frames)
+            if frames:
+                steps["2"]["result_model"] = config.get("step2", {}).get("result_model", "u2net")
 
         # Step 3: Check output/03_hole_punched (new location)
         step3_output = project_path / "output" / "03_hole_punched"
@@ -184,10 +199,14 @@ class ProjectAPI:
             if not steps["3"]["completed"]:
                 steps["3"]["completed"] = len(frames) > 0
             steps["3"]["count"] = len(frames)
+            if frames and steps["2"]["count"] and config.get("step3_undo"):
+                steps["3"]["can_undo_processing"] = True
 
         return steps
 
-    def create_project(self, role: str, action: str, video_path: str = "", frame_interval: int = 1) -> dict[str, Any]:
+    def create_project(
+        self, role: str, action: str, video_path: str = "", frame_interval: int = 1, *, copy_video: bool = False
+    ) -> dict[str, Any]:
         """Create a new action project under a role."""
         # Backward compatibility with the old signature: (name, video_path, frame_interval)
         if isinstance(video_path, int):
@@ -195,8 +214,8 @@ class ProjectAPI:
             action = role
             role = UNKNOWN_ROLE
 
-        safe_role = sanitize_segment(role, UNKNOWN_ROLE)
-        safe_action = self._sanitize_name(action)
+        safe_role = self._validate_rename_name(role) if copy_video else sanitize_segment(role, UNKNOWN_ROLE)
+        safe_action = self._validate_rename_name(action) if copy_video else self._sanitize_name(action)
         project_id = make_project_id(safe_role, safe_action)
 
         # Check for duplicate action in the same role (case-insensitive)
@@ -212,6 +231,19 @@ class ProjectAPI:
 
         # Create directory structure
         project_path = self._get_project_path(project_id)
+        if copy_video:
+            if not project_path.resolve().is_relative_to(self._projects_root.resolve()):
+                raise ValueError("Invalid project destination")
+            project_path.mkdir(parents=True, exist_ok=False)
+            try:
+                source = Path(video_path)
+                destination = project_path / "input" / f"source{source.suffix.lower()}"
+                destination.parent.mkdir()
+                shutil.copyfile(source, destination)
+                video_path = str(destination)
+            except OSError:
+                shutil.rmtree(project_path, ignore_errors=True)
+                raise
         (project_path / "cache").mkdir(parents=True)
         (project_path / "output" / "01_frames").mkdir(parents=True)
         (project_path / "output" / "02_no_bg").mkdir(parents=True)
@@ -246,6 +278,8 @@ class ProjectAPI:
             "frame_interval": 1,
             "timestamp": datetime.now().isoformat(),
         }
+        if copy_video:
+            meta["managed_video"] = True
 
         with open(project_path / "cache" / "global_params.json", "w", encoding="utf-8") as f:
             json.dump(meta, f, ensure_ascii=False, indent=2)
@@ -273,7 +307,6 @@ class ProjectAPI:
             },
             "step3": {
                 # Step 3: Post-processing (hole punching + alignment)
-                "enabled": True,  # Hole punching enabled
                 "green_intensity": 3,
                 "feather_radius": 3,
                 "min_hole_size": 5,

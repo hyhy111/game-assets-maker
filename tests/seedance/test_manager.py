@@ -122,7 +122,6 @@ def manager(repository, fake_client, downloader, cache_manager, clock):
         repository,
         downloader,
         cache_manager,
-        {"retention_days": 90, "last_cleanup_at": None},
         now=clock.now,
     )
 
@@ -340,15 +339,16 @@ def test_failures_back_off_exponentially_and_cap_at_five_minutes(manager, fake_c
     assert delays == [10, 20, 40, 80, 160, 300, 300]
 
 
-def test_start_recovers_active_tasks_and_runs_daily_cleanup_once(manager, fake_client, cache_manager, seedance_request):
+def test_start_recovers_active_tasks_without_cleaning_cache(manager, fake_client, cache_manager, seedance_request):
     task = _queued_task(manager, fake_client, seedance_request)
 
     manager.start()
     try:
         assert manager._scheduled_at[task.local_id] <= manager._monotonic()
-        assert cache_manager.cleaned == [90]
+        worker = manager._worker
         manager.start()
-        assert cache_manager.cleaned == [90]
+        assert manager._worker is worker
+        assert not cache_manager.cleaned
     finally:
         manager.shutdown()
 
@@ -391,11 +391,9 @@ def test_start_does_not_automatically_repeat_an_explicitly_failed_download(
     assert downloader.downloaded_ids == []
 
 
-def test_disabled_retention_never_calls_cache_clean_automatically_or_manually(manager, cache_manager):
-    manager._config["retention_days"] = 0
-
-    manager._run_due_cleanup()
-    manual = manager.clean_cache(0)
+@pytest.mark.parametrize("days", [None, 0])
+def test_clean_cache_does_nothing_without_a_positive_age(manager, cache_manager, days):
+    manual = manager.clean_cache(days)
 
     assert cache_manager.cleaned == []
     assert manual == {
@@ -404,7 +402,12 @@ def test_disabled_retention_never_calls_cache_clean_automatically_or_manually(ma
         "tasks_cleared": 0,
         "protected_tasks_skipped": 0,
     }
-    assert manager._config["last_cleanup_at"] is not None
+
+
+def test_explicit_cache_clean_still_uses_requested_age(manager, cache_manager):
+    manager.clean_cache(7)
+
+    assert cache_manager.cleaned == [7]
 
 
 def test_start_marks_interrupted_submission_unknown_without_reposting(manager, fake_client, seedance_request):
@@ -450,15 +453,6 @@ def test_shutdown_returns_promptly_when_worker_is_blocked_in_a_request(manager, 
     finally:
         release_request.set()
         manager.shutdown()
-
-
-def test_failed_cleanup_does_not_advance_the_cleanup_timestamp(manager, cache_manager, monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr(cache_manager, "clean", lambda _: (_ for _ in ()).throw(OSError("disk unavailable")))
-
-    with pytest.raises(OSError, match="disk unavailable"):
-        manager._run_due_cleanup()
-
-    assert manager._config["last_cleanup_at"] is None
 
 
 def test_retry_generation_creates_new_task_with_retained_inputs(manager, fake_client, seedance_request):
@@ -577,25 +571,6 @@ def test_public_task_is_redacted_and_cancel_only_allows_queued(manager, fake_cli
     assert manager._repository.get(task.local_id).remote_status == "cancelled"
     with pytest.raises(ValueError, match="queued"):
         manager.cancel(task.local_id)
-
-
-def test_cleanup_saves_complete_seedance_config_without_exposing_key(
-    repository, fake_client, downloader, cache_manager, clock
-):
-    from backend.seedance.manager import SeedanceTaskManager
-
-    config = {"api_key": "secret", "default_duration": 6, "retention_days": 7, "last_cleanup_at": None}
-    saved: list[dict[str, Any]] = []
-    manager = SeedanceTaskManager(
-        fake_client, repository, downloader, cache_manager, config, now=clock.now, config_saver=saved.append
-    )
-
-    manager._run_due_cleanup()
-
-    assert saved == [manager._config]
-    assert saved[0]["api_key"] == "secret"
-    assert saved[0]["default_duration"] == 6
-    assert manager._config["last_cleanup_at"] is not None
 
 
 def test_event_sink_mutation_and_blocking_do_not_change_task_or_stall_sync(manager, fake_client, seedance_request):

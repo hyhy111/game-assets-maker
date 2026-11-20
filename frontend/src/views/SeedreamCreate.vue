@@ -35,6 +35,7 @@
               @select="selectReferenceImage"
               @clear="clearReferenceImage"
               @drop-image="dropCandidateReference"
+              @drop-source-image="dropSourceReference"
               @drop-file="dropReferenceFile"
               @drop-error="referenceError = t($event)"
             />
@@ -97,11 +98,16 @@
           <span>{{ workspace.capabilitiesError ? t('aiCreation.capabilitiesFailed', { message: workspace.capabilitiesError }) : t('aiCreation.capabilitiesLoading') }}</span>
           <button
             type="button"
-            class="rounded-md border border-warning/40 px-2 py-0.5 text-xs transition-colors hover:bg-warning/20"
+            class="rounded-md border border-warning/40 px-2 py-0.5 text-xs transition-colors hover:bg-warning/20 icon-button control-tooltip"
             data-test="seedream-capabilities-retry"
+            :aria-label="t('buttonHints.reloadCapabilities')"
+            :data-tooltip="t('buttonHints.reloadCapabilities')"
             @click="reloadCapabilities()"
           >
-            {{ t('aiCreation.capabilitiesRetry') }}
+            <RefreshCw
+              class="h-5 w-5"
+              aria-hidden="true"
+            />
           </button>
         </div>
 
@@ -109,21 +115,31 @@
           <div class="inline-flex h-10 items-center rounded-xl border border-[#414141] bg-[#2d2d2d] p-1">
             <button
               type="button"
-              class="h-8 rounded-lg px-3 text-sm transition-colors"
+              class="inline-flex h-8 items-center rounded-lg px-3 text-sm transition-colors"
               :class="creationMode === 'image' ? 'bg-primary text-dark-bg' : 'text-gray-400 hover:text-white'"
               data-test="creation-mode-image"
+              :data-tooltip="t('aiCreation.imageMode')"
               @click="emit('change-mode', 'image')"
             >
-              {{ t('aiCreation.imageMode') }}
+              <Image
+                class="mr-1.5 h-4 w-4"
+                aria-hidden="true"
+              />
+              {{ t('aiCreation.imageModeShort') }}
             </button>
             <button
               type="button"
-              class="h-8 rounded-lg px-3 text-sm transition-colors"
+              class="inline-flex h-8 items-center rounded-lg px-3 text-sm transition-colors"
               :class="creationMode === 'video' ? 'bg-primary text-dark-bg' : 'text-gray-400 hover:text-white'"
               data-test="creation-mode-video"
+              :data-tooltip="t('aiCreation.videoMode')"
               @click="emit('change-mode', 'video')"
             >
-              {{ t('aiCreation.videoMode') }}
+              <Clapperboard
+                class="mr-1.5 h-4 w-4"
+                aria-hidden="true"
+              />
+              {{ t('aiCreation.videoModeShort') }}
             </button>
           </div>
 
@@ -145,7 +161,7 @@
               @click="parametersOpen = !parametersOpen"
               @keydown.escape.stop="parametersOpen = false"
             >
-              <Settings2
+              <SlidersHorizontal
                 :size="15"
                 class="text-gray-400"
                 aria-hidden="true"
@@ -240,11 +256,16 @@
 
           <button
             type="button"
-            class="h-10 rounded-xl px-3 text-sm text-gray-400 transition-colors hover:bg-white/[0.05] hover:text-white"
+            class="h-10 rounded-xl px-3 text-sm text-gray-400 transition-colors hover:bg-white/[0.05] hover:text-white icon-button control-tooltip"
             data-test="clear-image-draft"
+            :aria-label="t('buttonHints.clearDraft')"
+            :data-tooltip="t('buttonHints.clearDraft')"
             @click="clearDraft"
           >
-            {{ t('aiCreation.clear') }}
+            <Trash2
+              class="h-5 w-5"
+              aria-hidden="true"
+            />
           </button>
 
           <div class="ml-auto flex min-w-0 items-center gap-3 pl-2">
@@ -272,10 +293,15 @@
               >
                 {{ t('creditUsage.unavailable') }} <button
                   type="button"
-                  class="underline"
+                  class="underline icon-button control-tooltip"
+                  :aria-label="t('creditUsage.refresh')"
+                  :data-tooltip="t('creditUsage.refresh')"
                   @click="creditUsage.refresh()"
                 >
-                  {{ t('creditUsage.refresh') }}
+                  <RefreshCw
+                    class="h-5 w-5"
+                    aria-hidden="true"
+                  />
                 </button>
               </p>
               <p
@@ -301,15 +327,14 @@
             />
             <button
               type="submit"
-              class="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#ffbd5c] text-[#242424] transition hover:bg-[#ffc975] disabled:cursor-not-allowed disabled:bg-[#4a4a4a] disabled:text-[#777]"
+              class="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-primary text-dark-bg transition hover:bg-primary-600 disabled:cursor-not-allowed disabled:bg-[#4a4a4a] disabled:text-[#777]"
               :disabled="submitting || platformSubmitBlocked || capabilitiesBlocked || !form.prompt.trim()"
-              :aria-label="t('seedream.create.createBatch')"
-              :title="t('seedream.create.createBatch')"
+              :aria-label="t('aiCreation.imageMode')"
               data-test="seedream-submit"
             >
               <span
                 v-if="submitting"
-                class="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"
+                class="h-4 w-4 animate-spin rounded-full border-2 border-dark-bg/30 border-t-dark-bg"
                 aria-hidden="true"
               />
               <ArrowUp
@@ -417,7 +442,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { ArrowUp, Check, ChevronDown, Copy, Settings2 } from 'lucide-vue-next';
+import { ArrowUp, Check, ChevronDown, Copy, Trash2, RefreshCw, Image, Clapperboard, SlidersHorizontal } from 'lucide-vue-next';
 import { Translation as I18nT, useI18n } from 'vue-i18n';
 import { hasImageDrop, readImageDrop, type SeedreamImageDragPayload } from '@/seedream-image-drag';
 import { useRoute, useRouter } from 'vue-router';
@@ -600,6 +625,10 @@ async function dropCandidateReference(candidate: SeedreamImageDragPayload) {
   }
 }
 
+async function dropSourceReference(id: string) {
+  referenceError.value = await workspace.handoffSourceImage(id, 'reference') ? '' : t('aiCreation.imageUnavailable');
+}
+
 async function dropReferenceFile(file: File) {
   referenceError.value = '';
   if (!await workspace.importDroppedImage(file, 'reference')) {
@@ -613,11 +642,12 @@ function onReferenceDragOver(event: DragEvent) {
   referenceDragActive.value = true;
 }
 
-function onReferenceDrop(event: DragEvent) {
+async function onReferenceDrop(event: DragEvent) {
   referenceDragActive.value = false;
   const result = readImageDrop(event.dataTransfer);
   if (result.kind === 'candidate') void dropCandidateReference(result.candidate);
   else if (result.kind === 'file') void dropReferenceFile(result.file);
+  else if (result.kind === 'source') await dropSourceReference(result.id);
   else referenceError.value = t(result.key);
 }
 const copyTitle = computed(() => copied.value ? t('common.copied') : t('common.copy'));
@@ -734,6 +764,10 @@ watch(
   () => scheduleQuoteRefresh(),
   { immediate: true },
 );
+
+watch(() => workspace.generationSource, () => {
+  if (confirmModal.value) closeConfirmModal();
+});
 
 // Capability refreshes preserve the draft; the user must explicitly choose a replacement.
 

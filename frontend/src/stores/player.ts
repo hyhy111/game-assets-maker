@@ -7,6 +7,7 @@ import { useProcessStore } from './process';
 import { api } from '@/api';
 import type { Frame } from '@/types';
 import { createNavigationGuard } from '@/utils/navigation-guard';
+import { extractionFrameIndices } from '@/components/player/timelineMath';
 
 export const usePlayerStore = defineStore('player', () => {
   const navigation = createNavigationGuard();
@@ -51,6 +52,13 @@ export const usePlayerStore = defineStore('player', () => {
   const startFrame = ref(0);
   const endFrame = ref(0);
   const frameInterval = ref(1);
+  const playbackFrameIndices = computed(() => {
+    const process = useProcessStore();
+    return extractionFrameIndices(
+      frames.value.length, startFrame.value, endFrame.value, frameInterval.value,
+      process.currentStep === 1 ? process.s1Params.frame_overrides : undefined,
+    );
+  });
 
   // Image cache for frame playback
   const imageElementCache = new Map<string, HTMLImageElement>();
@@ -136,11 +144,16 @@ export const usePlayerStore = defineStore('player', () => {
     if (!isPlaying.value) return;
     const elapsed = performance.now() - playStartTime;
     const stepDuration = 1000 / playbackFps.value;
-    const baseStep = Math.floor((playStartIndex - startFrame.value) / frameInterval.value);
+    const selected = playbackFrameIndices.value;
+    if (!selected.length) {
+      pause();
+      return;
+    }
+    const nextStep = selected.findIndex(frame => frame > playStartIndex);
+    const baseStep = nextStep < 0 ? selected.length - 1 : Math.max(0, nextStep - 1);
     const stepCount = baseStep + Math.floor(elapsed / stepDuration);
-    const totalStepsInRange = Math.ceil((endFrame.value - startFrame.value + 1) / frameInterval.value);
-    const loopedStep = totalStepsInRange > 0 ? stepCount % totalStepsInRange : 0;
-    const targetIndex = startFrame.value + loopedStep * frameInterval.value;
+    const loopedStep = stepCount % selected.length;
+    const targetIndex = selected[loopedStep];
 
     const targetPath = frames.value[targetIndex]?.path;
     if (targetPath && imageElementCache.has(targetPath)) {
@@ -208,7 +221,7 @@ export const usePlayerStore = defineStore('player', () => {
 
   function stop() {
     pause();
-    currentIndex.value = startFrame.value;
+    currentIndex.value = playbackFrameIndices.value[0] ?? startFrame.value;
   }
 
   function goToFrame(index: number) {
@@ -323,7 +336,7 @@ export const usePlayerStore = defineStore('player', () => {
     frameInterval.value = Math.max(1, interval);
 
     // Reset to start of range
-    currentIndex.value = s;
+    currentIndex.value = playbackFrameIndices.value[0] ?? s;
   }
 
   function setCanvasBgColor(color: string) {
@@ -349,6 +362,7 @@ export const usePlayerStore = defineStore('player', () => {
     startFrame,
     endFrame,
     frameInterval,
+    playbackFrameIndices,
     canvasBgColor,
     canvasBgColors,
     // Cache (exposed for FramePlayer rendering)

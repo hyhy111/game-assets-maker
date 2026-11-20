@@ -206,9 +206,15 @@
             <Button
               size="sm"
               variant="secondary"
+              icon-only
+              :aria-label="t('projectManager.viewTrimResults')"
+              :tooltip="t('projectManager.viewTrimResults')"
               @click="showTrimResultsModal = true"
             >
-              {{ t('projectManager.viewTrimResults') }}
+              <Files
+                class="h-5 w-5"
+                aria-hidden="true"
+              />
             </Button>
           </div>
           <aside
@@ -228,7 +234,6 @@
                 <button
                   type="button"
                   class="rounded-lg p-2 text-gray-500 transition-colors hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                  :title="t('common.refresh')"
                   :aria-label="t('common.refresh')"
                   @click="loadProjects"
                 >
@@ -241,7 +246,6 @@
                   <MenuButton
                     type="button"
                     class="rounded-lg p-2 text-gray-500 transition-colors hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                    :title="t('projectManager.moreActions')"
                     :aria-label="t('projectManager.moreActions')"
                   >
                     <MoreVertical class="h-4 w-4" />
@@ -366,11 +370,29 @@
               <div class="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
-                  class="rounded-lg px-3 py-1.5 text-xs font-medium text-gray-400 transition-colors hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
+                  class="rounded-lg px-3 py-1.5 text-xs font-medium text-gray-400 transition-colors hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50 icon-button control-tooltip"
                   :disabled="trimmingRole !== null"
+                  :aria-label="isRoleFullySelected(selectedGroup) ? t('batchTrim.deselectAll') : t('batchTrim.selectAll')"
+                  :data-tooltip="isRoleFullySelected(selectedGroup) ? t('batchTrim.deselectAll') : t('batchTrim.selectAll')"
+                  role="checkbox"
+                  :aria-checked="isRoleFullySelected(selectedGroup) ? 'true' : selectedInRole(selectedGroup) > 0 ? 'mixed' : 'false'"
                   @click="toggleRoleSelection(selectedGroup)"
                 >
-                  {{ isRoleFullySelected(selectedGroup) ? t('batchTrim.deselectAll') : t('batchTrim.selectAll') }}
+                  <CheckSquare
+                    v-if="isRoleFullySelected(selectedGroup)"
+                    class="h-5 w-5"
+                    aria-hidden="true"
+                  />
+                  <MinusSquare
+                    v-else-if="selectedInRole(selectedGroup) > 0"
+                    class="h-5 w-5"
+                    aria-hidden="true"
+                  />
+                  <Square
+                    v-else
+                    class="h-5 w-5"
+                    aria-hidden="true"
+                  />
                 </button>
 
                 <div
@@ -381,8 +403,9 @@
                   <button
                     type="button"
                     role="radio"
-                    class="h-full rounded-md px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
+                    class="control-tooltip h-full rounded-md px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
                     :class="trimMode === 'global' ? 'bg-primary/20 text-primary-200 shadow-sm' : 'text-gray-500 hover:text-gray-200'"
+                    :data-tooltip="t('batchTrim.uniformSizeDesc')"
                     :aria-checked="trimMode === 'global'"
                     :disabled="trimmingRole !== null"
                     @click="trimMode = 'global'"
@@ -392,8 +415,9 @@
                   <button
                     type="button"
                     role="radio"
-                    class="h-full rounded-md px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
+                    class="control-tooltip h-full rounded-md px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
                     :class="trimMode === 'individual' ? 'bg-primary/20 text-primary-200 shadow-sm' : 'text-gray-500 hover:text-gray-200'"
+                    :data-tooltip="t('batchTrim.tightCropDesc')"
                     :aria-checked="trimMode === 'individual'"
                     :disabled="trimmingRole !== null"
                     @click="trimMode = 'individual'"
@@ -781,20 +805,21 @@
                     <code class="block break-all px-3 py-2.5 pr-24 text-xs text-gray-300">{{ path }}</code>
                     <button
                       type="button"
-                      class="absolute right-2 top-2 flex items-center gap-1 rounded-md px-2 py-1 text-xs text-gray-400 transition-colors hover:bg-dark-border hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                      :aria-label="copiedOutputPath === path ? t('common.copied') : t('common.copy')"
-                      :title="copiedOutputPath === path ? t('common.copied') : t('common.copy')"
+                      class="absolute right-2 top-2 flex items-center gap-1 rounded-md px-2 py-1 text-xs text-gray-400 transition-colors hover:bg-dark-border hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary icon-button control-tooltip"
+                      :aria-label="copiedOutputPath === path ? t('common.copied') : t('buttonHints.copyOutputPath')"
+                      :data-tooltip="copiedOutputPath === path ? t('common.copied') : t('buttonHints.copyOutputPath')"
                       @click="copyOutputPath(path)"
                     >
                       <Check
                         v-if="copiedOutputPath === path"
-                        class="h-3.5 w-3.5 text-success"
+                        class="h-5 w-5 text-success"
+                        aria-hidden="true"
                       />
                       <Copy
                         v-else
-                        class="h-3.5 w-3.5"
+                        class="h-5 w-5"
+                        aria-hidden="true"
                       />
-                      {{ copiedOutputPath === path ? t('common.copied') : t('common.copy') }}
                     </button>
                   </div>
                 </div>
@@ -816,10 +841,15 @@
                   <Button
                     v-if="trimOutputDirectories.length"
                     variant="secondary"
+                    icon-only
+                    :aria-label="t('projectManager.openOutputDirectory')"
+                    :tooltip="t('projectManager.openOutputDirectory')"
                     @click="openTrimOutputDirectories"
                   >
-                    <FolderOpen class="mr-2 h-4 w-4" />
-                    {{ t('projectManager.openOutputDirectory') }}
+                    <FolderOpen
+                      class="h-5 w-5"
+                      aria-hidden="true"
+                    />
                   </Button>
                   <Button
                     v-if="failedTrimIds.length"
@@ -976,26 +1006,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import { useI18n } from 'vue-i18n';
-import {
-  AlertTriangle,
-  Check,
-  CheckCircle,
-  ChevronLeft,
-  ChevronRight,
-  Copy,
-  FolderOpen,
-  ImageOff,
-  ImagePlus,
-  Loader2,
-  MoreVertical,
-  Play,
-  Plus,
-  RefreshCw,
-  Scissors,
-  Search,
-  Trash2,
-  X,
-} from 'lucide-vue-next';
+import { AlertTriangle, Check, CheckCircle, ChevronLeft, ChevronRight, Copy, FolderOpen, ImageOff, ImagePlus, Loader2, MoreVertical, Play, Plus, RefreshCw, Scissors, Search, Trash2, X, Files, CheckSquare, MinusSquare, Square } from 'lucide-vue-next';
 import { Dialog, DialogPanel, DialogTitle, Menu, MenuButton, MenuItem, MenuItems, TransitionChild, TransitionRoot } from '@headlessui/vue';
 import { useProjectStore } from '@/stores/project';
 import { usePlayerStore } from '@/stores/player';
@@ -1526,13 +1537,13 @@ async function openProject(project: Project) {
   try {
     projectStore.setCurrentProject(project);
 
-    // Preload step 1 frames so the editor opens with images ready
-    const response = await api.frame.getFrames(project.id, 1, 1, 500, true);
-    if (response.success && response.frames.length > 0) {
-      playerStore.loadFrames(response.frames);
-      // Urgent preload first 6 frames before switching UI
-      const urgent = response.frames.slice(0, 6);
-      await playerStore.preloadFrames(urgent, 3);
+    // Leave a cleared preview cache for the editor to rebuild with its loading state visible.
+    if (project.steps?.['1']?.data_ready) {
+      const response = await api.frame.getFrames(project.id, 1, 1, 500, true);
+      if (response.success && response.frames.length > 0) {
+        playerStore.loadFrames(response.frames);
+        await playerStore.preloadFrames(response.frames.slice(0, 6), 3);
+      }
     }
 
     router.push('/editor');

@@ -136,11 +136,11 @@
           :aria-label="locale === 'zh-CN' ? 'Switch to English' : '切换到中文'"
           @click="toggleLocale"
         >
-          <Globe class="w-5 h-5" />
+          <Languages class="w-5 h-5" />
         </button>
 
         <button
-          v-if="projectStore.currentProject"
+          v-if="projectStore.currentProject && router.currentRoute.value.path !== '/editor'"
           :disabled="isProcessing"
           :class="[
             'control-tooltip control-tooltip--below p-2 rounded-lg transition-colors',
@@ -200,7 +200,7 @@ import { storeToRefs } from 'pinia';
 import { useI18n } from 'vue-i18n';
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { Menu, MenuButton, MenuItems, MenuItem } from '@headlessui/vue';
-import { CircleUserRound, FolderOpen, Settings, Home, Globe, LogOut } from 'lucide-vue-next';
+import { CircleUserRound, FolderOpen, Settings, Home, Languages, LogOut } from 'lucide-vue-next';
 import { useProjectStore } from '@/stores/project';
 import { useProcessStore } from '@/stores/process';
 import { useAuthStore } from '@/stores/auth';

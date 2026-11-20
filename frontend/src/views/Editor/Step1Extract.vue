@@ -20,15 +20,21 @@
           min="1"
           :max="maxFrame"
           class="w-20"
+          @update:model-value="s1Params.frame_overrides = {}"
           @blur="clampFrameInterval"
         />
         <Button
           variant="ghost"
           size="sm"
+          icon-only
+          :aria-label="t('buttonHints.autoInterval')"
+          :tooltip="t('buttonHints.autoInterval')"
           @click="autoCalculateInterval"
         >
-          <Calculator class="w-4 h-4 mr-1" />
-          {{ t('step1.autoCalculate') }}
+          <Calculator
+            class="h-5 w-5"
+            aria-hidden="true"
+          />
         </Button>
       </div>
       <p class="text-xs text-gray-500">
@@ -50,15 +56,21 @@
               :min="0"
               :max="Math.min(maxFrame, s1Params.end_frame)"
               class="w-20"
+              @update:model-value="s1Params.frame_overrides = {}"
               @change="clampStartFrame"
               @blur="clampStartFrame"
             />
             <button
               class="control-tooltip p-2 rounded-lg bg-dark-surface border border-green-500/50 shadow-lg shadow-green-500/25 transition-all"
-              :aria-label="`${t('step1.startFrame')}: ${t('step1.useCurrentFrame')}`"
+              :aria-label="t('buttonHints.setStart')"
+              :data-tooltip="t('buttonHints.setStart')"
+              data-test="set-start-frame"
               @click="setStartToCurrent"
             >
-              <Circle class="w-5 h-5 text-green-500 fill-green-500" />
+              <Circle
+                class="w-5 h-5 text-green-500 fill-green-500"
+                aria-hidden="true"
+              />
             </button>
           </div>
         </div>
@@ -74,15 +86,21 @@
               :min="s1Params.start_frame"
               :max="maxFrame"
               class="w-20"
+              @update:model-value="s1Params.frame_overrides = {}"
               @change="clampEndFrame"
               @blur="clampEndFrame"
             />
             <button
               class="control-tooltip control-tooltip--end p-2 rounded-lg bg-dark-surface border border-red-500/50 shadow-lg shadow-red-500/25 transition-all"
-              :aria-label="`${t('step1.endFrame')}: ${t('step1.useCurrentFrame')}`"
+              :aria-label="t('buttonHints.setEnd')"
+              :data-tooltip="t('buttonHints.setEnd')"
+              data-test="set-end-frame"
               @click="setEndToCurrent"
             >
-              <Circle class="w-5 h-5 text-red-500 fill-red-500" />
+              <Circle
+                class="w-5 h-5 text-red-500 fill-red-500"
+                aria-hidden="true"
+              />
             </button>
           </div>
         </div>
@@ -121,9 +139,13 @@
       <Button
         block
         :loading="isProcessing"
+        :tooltip="isStepCompleted ? t('buttonHints.reExtract') : t('buttonHints.extract')"
         @click="startProcessing"
       >
-        <Play class="w-4 h-4 mr-2" />
+        <Layers
+          class="h-5 w-5 mr-2"
+          aria-hidden="true"
+        />
         {{ isStepCompleted ? t('step1.reExtract') : t('step1.startExtraction') }}
       </Button>
 
@@ -133,8 +155,11 @@
         block
         @click="cancelProcessing"
       >
-        <X class="w-4 h-4 mr-2" />
-        {{ t('common.cancel') }}
+        <Square
+          class="mr-2 h-4 w-4"
+          aria-hidden="true"
+        />
+        {{ t('common.cancelProcessing') }}
       </Button>
     </div>
   </div>
@@ -144,7 +169,7 @@
 import { computed, onMounted, ref } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useI18n } from 'vue-i18n';
-import { Play, CheckCircle, X, Calculator, Circle } from 'lucide-vue-next';
+import { CheckCircle, Calculator, Circle, Layers, Square } from 'lucide-vue-next';
 import { useProjectStore } from '@/stores/project';
 import { useProcessStore } from '@/stores/process';
 import { usePlayerStore } from '@/stores/player';
@@ -285,6 +310,7 @@ function autoCalculateInterval() {
 
   // Take the middle value
   const idx = Math.floor(divisors.length / 2);
+  s1Params.value.frame_overrides = {};
   s1Params.value.frame_interval = divisors[idx];
   // Sync to player
   playerStore.frameInterval = divisors[idx];
@@ -318,6 +344,7 @@ async function startProcessing() {
     start_frame: s1Params.value.start_frame,
     end_frame: s1Params.value.end_frame,
     frame_interval: s1Params.value.frame_interval,
+    frame_overrides: s1Params.value.frame_overrides ?? {},
     fps: s1Params.value.fps,
     processed: true
   };
@@ -330,6 +357,7 @@ async function cancelProcessing() {
 }
 
 function setStartToCurrent() {
+  s1Params.value.frame_overrides = {};
   const frame = currentIndex.value;
   if (frame >= 0 && frame <= maxFrame.value) {
     s1Params.value.start_frame = frame;
@@ -339,6 +367,7 @@ function setStartToCurrent() {
 }
 
 function setEndToCurrent() {
+  s1Params.value.frame_overrides = {};
   const frame = currentIndex.value;
   if (frame >= 0 && frame <= maxFrame.value) {
     s1Params.value.end_frame = frame;

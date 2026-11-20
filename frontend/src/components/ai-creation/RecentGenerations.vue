@@ -23,21 +23,40 @@
           </button>
         </div>
       </div>
-      <div class="flex items-center gap-4">
+      <div class="flex flex-wrap items-center gap-2">
         <Switch
           v-model="stackSamePrompts"
           :label="t('aiCreation.recent.stackSamePrompts')"
+          compact
           data-test="recent-stack-same-prompts"
         />
+        <Button
+          variant="secondary"
+          size="sm"
+          :loading="importing"
+          data-test="source-media-import"
+          @click="importLocalMedia"
+        >
+          <Upload
+            v-if="!importing"
+            class="mr-2 h-4 w-4"
+            aria-hidden="true"
+          />
+          {{ t('aiCreation.sourceMedia.import') }}
+        </Button>
         <button
           type="button"
-          class="flex items-center gap-1.5 rounded-lg border border-dark-border bg-dark-surface px-3 py-2 text-sm text-gray-400 transition-colors hover:border-gray-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+          class="flex !h-[34px] items-center gap-1.5 rounded-lg border border-dark-border bg-dark-surface px-3 !py-1.5 text-sm text-gray-400 transition-colors hover:border-gray-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-50 icon-button control-tooltip"
           :disabled="loading"
           data-test="recent-refresh"
+          :aria-label="t('aiCreation.sourceMedia.refresh')"
+          :data-tooltip="t('aiCreation.sourceMedia.refresh')"
           @click="refreshCurrent"
         >
-          <RefreshCw class="h-4 w-4" />
-          {{ t('common.refresh') }}
+          <RefreshCw
+            class="h-5 w-5"
+            aria-hidden="true"
+          />
         </button>
       </div>
     </div>
@@ -47,6 +66,13 @@
       class="mb-4 rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-danger"
     >
       {{ error.message }}
+    </p>
+    <p
+      v-if="importError || localMediaError"
+      class="mb-4 rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-danger"
+      role="alert"
+    >
+      {{ importError || localMediaError }}
     </p>
     <div
       v-if="loading && !visibleItems.length"
@@ -63,58 +89,44 @@
     </div>
     <div
       v-else
-      class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4"
+      class="grid auto-rows-fr grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4"
       data-test="recent-generations-grid"
     >
-      <template v-if="workspace.recentFilter === 'image'">
+      <template
+        v-for="entry in visibleItems"
+        :key="entry.key"
+      >
+        <SourceMediaCard
+          v-if="entry.kind === 'local'"
+          :item="entry.item"
+        />
         <RecentPromptGroup
-          v-for="group in visibleImageGroups"
-          :key="group.key"
-          :group-id="promptGroupId('image', group.key)"
-          :prompt="group.prompt"
-          :count="group.items.length"
-          :expanded="isExpanded('image', group.key)"
-          @toggle-expanded="toggleExpanded('image', group.key)"
+          v-else-if="entry.kind === 'image'"
+          :group-id="promptGroupId('image', entry.group.key)"
+          :prompt="entry.group.prompt"
+          :count="entry.group.items.length"
+          :expanded="isExpanded('image', entry.group.key)"
+          @toggle-expanded="toggleExpanded('image', entry.group.key)"
         >
           <RecentImageGenerationCard
-            :batch="group.items[0]"
+            :batch="entry.group.items[0]"
             @open="openImageDetail"
           >
             <template
-              v-if="group.items.length === 1"
+              v-if="entry.group.items.length === 1"
               #top-right="{ attempt }"
             >
               <RecentMediaFavoriteButton
                 v-if="attempt"
-                :favorite="isFavorite(imageMediaKey(group.items[0].local_id, attempt.local_id))"
-                :data-test="`recent-media-favorite-${imageMediaKey(group.items[0].local_id, attempt.local_id)}`"
-                @toggle="toggleFavorite(imageMediaKey(group.items[0].local_id, attempt.local_id))"
+                :favorite="isFavorite(imageMediaKey(entry.group.items[0].local_id, attempt.local_id))"
+                :data-test="`recent-media-favorite-${imageMediaKey(entry.group.items[0].local_id, attempt.local_id)}`"
+                @toggle="toggleFavorite(imageMediaKey(entry.group.items[0].local_id, attempt.local_id))"
               />
-            </template>
-            <template
-              v-if="group.items.length > 1"
-              #bottom-right
-            >
-              <button
-                type="button"
-                class="inline-flex items-center gap-1 text-xs font-medium text-primary transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
-                :aria-expanded="isExpanded('image', group.key)"
-                :data-test="`recent-prompt-expand-${promptGroupId('image', group.key)}`"
-                @click.stop="toggleExpanded('image', group.key)"
-                @keydown.stop
-              >
-                {{ t(isExpanded('image', group.key) ? 'aiCreation.recent.collapseTasks' : 'aiCreation.recent.expandTasks') }}
-                <ChevronDown
-                  class="h-3.5 w-3.5 transition-transform"
-                  :class="isExpanded('image', group.key) ? 'rotate-180' : ''"
-                  aria-hidden="true"
-                />
-              </button>
             </template>
           </RecentImageGenerationCard>
           <template #expanded>
             <RecentImageGenerationCard
-              v-for="batch in group.items"
+              v-for="batch in entry.group.items"
               :key="batch.local_id"
               :batch="batch"
               @open="openImageDetail"
@@ -130,55 +142,32 @@
             </RecentImageGenerationCard>
           </template>
         </RecentPromptGroup>
-      </template>
-      <template v-else>
         <RecentPromptGroup
-          v-for="group in visibleVideoGroups"
-          :key="group.key"
-          :group-id="promptGroupId('video', group.key)"
-          :prompt="group.prompt"
-          :count="group.items.length"
-          :expanded="isExpanded('video', group.key)"
-          @toggle-expanded="toggleExpanded('video', group.key)"
+          v-else
+          :group-id="promptGroupId('video', entry.group.key)"
+          :prompt="entry.group.prompt"
+          :count="entry.group.items.length"
+          :expanded="isExpanded('video', entry.group.key)"
+          @toggle-expanded="toggleExpanded('video', entry.group.key)"
         >
           <RecentVideoGenerationCard
-            :task="group.items[0]"
+            :task="entry.group.items[0]"
             @open="openVideoDetail"
           >
             <template
-              v-if="group.items.length === 1"
+              v-if="entry.group.items.length === 1"
               #top-right
             >
               <RecentMediaFavoriteButton
-                :favorite="isFavorite(videoMediaKey(group.items[0].local_id))"
-                :data-test="`recent-media-favorite-${videoMediaKey(group.items[0].local_id)}`"
-                @toggle="toggleFavorite(videoMediaKey(group.items[0].local_id))"
+                :favorite="isFavorite(videoMediaKey(entry.group.items[0].local_id))"
+                :data-test="`recent-media-favorite-${videoMediaKey(entry.group.items[0].local_id)}`"
+                @toggle="toggleFavorite(videoMediaKey(entry.group.items[0].local_id))"
               />
-            </template>
-            <template
-              v-if="group.items.length > 1"
-              #bottom-right
-            >
-              <button
-                type="button"
-                class="inline-flex items-center gap-1 text-xs font-medium text-primary transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
-                :aria-expanded="isExpanded('video', group.key)"
-                :data-test="`recent-prompt-expand-${promptGroupId('video', group.key)}`"
-                @click.stop="toggleExpanded('video', group.key)"
-                @keydown.stop
-              >
-                {{ t(isExpanded('video', group.key) ? 'aiCreation.recent.collapseTasks' : 'aiCreation.recent.expandTasks') }}
-                <ChevronDown
-                  class="h-3.5 w-3.5 transition-transform"
-                  :class="isExpanded('video', group.key) ? 'rotate-180' : ''"
-                  aria-hidden="true"
-                />
-              </button>
             </template>
           </RecentVideoGenerationCard>
           <template #expanded>
             <RecentVideoGenerationCard
-              v-for="task in group.items"
+              v-for="task in entry.group.items"
               :key="task.local_id"
               :task="task"
               @open="openVideoDetail"
@@ -214,7 +203,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
-import { ChevronDown, RefreshCw } from 'lucide-vue-next';
+import { RefreshCw, Upload } from 'lucide-vue-next';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 import { useRecentMediaFavorites } from '@/recent-media-favorites';
@@ -222,6 +211,10 @@ import { groupRecentByPrompt, listRecentIndividually } from '@/recent-prompt-gro
 import { useAICreationStore, type RecentGenerationFilter } from '@/stores/aiCreation';
 import { useSeedanceStore } from '@/stores/seedance';
 import { useSeedreamStore } from '@/stores/seedream';
+import { api } from '@/api';
+import type { SourceMedia } from '@/types';
+import Button from '@/components/common/Button.vue';
+import SourceMediaCard from './SourceMediaCard.vue';
 import Switch from '@/components/common/Switch.vue';
 import RecentImageGenerationCard from './RecentImageGenerationCard.vue';
 import RecentMediaFavoriteButton from './RecentMediaFavoriteButton.vue';
@@ -245,19 +238,34 @@ const imageGroups = computed(() => stackSamePrompts.value
 const videoGroups = computed(() => stackSamePrompts.value
   ? groupRecentByPrompt(seedance.tasks)
   : listRecentIndividually(seedance.tasks));
-const visibleImageGroups = computed(() => workspace.recentFilter === 'image'
-  ? imageGroups.value.slice(0, workspace.recentLoaded.image)
-  : []);
-const visibleVideoGroups = computed(() => workspace.recentFilter === 'video'
-  ? videoGroups.value.slice(0, workspace.recentLoaded.video)
-  : []);
-const visibleItems = computed(() => workspace.recentFilter === 'image' ? visibleImageGroups.value : visibleVideoGroups.value);
-const totalItems = computed(() => workspace.recentFilter === 'image' ? imageGroups.value.length : videoGroups.value.length);
-const hasMore = computed(() => visibleItems.value.length < totalItems.value);
-const loading = computed(() => workspace.recentFilter === 'image' ? seedream.loading : seedance.loading);
+const localMedia = ref<SourceMedia[]>([]);
+const loadingLocalMedia = ref(false);
+const localMediaError = ref('');
+const importError = ref('');
+const importing = ref(false);
+let localMediaLoadId = 0;
+
+const mediaEntries = computed(() => {
+  const filter = workspace.recentFilter;
+  const localEntries = localMedia.value.filter(item => item.kind === filter).map(item => ({
+    kind: 'local' as const, key: `local:${item.id}`, createdAt: item.imported_at, item,
+  }));
+  const generatedEntries = filter === 'image'
+    ? imageGroups.value.map(group => ({
+      kind: 'image' as const, key: `image:${group.key}`, createdAt: group.items[0].created_at, group,
+    }))
+    : videoGroups.value.map(group => ({
+      kind: 'video' as const, key: `video:${group.key}`, createdAt: group.items[0].created_at, group,
+    }));
+  return [...localEntries, ...generatedEntries]
+    .sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt));
+});
+const visibleItems = computed(() => mediaEntries.value.slice(0, workspace.recentLoaded[workspace.recentFilter]));
+const hasMore = computed(() => visibleItems.value.length < mediaEntries.value.length);
+const loading = computed(() => loadingLocalMedia.value || (workspace.recentFilter === 'image' ? seedream.loading : seedance.loading));
 const error = computed(() => workspace.recentFilter === 'image' ? seedream.error : seedance.error);
 
-onMounted(() => loadCurrent());
+onMounted(() => Promise.all([loadCurrent(), loadLocalMedia()]));
 watch(() => workspace.recentFilter, () => {
   expandedPromptKeys.value = new Set();
   return loadCurrent();
@@ -273,7 +281,40 @@ function loadCurrent() {
 
 async function refreshCurrent() {
   workspace.resetRecentLoaded(workspace.recentFilter);
-  await loadCurrent();
+  await Promise.all([loadCurrent(), loadLocalMedia()]);
+}
+
+async function loadLocalMedia() {
+  const requestId = ++localMediaLoadId;
+  loadingLocalMedia.value = true;
+  localMediaError.value = '';
+  try {
+    const items = await api.sourceMedia.list();
+    if (requestId === localMediaLoadId) localMedia.value = items;
+  } catch {
+    if (requestId === localMediaLoadId) localMediaError.value = t('aiCreation.sourceMedia.loadFailed');
+  } finally {
+    if (requestId === localMediaLoadId) loadingLocalMedia.value = false;
+  }
+}
+
+async function importLocalMedia() {
+  if (importing.value) return;
+  importing.value = true;
+  importError.value = '';
+  try {
+    const { items, failed } = await api.sourceMedia.import();
+    if (items.length) {
+      localMedia.value = [...items, ...localMedia.value.filter(item => !items.some(imported => imported.id === item.id))];
+      if (!items.some(item => item.kind === workspace.recentFilter)) workspace.setRecentFilter(items[0].kind);
+      await loadLocalMedia();
+    }
+    if (failed.length) importError.value = t('aiCreation.sourceMedia.importFailedFiles', { files: failed.join(', ') });
+  } catch {
+    importError.value = t('aiCreation.sourceMedia.importFailed');
+  } finally {
+    importing.value = false;
+  }
 }
 
 function openImageDetail(localId: string) {

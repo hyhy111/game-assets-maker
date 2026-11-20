@@ -45,3 +45,10 @@ For private-repository tests, set `GAM_UPDATE_GITHUB_TOKEN` in the launching pro
 ### Error diagnostics
 
 Installed builds automatically record remote connection, certificate, timeout, HTTP, business and failed-job errors in `~/.gam/logs/network.log`. Seedream and Seedance API exceptions are recorded separately in `seedream.log` and `seedance.log`, including the operation, cause, traceback and available task identifiers. Generic error messages include an `error_id` matching the log. These diagnostics are independent of the error-logging setting. Request bodies, image contents and credentials are omitted or redacted; URL query parameters are removed. Each file rotates at 5 MB with three backups, and logging failures do not affect the original operation. `GAM_DATA_ROOT` relocates the logs; source development defaults to the workspace's `logs/` directory.
+
+
+## 本地去背与后处理
+
+步骤 02 每个动作保留一套当前去背结果。切换模型可以继续查看上一轮结果。新一轮整批成功后替换去背帧并清除步骤 03 的结果，包含逐帧修整。失败或取消时保留上次成功的两步结果。
+
+步骤 03 的批量工具按挖孔、缩减边缘、对齐的顺序执行。缩减边缘默认关闭，数值以原图像素为单位。缩减使外轮廓及透明孔洞周围的可见像素向内收，羽化从新轮廓向内逐渐恢复原始不透明度。魔棒和橡皮擦仍可用于逐帧修整。

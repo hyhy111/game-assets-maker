@@ -306,6 +306,34 @@ test('video model scope guards model selection while insufficient credits only g
 });
 
 for (const kind of ['image', 'video']) {
+  test(`${kind}: a new account can select and quote a model with no credit buckets`, async t => {
+    const price = kind === 'image' ? 60 : 199;
+    const page = await mountPage(t, kind, {
+      quoteResponse: { data: { quote: price, canSubmit: false, reasonCode: 'NO_ELIGIBLE_CREDITS' } },
+      availabilityResponse: {
+        ...availability,
+        account: { generalAvailable: 0, bonusAvailable: 0, totalAvailable: 0, buckets: [] },
+        combinations: availability.combinations.map(row => ({
+          ...row, generalAvailable: 0, canSubmit: false,
+        })),
+      },
+    });
+    page.workspace.imageDraft.prompt = 'Draw a deer';
+    page.workspace.videoDraft.prompt = 'Walk forward';
+    page.workspace.videoDraft.first_frame = '/tmp/character.png';
+    await page.tick();
+
+    const state = page.app._instance.setupState;
+    const model = kind === 'image' ? imageId : videoId;
+    assert.equal(state.modelOptions.find(option => option.value === model).disabled, false);
+    assert.ok(page.httpCalls.some(call => call.path === `/app/credit/v2/quote/${kind}` && call.body?.model === model));
+    assert.equal(state.quoteError, `预计消耗 ${price} 积分，当前可用积分不足`);
+    assert.equal(await primarySubmitDisabled(kind, state), true);
+    assert.equal(state.platformConfirmBlocked, true);
+    await state.submit();
+    assert.equal(page.bridge.calls.some(call => /seedream_create_batch|seedance_create_task/.test(call.method)), false);
+  });
+
   test(`${kind}: a selected model outside the bonus scope becomes disabled and falls back to an eligible model`, async t => {
     const eligible = kind === 'image' ? imageId : videoId;
     const excluded = 'outside-bonus-scope';
@@ -416,6 +444,41 @@ test('workspace entry defaults a signed-in account to ForFuner AI and permits a 
   page.workspace.setGenerationSource('api-key');
   await page.tick();
   assert.equal(page.workspace.generationSource, 'api-key');
+  page.workspace.imageDraft.model = 'flash';
+  await page.auth.logout();
+  await page.tick();
+  assert.equal(page.workspace.imageDraft.model, 'flash');
+});
+
+test('workspace logout restores both custom-key models and keeps the draft content', async t => {
+  const page = await mountPage(t, 'workspace');
+  const { workspace } = page;
+  assert.equal(workspace.generationSource, 'forfuner-ai');
+  workspace.initializeImageDraft({ ...workspace.imageDraft, model: 'flash' }, imageId);
+  workspace.initializeVideoDraft({ ...workspace.videoDraft, model: 'fast' }, videoId);
+  Object.assign(workspace.imageDraft, { model: imageId, resolution: '4K', prompt: 'Create a character', reference_image: '/reference.png' });
+  Object.assign(workspace.videoDraft, { model: videoId, resolution: '1080p', duration: 10, prompt: 'Walk forward', first_frame: '/first.png' });
+
+  await page.auth.logout();
+  await page.tick();
+
+  assert.equal(workspace.generationSource, 'api-key');
+  const { model: imageModel, resolution: imageSize, prompt: imagePrompt, reference_image: reference } = workspace.imageDraft;
+  const { model: videoModel, resolution: videoSize, duration, prompt: videoPrompt, first_frame: first } = workspace.videoDraft;
+  assert.deepEqual([imageModel, imageSize, imagePrompt, reference], ['flash', '1K', 'Create a character', '/reference.png']);
+  assert.deepEqual([videoModel, videoSize, duration, videoPrompt, first], ['fast', '480p', 4, 'Walk forward', '/first.png']);
+
+  const html = await renderSfc('views/SeedanceCreate.vue', {
+    route: '/ai-creation?mode=video',
+    props: { embedded: true, showTaskList: false },
+    piniaState: {
+      auth: { status: page.auth.status },
+      'ai-creation': { generationSource: workspace.generationSource, videoDraft: { ...workspace.videoDraft } },
+    },
+  });
+  const modelButton = html.match(/<button\b[^>]*data-test="seedance-model"[^>]*>[\s\S]*?<\/button>/)?.[0] ?? '';
+  assert.match(modelButton, /Seedance2\.0 Fast/);
+  assert.ok(!modelButton.includes(videoId));
 });
 
 test('workspace entry follows delayed login restoration', async t => {
@@ -424,6 +487,51 @@ test('workspace entry follows delayed login restoration', async t => {
   page.auth.status = 'authenticated';
   await page.tick();
   assert.equal(page.workspace.generationSource, 'forfuner-ai');
+});
+
+for (const kind of ['image', 'video']) {
+  test(`${kind}: changing the source dismisses an open generation confirmation`, async t => {
+    const page = await mountPage(t, kind, {
+      bridgeScript: { seedance_validate_request: [{ resolve: { success: true, data: { valid: true } } }] },
+    });
+    await page.tick();
+    const state = page.app._instance.setupState;
+    const dialog = kind === 'image' ? 'confirmModal' : 'paidConfirmModal';
+    page.workspace.imageDraft.prompt = 'Create a character';
+    Object.assign(page.workspace.videoDraft, { prompt: 'Walk forward', first_frame: '/first.png' });
+    const previousDocument = globalThis.document;
+    globalThis.document = Object.assign(new EventTarget(), { activeElement: null });
+    t.after(() => { if (previousDocument === undefined) delete globalThis.document; else globalThis.document = previousDocument; });
+    await state.submit();
+    assert.equal(state[dialog], true);
+
+    page.workspace.setGenerationSource('api-key');
+    await page.tick();
+
+    assert.equal(state[dialog], false);
+    assert.equal(page.bridge.calls.some(call => /seedream_create_batch|seedance_create_task/.test(call.method)), false);
+  });
+}
+
+test('video: a source change invalidates an in-flight platform preflight', async t => {
+  let finishPreflight;
+  const preflight = new Promise(resolve => { finishPreflight = resolve; });
+  const page = await mountPage(t, 'video', {
+    bridgeScript: { seedance_validate_request: [{ resolve: () => preflight }] },
+  });
+  await page.tick();
+  const state = page.app._instance.setupState;
+  Object.assign(page.workspace.videoDraft, { prompt: 'Walk forward', first_frame: '/first.png' });
+  const submission = state.submit();
+  await page.tick();
+  assert.ok(page.bridge.calls.some(call => call.method === 'seedance_validate_request'));
+
+  page.workspace.setGenerationSource('api-key');
+  finishPreflight({ success: true, data: { valid: true } });
+  await submission;
+
+  assert.equal(state.paidConfirmModal, false);
+  assert.equal(state.pendingRequest, null);
 });
 
 for (const returnLastFrame of [false, true]) {

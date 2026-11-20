@@ -389,10 +389,11 @@ export interface AudioSyncStoreLike {
 export interface AudioSyncControllerDeps {
   audioStore: AudioSyncStoreLike;
   engine: AudioPlaybackEngine;
+  getPlaybackStartFrame?: (currentFrame: number) => number;
 }
 
 export interface AudioSyncController {
-  /** Trigger clips placed exactly on the frame where playback begins. */
+  /** Trigger clips assigned to the frame where playback begins. */
   onPlaybackStart(currentFrame: number): void;
   /**
    * 连续播放帧推进回调（由 player store 的 frame-advance hook 调用）。
@@ -420,7 +421,8 @@ export function createAudioSyncController(deps: AudioSyncControllerDeps): AudioS
   function onPlaybackStart(currentFrame: number): void {
     lastTickFrame = currentFrame;
     if (!deps.audioStore.loaded || deps.audioStore.sourceFps <= 0) return;
-    for (const clip of getTriggeredClips(currentFrame - 1, currentFrame, deps.audioStore.clips)) {
+    const start = deps.getPlaybackStartFrame?.(currentFrame) ?? currentFrame;
+    for (const clip of getTriggeredClips(start - 1, currentFrame, deps.audioStore.clips)) {
       deps.engine.playClip(clip, deps.audioStore.sourceFps);
     }
   }

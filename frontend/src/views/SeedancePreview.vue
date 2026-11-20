@@ -11,15 +11,16 @@
       </h1>
       <button
         type="button"
-        class="ml-auto flex w-fit items-center gap-2 rounded-lg px-1 py-2 text-base text-gray-400 transition-colors hover:text-white focus:outline-none focus:ring-2 focus:ring-primary/60"
+        class="ml-auto flex w-fit items-center gap-2 rounded-lg px-1 py-2 text-base text-gray-400 transition-colors hover:text-white focus:outline-none focus:ring-2 focus:ring-primary/60 icon-button control-tooltip"
         data-test="seedance-preview-back"
+        :aria-label="t('aiCreation.backToWorkspace')"
+        :data-tooltip="t('aiCreation.backToWorkspace')"
         @click="backToTasks"
       >
         <ArrowLeft
-          :size="22"
+          class="h-5 w-5"
           aria-hidden="true"
         />
-        {{ t('aiCreation.backToWorkspace') }}
       </button>
     </div>
 
@@ -60,20 +61,33 @@
             variant="secondary"
             @click="cancelTask"
           >
+            <StopCircle
+              class="h-5 w-5 mr-2"
+              aria-hidden="true"
+            />
             {{ t('seedance.tasks.cancel') }}
           </Button>
           <Button
             v-if="canRetryDownload"
             variant="secondary"
+            icon-only
+            :aria-label="t('buttonHints.retryDownload')"
             @click="retryDownload"
           >
-            {{ t('seedance.ui.redownload') }}
+            <Download
+              class="h-5 w-5"
+              aria-hidden="true"
+            />
           </Button>
           <Button
             v-if="task.cache_status === 'complete'"
             variant="primary"
             @click="regenerate"
           >
+            <RotateCw
+              class="h-5 w-5 mr-2"
+              aria-hidden="true"
+            />
             {{ t('seedance.tasks.regenerate') }}
           </Button>
           <Button
@@ -81,6 +95,10 @@
             variant="primary"
             @click="continueFromReturnedFrame"
           >
+            <ArrowRightFromLine
+              class="h-5 w-5 mr-2"
+              aria-hidden="true"
+            />
             {{ t('seedance.ui.continueGeneration') }}
           </Button>
           <div class="ml-auto flex items-center gap-2">
@@ -292,7 +310,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
-import { ArrowLeft, Download, FolderOpen, Loader2, Trash2 } from 'lucide-vue-next';
+import { ArrowLeft, Download, FolderOpen, Loader2, Trash2, StopCircle, RotateCw, ArrowRightFromLine } from 'lucide-vue-next';
 import { api } from '@/api';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';

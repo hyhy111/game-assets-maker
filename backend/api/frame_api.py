@@ -15,6 +15,7 @@ from PIL import Image
 
 from backend.api.frame_visibility import get_hidden_frame_names, restore_hidden_frames, set_frame_hidden
 from backend.api.project_paths import media_url_for_path, resolve_project_path
+from backend.api.project_preview_cache import ensure_preview_frames, visible_preview_frames
 from backend.core.frame_edit_history import (
     initial_frame,
     remember_backup_step,
@@ -51,18 +52,24 @@ class FrameAPI:
             return frame_path
 
     def get_frames(
-        self, project_id: str, step: int, page: int = 1, page_size: int = 50, use_cache: bool = True
+        self,
+        project_id: str,
+        step: int,
+        page: int = 1,
+        page_size: int = 50,
+        use_cache: bool = True,
+        rebuild_preview: bool = False,
     ) -> dict[str, Any]:
         """Get frames for a project at specific step with pagination"""
         project_path = resolve_project_path(self._projects_root, project_id)
 
-        # Determine directory based on step
+        cache_frames = []
         if step == 1:
-            # Step 1: always show cache frames for preview so users can adjust range/interval
-            cache_dir = project_path / "cache" / "01_frames_cache"
-            output_dir = project_path / "output" / "01_frames"
-
-            frames_dir = cache_dir if use_cache and cache_dir.exists() else output_dir
+            if use_cache:
+                if rebuild_preview:
+                    ensure_preview_frames(self._projects_root, project_path)
+                cache_frames = visible_preview_frames(project_path)
+            frames_dir = project_path / "output" / "01_frames"
         elif step == 2:
             frames_dir = project_path / "output" / "02_no_bg"
         elif step == 3:
@@ -70,7 +77,7 @@ class FrameAPI:
         else:
             return {"success": False, "error": "Invalid step"}
 
-        if not frames_dir.exists():
+        if not cache_frames and not frames_dir.exists():
             return {
                 "success": True,
                 "frames": [],
@@ -83,10 +90,21 @@ class FrameAPI:
             }
 
         # Step 2/3 share a project-level non-destructive visibility list.
-        all_frame_files = sorted(frames_dir.glob("*.png"))
-        timeline_indices = {frame: index for index, frame in enumerate(all_frame_files)}
+        all_frame_files = sorted(cache_frames or frames_dir.glob("*.png"))
         hidden_frames = set(get_hidden_frame_names(project_path)) if step in {2, 3} else set()
-        frame_files = [frame for frame in all_frame_files if frame.name not in hidden_frames]
+        frame_files = []
+        hidden_previews = []
+        for timeline_index, frame in enumerate(all_frame_files):
+            if frame.name not in hidden_frames:
+                frame_files.append((timeline_index, frame))
+            elif page == 1:
+                hidden_previews.append(
+                    {
+                        "filename": frame.name,
+                        "timeline_index": timeline_index,
+                        "url": self.get_frame_url(str(frame)),
+                    }
+                )
 
         # Calculate pagination
         total = len(frame_files)
@@ -96,12 +114,12 @@ class FrameAPI:
 
         # Build frame list
         frames = []
-        for i, frame_file in enumerate(frame_files[start_idx:end_idx], start=start_idx):
+        for i, (timeline_index, frame_file) in enumerate(frame_files[start_idx:end_idx], start=start_idx):
             frame_path = str(frame_file)
             frames.append(
                 {
                     "index": i,
-                    "timeline_index": timeline_indices[frame_file],
+                    "timeline_index": timeline_index,
                     "name": frame_file.stem,
                     "path": frame_path,
                     "filename": frame_file.name,
@@ -118,6 +136,7 @@ class FrameAPI:
             "page_size": page_size,
             "total_pages": total_pages,
             "hidden_count": len(hidden_frames),
+            **({"hidden_previews": hidden_previews} if hidden_previews else {}),
         }
 
     def get_hidden_frames(self, project_id: str) -> list[str]:

@@ -8,6 +8,8 @@
         <component
           :is="currentStepComponent"
           v-if="projectStore.currentProject && paramsLoaded"
+          @reset-post-processing="openPostProcessingReset()"
+          @undo-post-processing="openPostProcessingReset('last')"
         />
         <div
           v-else-if="!paramsLoaded"
@@ -37,14 +39,24 @@
               {{ t('magicWand.idleHint') }}
             </p>
           </div>
-          <div class="relative min-h-0 flex-1">
+          <div
+            ref="frameViewport"
+            class="relative min-h-0 flex-1 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
+            role="region"
+            :aria-label="t('player.framePreview')"
+            tabindex="-1"
+          >
             <FramePlayer
               v-if="playerStore.frames.length > 0"
-              :keyboard-disabled="frameEditorLoading || frameEditorSaving || navigationPending"
+              :keyboard-disabled="frameEditorLoading || frameEditorSaving || navigationPending || postProcessingResetOpen"
               :editing="!!frameEditor"
               :retouch-enabled="frameRetouchEnabled"
-              :tools-disabled="frameEditorLoading || frameEditorSaving || navigationPending || processStore.isProcessing"
+              :tools-disabled="visibilityUpdating || frameEditorLoading || frameEditorSaving || navigationPending || processStore.isProcessing"
               :active-tool="frameEditor ? frameEditorTool : 'browse'"
+              :preview-frame-index="previewFrameIndex"
+              @preview-step="stepCandidateFrame"
+              @preview-cancel="closeFramePicker(true)"
+              @preview-ready="readyPreviewFrame = $event"
               @tool="selectFrameTool"
             >
               <SeedreamImageEraser
@@ -61,7 +73,7 @@
                 :view-zoom="playerStore.zoom"
                 :view-pan-x="playerStore.panX"
                 :view-pan-y="playerStore.panY"
-                :suspended="navigationPending || processStore.isProcessing"
+                :suspended="navigationPending || processStore.isProcessing || postProcessingResetOpen"
                 :error="frameEditorError"
                 :title="t('magicWand.title', { filename: frameEditor.filename })"
                 @cancel="closeFrameEditor"
@@ -74,60 +86,53 @@
             >
               <div class="text-center">
                 <Film class="w-16 h-16 mx-auto mb-4 opacity-30" />
-                <p>{{ hiddenFrames.length > 0 ? t('frameVisibility.allHidden') : t('common.loading') }}</p>
+                <p
+                  v-if="previewLoadFailed"
+                  role="alert"
+                >
+                  {{ t('previewCleanup.loadFailed') }}
+                </p>
+                <p v-else>
+                  {{ hiddenFrames.length > 0 ? t('frameVisibility.allHidden') : t('common.loading') }}
+                </p>
               </div>
             </div>
           </div>
+          <FramePicker
+            v-if="framePicker"
+            :key="framePicker.baseFrame"
+            v-bind="framePicker"
+            :can-replace="canReplaceFrame"
+            @step="stepCandidateFrame"
+            @compare="framePicker.showCurrent = !framePicker.showCurrent"
+            @restore="setCandidateFrame(framePicker.baseFrame)"
+            @close="closeFramePicker(true)"
+            @replace="selectReplacementFrame"
+          />
         </div>
 
         <!-- Player controls -->
         <PlayerControls
           v-if="playerStore.frames.length > 0"
           :timeline-frame-count="timelineFrameCount"
+          :active-base-frame="framePicker?.baseFrame"
+          :preview-frame-index="previewFrameIndex"
           class="mt-4 rounded-xl"
+          @edit-frame="openFramePicker"
         />
 
-        <div
+        <HiddenFramesPanel
           v-if="frameVisibilityEnabled"
-          class="mt-3 flex items-center justify-between gap-3 rounded-xl border border-dark-border bg-dark-surface px-4 py-3"
-        >
-          <div>
-            <p class="text-sm text-gray-300">
-              {{ t('frameVisibility.hiddenCount', { count: hiddenFrames.length }) }}
-            </p>
-            <p class="text-xs text-gray-500">
-              {{ t('frameVisibility.hint') }}
-            </p>
-          </div>
-          <div class="flex flex-wrap justify-end gap-2">
-            <Button
-              variant="danger"
-              size="sm"
-              :disabled="!playerStore.currentFrame || visibilityUpdating || processStore.isProcessing"
-              @click="hideCurrentFrame"
-            >
-              <EyeOff class="mr-1.5 h-4 w-4" />
-              {{ t('frameVisibility.hideCurrent') }}
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              :disabled="hiddenFrames.length === 0 || visibilityUpdating || processStore.isProcessing"
-              @click="restoreLastHiddenFrame"
-            >
-              <Undo2 class="mr-1.5 h-4 w-4" />
-              {{ t('frameVisibility.restoreLast') }}
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              :disabled="hiddenFrames.length === 0 || visibilityUpdating || processStore.isProcessing"
-              @click="restoreAllHiddenFrames"
-            >
-              {{ t('frameVisibility.restoreAll') }}
-            </Button>
-          </div>
-        </div>
+          :key="currentProject?.id"
+          :filenames="hiddenFrames"
+          :previews="hiddenFramePreviews"
+          :can-hide="!!playerStore.currentFrame"
+          :busy="visibilityUpdating || navigationPending || processStore.isProcessing"
+          :error="frameVisibilityError"
+          @hide="hideCurrentFrame"
+          @restore="restoreHiddenFrame"
+          @restore-all="restoreAllHiddenFrames"
+        />
         <p
           v-if="frameEditorError && !frameEditor"
           class="mt-2 text-sm text-danger"
@@ -196,6 +201,54 @@
         </div>
       </section>
     </div>
+    <Dialog
+      v-if="postProcessingResetOpen"
+      :open="true"
+      class="fixed inset-0 z-50"
+      @close="closePostProcessingReset"
+    >
+      <div
+        class="absolute inset-0 bg-black/70"
+        aria-hidden="true"
+      />
+      <div class="relative grid h-full place-items-center overflow-y-auto p-4">
+        <DialogPanel
+          class="w-full max-w-lg rounded-xl border border-dark-border bg-dark-surface p-6 shadow-xl"
+          data-test="step3-reset-dialog"
+        >
+          <DialogTitle class="text-lg font-semibold text-white">
+            {{ postProcessingResetTitle }}
+          </DialogTitle>
+          <DialogDescription class="mt-3 text-sm text-gray-400">
+            {{ t(postProcessingResetMode === 'last' ? 'step3.undoProcessingHint' : 'step3.resetAllHint') }}
+          </DialogDescription>
+          <p
+            v-if="postProcessingResetError"
+            class="mt-3 text-sm text-danger"
+            role="alert"
+          >
+            {{ postProcessingResetError }}
+          </p>
+          <div class="mt-5 flex flex-wrap justify-end gap-2">
+            <Button
+              variant="secondary"
+              :disabled="resettingPostProcessing"
+              @click="closePostProcessingReset"
+            >
+              {{ t('common.cancel') }}
+            </Button>
+            <Button
+              variant="danger"
+              :loading="resettingPostProcessing"
+              data-test="step3-reset-confirm"
+              @click="resetPostProcessing"
+            >
+              {{ postProcessingResetTitle }}
+            </Button>
+          </div>
+        </DialogPanel>
+      </div>
+    </Dialog>
   </div>
 </template>
 
@@ -204,16 +257,21 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRouter, useRoute } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import { useI18n } from 'vue-i18n';
-import { EyeOff, Film, Undo2 } from 'lucide-vue-next';
+import { Film } from 'lucide-vue-next';
+import { Dialog, DialogDescription, DialogPanel, DialogTitle } from '@headlessui/vue';
 import { useProjectStore } from '@/stores/project';
 import { useProcessStore } from '@/stores/process';
 import { usePlayerStore } from '@/stores/player';
 import { api } from '@/api';
+import type { HiddenFramePreview, HiddenFramesResponse } from '@/types';
 import { trapModalTab } from '@/modal-focus';
 import Header from '@/components/layout/Header.vue';
 import StepNavigator from '@/components/layout/StepNavigator.vue';
 import FramePlayer from '@/components/player/FramePlayer.vue';
+import FramePicker from '@/components/player/FramePicker.vue';
+import HiddenFramesPanel from '@/components/player/HiddenFramesPanel.vue';
 import PlayerControls from '@/components/player/PlayerControls.vue';
+import { extractionFrameIndices } from '@/components/player/timelineMath';
 import Button from '@/components/common/Button.vue';
 import Step1Extract from './Step1Extract.vue';
 import Step2Background from './Step2Background.vue';
@@ -231,9 +289,94 @@ const { t } = useI18n();
 const { currentProject } = storeToRefs(projectStore);
 const { currentStep, s1Params } = storeToRefs(processStore);
 
+const frameViewport = ref<HTMLElement | null>(null);
+const framePicker = ref<{
+  baseFrame: number;
+  currentFrame: number;
+  minFrame: number;
+  maxFrame: number;
+  candidate: number;
+  showCurrent: boolean;
+} | null>(null);
+const previewFrameIndex = computed(() => {
+  const picker = framePicker.value;
+  return picker?.showCurrent ? picker.currentFrame : picker?.candidate;
+});
+const readyPreviewFrame = ref<number>();
+const canReplaceFrame = computed(() => {
+  const picker = framePicker.value;
+  return !!picker && !picker.showCurrent && picker.candidate !== picker.currentFrame
+    && picker.candidate === readyPreviewFrame.value;
+});
+let pickerAnchor: HTMLButtonElement | undefined;
+
+function openFramePicker(baseFrame: number, anchor?: HTMLButtonElement) {
+  const { startFrame, endFrame, totalFrames } = playerStore;
+  const { frame_interval: interval, frame_overrides: overrides } = s1Params.value;
+  if (currentStep.value !== 1 || processStore.isProcessing || interval <= 1) return;
+  const slot = (baseFrame - startFrame) / interval;
+  const selected = extractionFrameIndices(totalFrames, startFrame, endFrame, interval, overrides);
+  if (!Number.isInteger(slot) || slot < 0 || slot >= selected.length) return;
+  playerStore.pause();
+  pickerAnchor = anchor;
+  framePicker.value = {
+    baseFrame,
+    currentFrame: selected[slot],
+    minFrame: slot > 0 ? selected[slot - 1] + 1 : startFrame,
+    maxFrame: slot + 1 < selected.length ? selected[slot + 1] - 1 : endFrame,
+    candidate: selected[slot],
+    showCurrent: false,
+  };
+}
+
+function setCandidateFrame(frame: number) {
+  const picker = framePicker.value;
+  if (!picker || !Number.isInteger(frame) || frame < picker.minFrame || frame > picker.maxFrame) return;
+  picker.candidate = frame;
+  picker.showCurrent = false;
+}
+
+function stepCandidateFrame(delta: number) {
+  const picker = framePicker.value;
+  if (picker) setCandidateFrame(picker.candidate + delta);
+}
+
+function closeFramePicker(restoreFocus = false) {
+  framePicker.value = null;
+  readyPreviewFrame.value = undefined;
+  if (restoreFocus) pickerAnchor?.focus({ preventScroll: true });
+  pickerAnchor = undefined;
+}
+
+function selectReplacementFrame() {
+  const picker = framePicker.value;
+  if (!picker || !canReplaceFrame.value || currentStep.value !== 1 || processStore.isProcessing) return;
+  const { baseFrame, candidate } = picker;
+  const overrides = { ...s1Params.value.frame_overrides };
+  if (candidate === baseFrame) delete overrides[baseFrame];
+  else overrides[baseFrame] = candidate;
+  closeFramePicker();
+  s1Params.value.frame_overrides = overrides;
+  playerStore.goToFrame(candidate);
+  frameViewport.value?.focus({ preventScroll: true });
+}
+
+watch(
+  () => [currentProject.value?.id, currentStep.value, playerStore.frames, playerStore.startFrame,
+    playerStore.endFrame, s1Params.value.frame_interval, s1Params.value.frame_overrides, processStore.isProcessing],
+  () => closeFramePicker(),
+);
+// Playback may finish preloading after the picker has paused it.
+watch(() => playerStore.isPlaying, (playing) => {
+  if (playing && framePicker.value) playerStore.pause();
+}, { flush: 'sync' });
+
 // Params loaded state
 const paramsLoaded = ref(false);
 const hiddenFrames = ref<string[]>([]);
+const hiddenFramePreviews = ref<HiddenFramePreview[]>([]);
+const frameVisibilityError = ref('');
+const previewLoadFailed = ref(false);
 const timelineFrameCount = ref(0);
 const visibilityUpdating = ref(false);
 let frameLoadRequestId = 0;
@@ -246,10 +389,55 @@ const frameToolbar = ref<HTMLElement | null>(null);
 const frameEditorRef = ref<InstanceType<typeof SeedreamImageEraser> | null>(null);
 const stayButton = ref<InstanceType<typeof Button> | null>(null);
 const navigationPending = ref(false);
+const postProcessingResetMode = ref<'all' | 'last' | null>(null);
+const postProcessingResetOpen = computed(() => postProcessingResetMode.value !== null);
+const postProcessingResetTitle = computed(() => t(postProcessingResetMode.value === 'last' ? 'step3.undoProcessing' : 'step3.resetAll'));
+const resettingPostProcessing = ref(false);
+const postProcessingResetError = ref('');
 let resolveNavigation: ((allowed: boolean) => void) | null = null;
 
+function openPostProcessingReset(mode: 'all' | 'last' = 'all') {
+  if (currentStep.value !== 3 || !projectStore.isStepCompleted(2) || processStore.isProcessing
+    || visibilityUpdating.value || frameEditorLoading.value || frameEditorSaving.value || navigationPending.value
+    || postProcessingResetOpen.value || frameEditorRef.value?.busy
+    || (mode === 'last' && !currentProject.value?.steps?.['3']?.can_undo_processing)) return;
+  postProcessingResetError.value = '';
+  postProcessingResetMode.value = mode;
+}
+
+function closePostProcessingReset() {
+  if (!resettingPostProcessing.value) postProcessingResetMode.value = null;
+}
+
+async function resetPostProcessing() {
+  const project = currentProject.value;
+  if (!project || !postProcessingResetOpen.value || resettingPostProcessing.value) return;
+  resettingPostProcessing.value = true;
+  const undoing = postProcessingResetMode.value === 'last';
+  postProcessingResetError.value = '';
+  playerStore.pause();
+  try {
+    const success = await (undoing ? api.process.undoPostProcessing(project.id) : api.process.resetPostProcessing(project.id));
+    if (!success) throw new Error('Step 3 restore failed');
+    closeFrameEditor();
+    if (processStore.taskStatus?.step === 3) {
+      processStore.currentTask = null;
+      processStore.taskStatus = null;
+    }
+    const updated = await projectStore.loadProject(project.id);
+    processStore.applyStepParams(3, { processed: Boolean(updated?.steps?.['3']?.completed), processing_time: 0 });
+    postProcessingResetMode.value = null;
+  } catch {
+    postProcessingResetError.value = t(undoing ? 'step3.undoProcessingFailed' : 'step3.resetAllFailed');
+  } finally {
+    resettingPostProcessing.value = false;
+  }
+}
+
 function beforeFrameNavigation(): boolean | Promise<boolean> {
-  if (frameEditorLoading.value || frameEditorSaving.value || navigationPending.value || frameEditorRef.value?.busy) return false;
+  if (visibilityUpdating.value || frameEditorLoading.value || frameEditorSaving.value || navigationPending.value
+    || postProcessingResetOpen.value || frameEditorRef.value?.busy) return false;
+  closeFramePicker();
   if (!frameEditor.value) return true;
   if (!frameEditorRef.value?.dirty) {
     closeFrameEditor();
@@ -284,7 +472,7 @@ function beforeUnload(event: BeforeUnloadEvent) {
 }
 
 function onToolShortcut(event: KeyboardEvent) {
-  if (event.defaultPrevented) return;
+  if (event.defaultPrevented || postProcessingResetOpen.value) return;
   if (frameRetouchEnabled.value && frameEditor.value && frameEditorTool.value !== 'browse'
     && (event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && !event.isComposing
     && event.key.toLowerCase() === 's') {
@@ -296,12 +484,18 @@ function onToolShortcut(event: KeyboardEvent) {
     return;
   }
   if (event.repeat || event.ctrlKey || event.metaKey || event.altKey
-    || !frameRetouchEnabled.value || processStore.isProcessing
-    || frameEditorRef.value?.busy) return;
+    || processStore.isProcessing || frameEditorRef.value?.busy) return;
   if (event.target instanceof Element
     && event.target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="textbox"]')) return;
   const key = event.key.toLowerCase();
-  const tool = key === 'w' ? 'wand' : key === 'e' ? 'brush' : key === 'v' ? 'browse' : null;
+  if (key === 'v') {
+    if (frameEditorLoading.value || frameEditorSaving.value || navigationPending.value) return;
+    event.preventDefault();
+    selectFrameTool('browse');
+    return;
+  }
+  if (!frameRetouchEnabled.value) return;
+  const tool = key === 'w' ? 'wand' : key === 'e' ? 'brush' : null;
   if (!tool) return;
   event.preventDefault();
   selectFrameTool(tool);
@@ -320,7 +514,7 @@ onBeforeUnmount(() => {
 });
 
 function selectFrameTool(tool: 'wand' | 'brush' | 'browse') {
-  if (frameEditorSaving.value || frameEditorLoading.value || navigationPending.value) return;
+  if (visibilityUpdating.value || frameEditorSaving.value || frameEditorLoading.value || navigationPending.value) return;
   if (frameEditor.value) frameEditorTool.value = tool;
   else if (tool !== 'browse') void openFrameEditor(tool);
 }
@@ -395,11 +589,17 @@ const currentStepComponent = computed(() => {
 
 const frameVisibilityEnabled = computed(() => (
   (currentStep.value === 2 || currentStep.value === 3)
-  && projectStore.isStepCompleted(currentStep.value)
+  && (projectStore.isStepCompleted(2) || projectStore.isStepCompleted(currentStep.value))
 ));
 
 const frameRetouchEnabled = computed(() => currentStep.value === 3
   && (projectStore.isStepCompleted(2) || projectStore.isStepCompleted(3)));
+
+watch([() => currentProject.value?.id, currentStep], ([projectId], [previousProjectId]) => {
+  if (projectId !== previousProjectId) hiddenFrames.value = [];
+  hiddenFramePreviews.value = [];
+  frameVisibilityError.value = '';
+});
 
 // Load frames when step changes or project data changes
 watch([currentStep, currentProject], async ([step]) => {
@@ -428,14 +628,9 @@ async function loadFramesForStep(step: number) {
   );
 
   // Clear current frames to show loading state
+  previewLoadFailed.value = false;
   playerStore.loadFrames([]);
   timelineFrameCount.value = 0;
-  const nextHiddenFrames = step > 1
-    ? await api.frame.getHiddenFrames(project.id)
-    : [];
-  if (!isCurrentRequest()) return false;
-  hiddenFrames.value = nextHiddenFrames;
-
   // Determine which step's frames to show
   // Show the output of the current step if completed, otherwise show the previous step's output
   let sourceStep = step;
@@ -447,25 +642,37 @@ async function loadFramesForStep(step: number) {
 
   // Ensure sourceStep 1 shows output/01_frames (not cache) if we are in Step 2 preview
   // The backend already prefers cache for step 1, but for Step 2 preview we want the filtered frames
-  
+
   try {
+    const nextHiddenFrames = step > 1 ? await api.frame.getHiddenFrames(project.id) : [];
+    if (!isCurrentRequest()) return false;
+    hiddenFrames.value = nextHiddenFrames;
     const response = await api.frame.getFrames(
       project.id,
       sourceStep,
       1,
       500, // Increase page size to see more frames in sequence
-      !(step === 2 && sourceStep === 1) // Disable cache only if previewing Step 1 results in Step 2
+      !(step === 2 && sourceStep === 1), // Disable cache only if previewing Step 1 results in Step 2
+      step === 1,
     );
 
     if (!isCurrentRequest()) return false;
     if (response.success) {
-      playerStore.loadFrames(response.frames);
+      hiddenFramePreviews.value = response.hidden_previews ?? [];
+      const frames = [...response.frames];
+      for (let page = 2; page <= response.total_pages; page++) {
+        const next = await api.frame.getFrames(project.id, sourceStep, page, 500, !(step === 2 && sourceStep === 1));
+        if (!isCurrentRequest()) return false;
+        if (!next.success) throw new Error('Failed to load frame page');
+        frames.push(...next.frames);
+      }
+      playerStore.loadFrames(frames);
       timelineFrameCount.value = response.timeline_total ?? response.total;
-      
+
       if (step === 1 && s1Params.value) {
         // Sync playback range from Step1 params ONLY for Step 1.
         // s1Params.start_frame/end_frame 是源帧空间（cache 索引）。
-        const total = response.frames.length;
+        const total = frames.length;
         const startSrc = Math.max(0, s1Params.value.start_frame);
         if (total > startSrc) {
           // cache 已加载（帧数覆盖 start），按 s1Params 范围设置
@@ -478,7 +685,7 @@ async function loadFramesForStep(step: number) {
       } else {
         // For Step 2 and 3, play the entire sequence loop correctly
         // Response frames are already sequential from output dir
-        playerStore.setPlaybackRange(0, response.frames.length - 1, 1);
+        playerStore.setPlaybackRange(0, frames.length - 1, 1);
       }
       return isCurrentRequest();
     }
@@ -488,57 +695,59 @@ async function loadFramesForStep(step: number) {
     playerStore.loadFrames([]);
     timelineFrameCount.value = 0;
   }
+  if (step === 1) previewLoadFailed.value = true;
   return false;
 }
 
-async function hideCurrentFrame() {
-  if (!await beforeFrameNavigation()) return;
-  const project = currentProject.value;
+function hideCurrentFrame() {
   const frame = playerStore.currentFrame;
-  if (!project || !frame) return;
+  if (frame) return updateFrameVisibility(projectId => api.frame.setFrameHidden(projectId, frame.filename, true));
+}
 
-  const nextIndex = playerStore.currentIndex;
+function restoreHiddenFrame(filename: string) {
+  if (hiddenFrames.value.includes(filename)) {
+    return updateFrameVisibility(projectId => api.frame.setFrameHidden(projectId, filename, false), filename);
+  }
+}
+
+function restoreAllHiddenFrames() {
+  if (hiddenFrames.value.length) {
+    return updateFrameVisibility(projectId => api.frame.restoreHiddenFrames(projectId));
+  }
+}
+
+async function updateFrameVisibility(
+  update: (projectId: string) => Promise<HiddenFramesResponse>,
+  restoredFilename?: string,
+) {
+  const project = currentProject.value;
+  const step = currentStep.value;
+  const isCurrentView = () => currentProject.value?.id === project?.id && currentStep.value === step;
+  if (!project || !frameVisibilityEnabled.value || processStore.isProcessing || !await beforeFrameNavigation()
+    || !isCurrentView() || visibilityUpdating.value || processStore.isProcessing) return;
+
+  const index = playerStore.currentIndex;
+  const preferredFilename = restoredFilename ?? playerStore.currentFrame?.filename;
+  let nextIndex: number | undefined;
   visibilityUpdating.value = true;
+  frameVisibilityError.value = '';
   playerStore.pause();
   try {
-    const result = await api.frame.setFrameHidden(project.id, frame.filename, true);
+    const result = await update(project.id);
+    if (!result.success) throw new Error('Failed to save frame visibility');
+    if (!isCurrentView()) return;
     hiddenFrames.value = result.hidden_frames;
-    await loadFramesForStep(currentStep.value);
-    playerStore.goToFrame(Math.min(nextIndex, playerStore.frames.length - 1));
+    if (!await loadFramesForStep(currentStep.value)) throw new Error('Failed to refresh frame visibility');
+    const preferredIndex = playerStore.frames.findIndex(frame => frame.filename === preferredFilename);
+    nextIndex = preferredIndex >= 0 ? preferredIndex : Math.min(index, playerStore.frames.length - 1);
+  } catch (error) {
+    logEvent(['Failed to update frame visibility:', error].join(' '), 'error');
+    if (isCurrentView()) frameVisibilityError.value = t('frameVisibility.updateFailed');
   } finally {
     visibilityUpdating.value = false;
   }
-}
 
-async function restoreLastHiddenFrame() {
-  if (!await beforeFrameNavigation()) return;
-  const project = currentProject.value;
-  const filename = hiddenFrames.value[hiddenFrames.value.length - 1];
-  if (!project || !filename) return;
-
-  visibilityUpdating.value = true;
-  try {
-    const result = await api.frame.setFrameHidden(project.id, filename, false);
-    hiddenFrames.value = result.hidden_frames;
-    await loadFramesForStep(currentStep.value);
-  } finally {
-    visibilityUpdating.value = false;
-  }
-}
-
-async function restoreAllHiddenFrames() {
-  if (!await beforeFrameNavigation()) return;
-  const project = currentProject.value;
-  if (!project || hiddenFrames.value.length === 0) return;
-
-  visibilityUpdating.value = true;
-  try {
-    const result = await api.frame.restoreHiddenFrames(project.id);
-    hiddenFrames.value = result.hidden_frames;
-    await loadFramesForStep(currentStep.value);
-  } finally {
-    visibilityUpdating.value = false;
-  }
+  if (isCurrentView() && nextIndex !== undefined && nextIndex >= 0) playerStore.goToFrame(nextIndex);
 }
 
 onMounted(async () => {
@@ -556,15 +765,9 @@ onMounted(async () => {
   // Refresh project status from backend (important for steps state)
   await projectStore.loadProject(currentProject.value.id);
 
-  // Load saved step parameters for all steps
-  // Only load params if the step has been processed, otherwise use frontend defaults
-  await processStore.loadStepParams(currentProject.value.id, 1);
-  if (projectStore.isStepCompleted(2)) {
-    await processStore.loadStepParams(currentProject.value.id, 2);
-  }
-  if (projectStore.isStepCompleted(3)) {
-    await processStore.loadStepParams(currentProject.value.id, 3);
-  }
+  // Load parameters even when a project has no published result yet.
+  const projectId = currentProject.value.id;
+  await Promise.all([1, 2, 3].map((step) => processStore.loadStepParams(projectId, step)));
 
   // Mark params as loaded so child components can render
   paramsLoaded.value = true;

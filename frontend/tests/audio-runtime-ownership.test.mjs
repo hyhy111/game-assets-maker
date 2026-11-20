@@ -29,7 +29,8 @@ test('range track background click only updates the playhead', async () => {
 
 test('audio editor exposes an explicit selection audition action', async () => {
   const timeline = await readFile(audioTimelineUrl, 'utf8');
-  assert.match(timeline, /试听选区/);
+  assert.match(timeline, /t\('buttonHints\.previewAudio'\)/);
+  assert.match(timeline, /<Headphones/);
   assert.match(timeline, /previewSelection/);
 });
 
@@ -56,8 +57,8 @@ test('all steps expose audio playback control while only step 1 exposes the audi
 
   assert.match(controls, /data-test="audio-track-toggle"/);
   assert.match(controls, /:aria-expanded="showAudioTimeline"/);
-  assert.match(controls, /audio-track-wave--active/);
-  assert.match(controls, /@keyframes audio-track-wave/);
+  assert.match(controls, /<AudioLines/);
+  assert.match(controls, /:aria-pressed="showAudioTimeline"/);
   assert.equal((controls.match(/data-test="audio-mute-toggle"/g) ?? []).length, 1);
   assert.match(controls, /:aria-pressed="!audioPlaybackEnabled"/);
   assert.match(controls, /:audio-muted="!audioPlaybackEnabled"/);

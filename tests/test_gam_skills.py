@@ -24,7 +24,7 @@ def service(tmp_path, monkeypatch):
     return SkillsAPI(tmp_path)
 
 
-def installed(service, names=SKILLS, agent="codex", **entry_changes):
+def installed(service, names=SKILLS, agent="codex", *, newline="\n", **entry_changes):
     canonical, target, lock_path = service._paths(agent)
     lock = {"version": 3, "skills": {}}
     if lock_path.exists():
@@ -32,7 +32,7 @@ def installed(service, names=SKILLS, agent="codex", **entry_changes):
     for name in names:
         path = canonical / name
         path.mkdir(parents=True, exist_ok=True)
-        (path / "SKILL.md").write_text(f"---\nname: {name}\n---\nGAM")
+        (path / "SKILL.md").write_text(f"---\nname: {name}\n---\nGAM", encoding="utf-8", newline=newline)
         if target != canonical:
             target.mkdir(parents=True, exist_ok=True)
             (target / name).symlink_to(path, target_is_directory=True)
@@ -112,8 +112,9 @@ def test_other_installers_are_not_reported_as_outdated_or_overwritten(service, m
     runner.assert_not_called()
 
 
-def test_update_check_compares_only_gam_folder_hashes(service, monkeypatch):
-    installed(service)
+@pytest.mark.parametrize("newline", ["\n", "\r\n"], ids=["lf", "crlf"])
+def test_update_check_compares_only_gam_folder_hashes(service, monkeypatch, newline):
+    installed(service, newline=newline)
     _, _, path = service._paths("codex")
     lock = json.loads(path.read_text())
     lock["skills"]["unrelated"] = {"source": "another/repository", "sourceType": "github"}
@@ -177,7 +178,7 @@ def test_universal_agents_use_shared_install_without_native_directory(service, m
 
 
 def test_claude_default_copies_remain_recognized_after_cursor_install(service, monkeypatch):
-    installed(service, agent="claude-code")
+    installed(service, agent="claude-code", newline="\r\n")
     canonical, target, _ = service._paths("claude-code")
     for name in SKILLS:
         (target / name).unlink()
@@ -223,7 +224,17 @@ def test_latest_shared_lock_cannot_hide_stale_actual_files(service, monkeypatch,
     assert state["outdated"] == list(SKILLS)
 
 
-def test_content_check_covers_nested_files_but_ignores_installer_exclusions(service, monkeypatch):
+@pytest.mark.parametrize(
+    ("filename", "stale", "upstream", "current"),
+    [
+        ("tool.py", b"print('old')\n", b"print('new')\n", b"print('new')\r\n"),
+        ("asset.bin", b"asset\r\n", b"asset\n", b"asset\n"),
+    ],
+    ids=["text", "binary"],
+)
+def test_content_check_covers_nested_files_but_ignores_installer_exclusions(
+    service, monkeypatch, filename, stale, upstream, current
+):
     installed(service)
     canonical, _, _ = service._paths("codex")
     transport = remote(monkeypatch)
@@ -232,21 +243,20 @@ def test_content_check_covers_nested_files_but_ignores_installer_exclusions(serv
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("runtime metadata")
     assert service.status("codex", True)["status"] == "up_to_date"
-    script = canonical / "gam-cli" / "scripts" / "tool.py"
-    script.parent.mkdir()
-    script.write_bytes(b"print('old')\n")
-    data = b"print('new')\n"
+    asset = canonical / "gam-cli" / "scripts" / filename
+    asset.parent.mkdir()
+    asset.write_bytes(stale)
     tree = json.loads(transport().getvalue())
     tree["tree"].append(
         {
             "type": "blob",
-            "path": "gam-cli/scripts/tool.py",
-            "sha": hashlib.sha1(f"blob {len(data)}\0".encode() + data, usedforsecurity=False).hexdigest(),
+            "path": f"gam-cli/scripts/{filename}",
+            "sha": hashlib.sha1(f"blob {len(upstream)}\0".encode() + upstream, usedforsecurity=False).hexdigest(),
         }
     )
     transport.side_effect = lambda *a, **kw: io.BytesIO(json.dumps(tree).encode())
     assert service.status("codex", True)["outdated"] == ["gam-cli"]
-    script.write_bytes(data)
+    asset.write_bytes(current)
     assert service.status("codex", True)["status"] == "up_to_date"
 
 

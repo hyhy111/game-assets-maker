@@ -1,7 +1,8 @@
 <template>
   <button
     type="button"
-    class="grid h-9 w-9 place-items-center rounded-lg border border-white/15 bg-black/70 text-gray-300 shadow-lg backdrop-blur transition hover:border-warning/50 hover:text-warning focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warning/70"
+    class="media-overlay-action"
+    draggable="false"
     :class="favorite ? 'border-warning/40 bg-[#241d11]/90 text-warning' : ''"
     :aria-label="t(favorite ? 'aiCreation.recent.unfavoriteMedia' : 'aiCreation.recent.favoriteMedia')"
     :aria-pressed="favorite"
@@ -11,7 +12,7 @@
     @keydown.stop
   >
     <Star
-      class="h-[18px] w-[18px]"
+      class="h-3.5 w-3.5"
       :fill="favorite ? 'currentColor' : 'none'"
       aria-hidden="true"
     />

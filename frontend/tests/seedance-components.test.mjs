@@ -48,8 +48,8 @@ test('shared Seedance header removes section navigation and retains global actio
   assert.doesNotMatch(html, /创建任务|任务列表|结果预览/);
   assert.doesNotMatch(html, /href="\/video-generation\/(?:create|tasks|preview)"/);
   assert.match(html, /aria-label="设置"/);
-  assert.match(html, /aria-label="返回主界面"/);
-  assert.match(html, /lucide-globe/);
+  assert.match(html, /aria-label="返回动画库"/);
+  assert.match(html, /lucide-languages/);
   assert.match(html, /lucide-settings/);
   assert.match(html, /lucide-home-icon/);
   assert.match(html, /sticky top-0 z-30/);
@@ -86,7 +86,8 @@ test('Seedance create screen uses one compact composer with collapsed parameters
   assert.match(html, /aria-expanded="false"/);
   assert.match(html, /data-test="seedance-parameter-panel"[^>]*style="display:none;"/);
   assert.match(html, /data-test="seedance-submit"/);
-  assert.match(html, /class="[^"]*bg-\[#ffbd5c\][^"]*hover:bg-\[#ffc975\][^"]*disabled:bg-\[#4a4a4a\][^"]*"[^>]*data-test="seedance-submit"/);
+  assert.match(html, /aria-label="生成视频"/);
+  assert.match(html, /class="[^"]*bg-primary[^\"]*"[^>]*data-test="seedance-submit"/);
   assert.match(html, /<button[^>]*data-test="seedance-duration"/);
   assert.doesNotMatch(html, /<select[^>]*data-test="seedance-duration"/);
   const createSource = await readFile(new URL('../src/views/SeedanceCreate.vue', import.meta.url), 'utf8');
@@ -143,7 +144,7 @@ test('Seedance task card renders real metadata and state-derived actions', async
   assert.match(html, /16:9/);
   assert.match(html, /查看详情/);
   assert.match(html, /再次生成/);
-  assert.match(html, /使用尾帧继续生成/);
+  assert.match(html, /尾帧续生成/);
   assert.match(html, /删除/);
   assert.doesNotMatch(html, /取消任务|重新生成|重试下载/);
 
@@ -356,7 +357,9 @@ test('Seedance image editor opens resize controls directly and places restore be
   assert.match(html, /data-test="image-editor-resize-controls"/);
   assert.doesNotMatch(html, /image-editor-resize-toggle/);
   assert.match(html, /取消[\s\S]*data-test="image-editor-restore-original"[\s\S]*复原为原图[\s\S]*data-test="seedream-eraser-apply"/);
-  assert.match(html, /bg-success/);
+  const restore = html.match(/<button\b[^>]*data-test="image-editor-restore-original"[^>]*>/)?.[0];
+  assert.match(restore, /bg-dark-surface/);
+  assert.doesNotMatch(restore, /bg-success/);
   assert.match(html, /角色占画面高度/);
   assert.match(html, /底部留白/);
   assert.doesNotMatch(html, /image-editor-height-preset-/);
@@ -425,7 +428,9 @@ test('Seedance settings uses the shared workspace without losing safe controls',
   assert.match(html, />设置</);
   assert.match(html, /API Key/);
   assert.match(html, /测试连接/);
-  assert.match(html, /默认生成参数/);
+  assert.match(html, /items-stretch gap-5 lg:grid-cols-2"><section[^>]*data-test="app-update-settings".*?<\/section><section[^>]*data-test="gam-skills-settings"/s);
+  assert.match(html, /lg:grid-cols-2 xl:col-span-2"><section[^>]*>.*?AI图片默认生成参数.*?<\/section><section[^>]*>.*?AI视频默认生成参数/s);
+  assert.match(html, /lg:grid-cols-2 xl:col-span-2"><section[^>]*>.*?存储位置.*?data-test="storage-project-dir".*?<\/section><section[^>]*>.*?本地处理默认值.*?data-test="processing-background-model"/s);
   assert.match(source, /:options="seedanceDurationOptions"/);
   assert.match(source, /DURATION_OPTIONS\.map\(value/);
   assert.match(html, /data-test="seedream-settings-model"/);
@@ -437,11 +442,19 @@ test('Seedance settings uses the shared workspace without losing safe controls',
   assert.match(html, /type="checkbox" checked/);
   assert.match(html, /form="seedance-settings-form"/);
   assert.match(html, /id="seedance-settings-form"/);
-  assert.match(html, /缓存管理/);
+  assert.match(html, /清理动画预览帧/);
+  assert.match(html, /按动画创建日期筛选/);
+  const ageOptions = [...html.matchAll(/<input\b(?=[^>]*\bvalue="(\d+)")[^>]*\bname="preview-cleanup-age"[^>]*>/g)];
+  assert.deepEqual(ageOptions.map(([, days]) => days), ['3', '7', '30']);
+  assert.deepEqual(ageOptions.filter(([input]) => /\bchecked\b/.test(input)).map(([, days]) => days), ['30']);
+  assert.match(html, /3 天前.*7 天前.*30 天前/s);
+  assert.doesNotMatch(html, /type="date"/);
+  assert.match(html, />仅删除步骤 01 为预览的逐帧图片。下次进入步骤 01 时，应用会从原视频重建预览帧。<\/p>/);
+  assert.doesNotMatch(html, /包含截止日期当天及更早创建的动画。/);
   assert.match(html, /value="\/tmp\/seedance"/);
   assert.match(html, /h-\[42px\] shrink-0/);
   assert.match(html, /autocomplete="new-password"/);
-  assert.match(html, /从不/);
+  assert.doesNotMatch(html, /自动保留期限/);
   assert.doesNotMatch(html, /Seedance Studio/);
   assert.doesNotMatch(html, /href="\/video-generation\/create"/);
   assert.doesNotMatch(html, /href="\/video-generation\/tasks"/);

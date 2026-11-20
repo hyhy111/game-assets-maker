@@ -124,6 +124,22 @@ test('exhausted credits preserve only their declared model scope and exclude fut
   } finally { f.dispose(); }
 });
 
+test('expired and future buckets do not restrict model browsing at zero balance', async () => {
+  const f = await fixture();
+  try {
+    f.auth.token = 'a'; f.auth.isLoggedIn = true; await flush();
+    const snapshot = response(0);
+    snapshot.data.account.buckets = [
+      { bucket: { bucketId: 'expired', remainAmount: 0, usageMode: 'RESTRICTED', expireTime: '2026-10-28T00:00:00Z' }, rules: [] },
+      { bucket: { bucketId: 'future', remainAmount: 100, usageMode: 'RESTRICTED', effectiveFrom: '2026-10-30T00:00:00Z' }, rules: [] },
+    ];
+    f.requests[0].resolve(snapshot); await flush();
+    assert.equal(f.store.canSelectModel('image', 'a'), true);
+    assert.equal(f.store.canSelectModel('image', 'missing'), false);
+    assert.equal(f.store.canPay('image', 'a', '2K'), false);
+  } finally { f.dispose(); }
+});
+
 for (const staleFails of [false, true]) {
   test(`balance changes queue a fresh snapshot after an in-flight ${staleFails ? 'failure' : 'success'}`, async () => {
     const f = await fixture();

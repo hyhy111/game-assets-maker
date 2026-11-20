@@ -8,6 +8,7 @@ import pytest
 
 from backend.api.process_api import ProcessAPI
 from backend.core.model_preloader import ModelPreloader
+from src.core.model_download import ModelDownloadCancelledError
 
 
 class FakeModelLoader:
@@ -15,6 +16,7 @@ class FakeModelLoader:
         self.available = available
         self.blocked = blocked
         self.download_calls = 0
+        self.download_calls_lock = threading.Lock()
         self.download_sources = []
         self.initialize_calls = 0
         self.download_started = threading.Event()
@@ -27,15 +29,26 @@ class FakeModelLoader:
     def is_available(self, _model: str) -> bool:
         return self.available
 
-    def download(self, _model: str, _progress: Callable[[int, int | None], None], source: str) -> None:
-        self.download_calls += 1
+    def download(
+        self,
+        _model: str,
+        _progress: Callable[[int, int | None], None],
+        source: str,
+        cancel_event: threading.Event | None = None,
+    ) -> None:
+        with self.download_calls_lock:
+            self.download_calls += 1
         self.download_sources.append(source)
         _progress(4, 10)
         self.download_started.set()
         if self.download_errors:
             raise self.download_errors.pop(0)
         if self.blocked:
-            assert self.allow_download.wait(2)
+            deadline = time.monotonic() + 2
+            while not self.allow_download.is_set():
+                assert time.monotonic() < deadline
+                if cancel_event is not None and cancel_event.wait(0.01):
+                    raise ModelDownloadCancelledError()
         self.available = True
 
     def initialize(self, _model: str) -> None:
@@ -223,17 +236,17 @@ def test_process_api_rejects_unsupported_model(tmp_path, monkeypatch) -> None:
             time.sleep(0.01)
         assert api.get_model_status("u2net")["phase"] == "ready"
 
-        with pytest.raises(ValueError, match="Only u2net"):
+        with pytest.raises(ValueError, match="Unsupported background-removal model"):
             api.start_processing("unused", 2, {"model": "isnet-anime"})
     finally:
         api.shutdown()
 
 
-@pytest.mark.parametrize("method", ["get_model_status", "preload_model", "retry_model"])
+@pytest.mark.parametrize("method", ["get_model_status", "preload_model", "retry_model", "cancel_model_download"])
 def test_model_api_rejects_other_models(method):
     api = ProcessAPI(model_loader=FakeModelLoader(available=True))
     try:
-        with pytest.raises(ValueError, match="Only u2net"):
+        with pytest.raises(ValueError, match="Unsupported background-removal model"):
             getattr(api, method)("isnet-anime")
     finally:
         api.shutdown()
@@ -248,16 +261,19 @@ def test_step2_requires_ready_u2net():
         api.shutdown()
 
 
-@pytest.mark.parametrize("source", ["modelscope", "github"])
-def test_missing_model_waits_for_explicit_source(source):
+@pytest.mark.parametrize(
+    ("model", "source"),
+    [("u2net", "modelscope"), ("u2net", "github"), ("birefnet-comfy", "modelscope"), ("birefnet-comfy", "huggingface")],
+)
+def test_missing_model_waits_for_explicit_source(model, source):
     loader = FakeModelLoader(available=False)
     preloader = ModelPreloader(loader)
     try:
-        assert preloader.preload("u2net")["phase"] == "needs_download"
-        assert preloader.retry("u2net")["phase"] == "needs_download"
+        assert preloader.preload(model)["phase"] == "needs_download"
+        assert preloader.retry(model)["phase"] == "needs_download"
         assert loader.download_calls == 0
-        preloader.preload("u2net", source=source)
-        assert preloader.wait("u2net", timeout=1)["phase"] == "ready"
+        preloader.preload(model, source=source)
+        assert preloader.wait(model, timeout=1)["phase"] == "ready"
         assert loader.download_sources == [source]
     finally:
         preloader.shutdown()
@@ -274,12 +290,107 @@ def test_existing_model_initializes_without_download_choice():
         preloader.shutdown()
 
 
-def test_invalid_source_cannot_start_download():
+@pytest.mark.parametrize(
+    ("model", "source"),
+    [("u2net", "https://example.com/model"), ("u2net", "huggingface"), ("birefnet-comfy", "github")],
+)
+def test_invalid_source_cannot_start_download(model, source):
     loader = FakeModelLoader(available=False)
     preloader = ModelPreloader(loader)
     try:
         with pytest.raises(ValueError, match="Unsupported model download source"):
-            preloader.preload("u2net", source="https://example.com/model")
+            preloader.preload(model, source=source)
         assert loader.download_calls == 0
     finally:
         preloader.shutdown()
+
+
+def test_cancelled_download_returns_to_needs_download_and_can_restart() -> None:
+    loader = FakeModelLoader(available=False, blocked=True)
+    preloader = ModelPreloader(loader)
+    try:
+        preloader.preload("u2net", source="modelscope")
+        assert loader.download_started.wait(1)
+
+        assert preloader.cancel("u2net")["phase"] == "downloading"
+        assert preloader.wait("u2net", timeout=1) == {
+            "model": "u2net",
+            "phase": "needs_download",
+            "downloaded_bytes": None,
+            "total_bytes": None,
+            "error": None,
+        }
+
+        preloader.preload("u2net", source="modelscope")
+        assert preloader.get_status("u2net")["phase"] == "downloading"
+        loader.allow_download.set()
+        loader.allow_initialize.set()
+        assert preloader.wait("u2net", timeout=1)["phase"] == "ready"
+        assert loader.download_calls == 2
+    finally:
+        loader.allow_download.set()
+        loader.allow_initialize.set()
+        preloader.shutdown()
+
+
+def test_cancel_without_an_active_download_is_a_no_op() -> None:
+    loader = FakeModelLoader(available=False)
+    preloader = ModelPreloader(loader)
+    try:
+        assert preloader.cancel("u2net") == {
+            "model": "u2net",
+            "phase": "needs_download",
+            "downloaded_bytes": None,
+            "total_bytes": None,
+            "error": None,
+        }
+        assert loader.download_calls == 0
+    finally:
+        preloader.shutdown()
+
+
+def test_models_download_in_parallel() -> None:
+    loader = FakeModelLoader(available=False, blocked=True)
+    preloader = ModelPreloader(loader)
+    try:
+        preloader.preload("u2net", source="modelscope")
+        preloader.preload("birefnet-comfy", source="modelscope")
+
+        deadline = time.monotonic() + 1
+        while loader.download_calls < 2:
+            assert time.monotonic() < deadline, "both models should be downloading concurrently"
+            time.sleep(0.01)
+        assert preloader.get_status("u2net")["phase"] == "downloading"
+        assert preloader.get_status("birefnet-comfy")["phase"] == "downloading"
+
+        loader.allow_download.set()
+        loader.allow_initialize.set()
+        assert preloader.wait("u2net", timeout=1)["phase"] == "ready"
+        assert preloader.wait("birefnet-comfy", timeout=1)["phase"] == "ready"
+    finally:
+        loader.allow_download.set()
+        loader.allow_initialize.set()
+        preloader.shutdown()
+
+
+def test_process_api_cancel_model_download_validates_and_delegates(tmp_path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "project").mkdir()
+    loader = FakeModelLoader(available=False, blocked=True)
+    api = ProcessAPI(window=FakeWindow(), model_loader=loader)
+    try:
+        api.preload_model("u2net", "modelscope")
+        assert loader.download_started.wait(1)
+        assert api.cancel_model_download("u2net")["phase"] == "downloading"
+
+        deadline = time.monotonic() + 1
+        while api.get_model_status("u2net")["phase"] != "needs_download":
+            assert time.monotonic() < deadline
+            time.sleep(0.01)
+        assert api.get_model_status("u2net")["error"] is None
+
+        with pytest.raises(ValueError, match="Unsupported background-removal model"):
+            api.cancel_model_download("isnet-anime")
+    finally:
+        loader.allow_download.set()
+        api.shutdown()

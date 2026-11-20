@@ -1,10 +1,16 @@
 """U2Net weights downloaded from ModelScope without its SDK."""
 
+import hashlib
 import os
 import shutil
+import tempfile
+import threading
+from collections.abc import Callable
 from pathlib import Path
 
+from src.core.model_download import ModelDownloadCancelledError
 from src.utils.data_paths import INSTALLED_MODE, data_mode
+from src.utils.diagnostics import record_network_error
 
 U2NET_URL = "https://modelscope.cn/models/AI-ModelScope/u2net/resolve/master/u2net.onnx"
 U2NET_HASH = "md5:60024c5c889badc19c04ad937298a77b"
@@ -56,21 +62,55 @@ def migrate_legacy_u2net(directory: Path) -> Path | None:
         staging.unlink(missing_ok=True)
 
 
-def download_u2net(directory: Path, source: str = "modelscope") -> str:
-    import pooch
+def download_u2net(
+    directory: Path,
+    source: str = "modelscope",
+    progress: Callable[[int, int | None], None] | None = None,
+    cancel_event: threading.Event | None = None,
+) -> str:
+    """Stream the checkpoint to a temporary file, verify it, and move it into place atomically.
+
+    A cancelled or failed download removes the temporary file so no residue remains.
+    """
+    import requests
 
     if source not in U2NET_SOURCES:
         raise ValueError("Unsupported model download source")
+    url = U2NET_SOURCES[source]
+    expected_md5 = U2NET_HASH.split(":", 1)[1]
+    directory.mkdir(parents=True, exist_ok=True)
+    destination = directory / "u2net.onnx"
+    if is_valid_u2net(destination):
+        return str(destination)
+    temporary = None
     try:
-        return pooch.retrieve(
-            U2NET_SOURCES[source],
-            known_hash=U2NET_HASH,
-            fname="u2net.onnx",
-            path=directory,
-            progressbar=True,
-        )
-    except Exception as error:
-        from src.utils.diagnostics import record_network_error
-
-        record_network_error("GET", U2NET_SOURCES[source], error)
+        with (
+            requests.get(url, stream=True, timeout=(10, 60)) as response,
+            tempfile.NamedTemporaryFile(dir=directory, prefix=".u2net-", delete=False) as stream,
+        ):
+            temporary = Path(stream.name)
+            response.raise_for_status()
+            content_length = response.headers.get("Content-Length")
+            total = int(content_length) if content_length and content_length.isdigit() else None
+            received = 0
+            digest = hashlib.md5(usedforsecurity=False)
+            for chunk in response.iter_content(1024 * 1024):
+                if cancel_event is not None and cancel_event.is_set():
+                    raise ModelDownloadCancelledError("u2net download cancelled")
+                received += len(chunk)
+                digest.update(chunk)
+                stream.write(chunk)
+                if progress is not None:
+                    progress(received, total)
+        if digest.hexdigest() != expected_md5:
+            raise ValueError("u2net model hash mismatch")
+        os.replace(temporary, destination)
+        return str(destination)
+    except ModelDownloadCancelledError:
         raise
+    except Exception as error:
+        record_network_error("GET", url, error)
+        raise
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)

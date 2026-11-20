@@ -43,10 +43,15 @@
         <span class="text-red-400">{{ errorMessage }}</span>
         <button
           type="button"
-          class="rounded border border-dark-border px-2 py-0.5 text-gray-400 hover:border-gray-500 hover:text-white"
+          class="rounded border border-dark-border px-2 py-0.5 text-gray-400 hover:border-gray-500 hover:text-white icon-button control-tooltip"
+          :aria-label="t('buttonHints.reloadAudio')"
+          :data-tooltip="t('buttonHints.reloadAudio')"
           @click.stop="emit('reloadAudio')"
         >
-          重试
+          <RefreshCw
+            class="h-5 w-5"
+            aria-hidden="true"
+          />
         </button>
       </div>
 
@@ -165,41 +170,59 @@
       <div class="ml-auto flex items-center gap-2">
         <button
           type="button"
-          class="rounded border border-dark-border px-2 py-1 text-gray-300 transition hover:border-gray-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+          class="rounded border border-dark-border px-2 py-1 text-gray-300 transition hover:border-gray-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-40 icon-button control-tooltip"
           :disabled="!hasValidSelection || !audioBuffer || audioMuted"
-          :class="{ 'control-tooltip': audioMuted }"
-          :data-tooltip="audioMuted ? '已静音' : undefined"
+          :data-tooltip="audioMuted ? t('buttonHints.previewMuted') : t('buttonHints.previewAudio')"
           data-test="preview-audio-selection"
+          :aria-label="audioMuted ? t('buttonHints.previewMuted') : t('buttonHints.previewAudio')"
           @click="previewSelection"
         >
-          试听选区
+          <Headphones
+            class="h-5 w-5"
+            aria-hidden="true"
+          />
         </button>
         <button
           type="button"
-          class="rounded bg-primary px-2 py-1 font-medium text-dark-bg transition disabled:cursor-not-allowed disabled:opacity-40"
+          class="rounded bg-primary px-2 py-1 font-medium text-dark-bg transition disabled:cursor-not-allowed disabled:opacity-40 control-tooltip"
           :disabled="!hasValidSelection"
           data-test="create-audio-clip"
+          :data-tooltip="t('buttonHints.createClip')"
           @click="createClipFromSelection"
         >
-          创建 Audio Clip
+          <PlusSquare
+            class="mr-1.5 h-4 w-4"
+            aria-hidden="true"
+          />
+          {{ t('audioTimeline.createClip') }}
         </button>
         <button
           type="button"
-          class="rounded border border-primary/60 px-2 py-1 text-primary transition hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-40"
+          class="rounded border border-primary/60 px-2 py-1 text-primary transition hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-40 control-tooltip"
           :disabled="!audioStore.loaded"
           data-test="auto-create-audio-clips"
+          :data-tooltip="t('buttonHints.autoClips')"
           @click="autoCreateClips"
         >
-          自动创建
+          <Wand2
+            class="mr-1.5 h-4 w-4"
+            aria-hidden="true"
+          />
+          {{ t('audioTimeline.autoClips') }}
         </button>
         <button
           v-if="hasSelectedClips"
           type="button"
-          class="rounded border border-red-500/60 px-2 py-1 text-red-400 transition hover:bg-red-500/20 hover:text-red-300"
+          class="rounded border border-red-500/60 px-2 py-1 text-red-400 transition hover:bg-red-500/20 hover:text-red-300 icon-button control-tooltip"
           data-test="delete-audio-clip"
+          :aria-label="t('buttonHints.deleteClips', { count: audioStore.selectedClipIndices.length })"
+          :data-tooltip="t('buttonHints.deleteClips', { count: audioStore.selectedClipIndices.length })"
           @click="onDeleteSelected"
         >
-          删除片段{{ audioStore.selectedClipIndices.length > 1 ? `（${audioStore.selectedClipIndices.length}）` : '' }}
+          <Trash2
+            class="h-5 w-5"
+            aria-hidden="true"
+          />
         </button>
       </div>
     </div>
@@ -216,7 +239,8 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
-import { Volume2 } from 'lucide-vue-next';
+import { useI18n } from 'vue-i18n';
+import { Volume2, RefreshCw, Headphones, PlusSquare, Wand2, Trash2 } from 'lucide-vue-next';
 import { useAudioTimelineStore } from '@/stores/audioTimeline';
 import { usePlayerStore } from '@/stores/player';
 import { useProcessStore } from '@/stores/process';
@@ -229,6 +253,8 @@ import {
 } from '@/composables/audioPeaks';
 import type { AudioClip } from '@/types';
 import { frameFromTimelineRatio, timelineFramePercent } from './timelineMath';
+
+const { t } = useI18n();
 
 const props = withDefaults(defineProps<{
   totalFrames: number;

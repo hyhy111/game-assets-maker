@@ -14,7 +14,6 @@
         type="button"
         class="rounded-md p-1.5 text-gray-500 transition-colors hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         :aria-label="label"
-        :title="label"
         @click="prepareMenu(close)"
         @keydown="prepareMenu(close)"
       >

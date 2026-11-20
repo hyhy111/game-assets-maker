@@ -80,7 +80,6 @@ class ProductionSmokeBackend:
             repository,
             ResultDownloader(repository),
             CacheManager(repository, _NoProjectAccess()),
-            {"retention_days": 0, "last_cleanup_at": None},
         )
 
     def check_connection(self) -> None:

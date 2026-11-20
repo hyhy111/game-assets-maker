@@ -157,6 +157,14 @@ def test_public_bridge_blocks_manual_save_while_processing(tmp_path, monkeypatch
             assert api._project_api.get_project("hero/idle")["steps"]["3"]["completed"] is True
         if directory == "02_no_bg" and step == 3:
             assert frame.read_bytes() == original
+            monkeypatch.setattr(api._process_api, "has_active_writes", lambda: True)
+            with pytest.raises(ValueError, match="PROCESSING_ACTIVE"):
+                api.reset_post_processing("hero/idle")
+            assert target.is_file()
+            monkeypatch.setattr(api._process_api, "has_active_writes", lambda: False)
+            assert api.reset_post_processing("hero/idle")
+            assert not target.exists()
+            assert frame.read_bytes() == original
     finally:
         api._process_api.shutdown()
 
@@ -262,13 +270,14 @@ def test_unscoped_legacy_backup_is_not_guessed_to_be_the_step3_initial_frame(fra
     assert backup.read_bytes() == unknown
 
 
-def test_successful_reprocessing_establishes_a_new_initial_version_and_preserves_step2(frames):
+def test_successful_reprocessing_establishes_a_new_initial_version_from_the_manual_result(frames):
     from backend.api.process_api import ProcessAPI, Task
 
     api, project, frame = frames
     original = frame.read_bytes()
     opened = api.get_editable_frame("hero/idle", frame.name)
     api.save_frame_edit("hero/idle", frame.name, data_url(png(color=(0, 0, 0, 0))), opened["revision"])
+    manual_result = frame.read_bytes()
     source = project / "output/02_no_bg" / frame.name
     source.parent.mkdir()
     source.write_bytes(png(color=(50, 60, 200, 255)))
@@ -279,7 +288,7 @@ def test_successful_reprocessing_establishes_a_new_initial_version_and_preserves
         process._run_task(task)
         assert task.status == "completed", task.error
         opened = api.get_editable_frame("hero/idle", frame.name)
-        assert base64.b64decode(opened["initial_image_data_url"].split(",", 1)[1]) == source_before
+        assert base64.b64decode(opened["initial_image_data_url"].split(",", 1)[1]) == manual_result
         assert source.read_bytes() == source_before
         assert (
             project / "cache/frame_edits" / hashlib.sha256(original).hexdigest() / frame.name

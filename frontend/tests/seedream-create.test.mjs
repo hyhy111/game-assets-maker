@@ -10,7 +10,7 @@ test('Seedream header keeps shared actions without the three page navigation lin
   const html = await renderSfc('components/seedream/SeedreamTopNav.vue', {
     route: '/image-generation/create',
   });
-  assert.match(html, /aria-label="返回主界面"/);
+  assert.match(html, /aria-label="返回动画库"/);
   assert.match(html, /lucide-home-icon/);
   assert.doesNotMatch(html, /<nav/);
   assert.doesNotMatch(html, /任务列表/);
@@ -170,6 +170,11 @@ test('image composer renders an optional single reference image card', async () 
   assert.match(html, /data-test="seedream-reference-card"/);
   assert.match(html, /参考图/);
   assert.match(html, /data-test="seedance-frame-optional"/);
+});
+
+test('the reference picker forwards local media drops to the reference handoff', async () => {
+  const source = await readFile(new URL('../src/views/SeedreamCreate.vue', import.meta.url), 'utf8');
+  assert.match(source, /<SeedanceImagePicker\b[\s\S]*?@drop-source-image="dropSourceReference"/);
 });
 
 test('reference image card shows the draft preview and remove control when a reference is attached', async () => {

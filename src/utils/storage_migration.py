@@ -24,7 +24,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from src.utils.ai_cache_paths import AI_PIC_CACHE_DIRNAME, AI_VIDEO_CACHE_DIRNAME
+from src.utils.ai_cache_paths import (
+    AI_PIC_CACHE_DIRNAME,
+    AI_VIDEO_CACHE_DIRNAME,
+    LOCAL_IMAGE_CACHE_DIRNAME,
+    LOCAL_VIDEO_CACHE_DIRNAME,
+)
 from src.utils.file_operations import rename_path
 from src.utils.storage_locations import normalize_storage_path
 
@@ -336,7 +341,12 @@ class StorageMigrationCoordinator:
         if migration.kind == AI_CACHE_LOCATION:
             return [
                 (base / name, Path(name))
-                for name in (AI_PIC_CACHE_DIRNAME, AI_VIDEO_CACHE_DIRNAME)
+                for name in (
+                    AI_PIC_CACHE_DIRNAME,
+                    AI_VIDEO_CACHE_DIRNAME,
+                    LOCAL_IMAGE_CACHE_DIRNAME,
+                    LOCAL_VIDEO_CACHE_DIRNAME,
+                )
                 if (base / name).exists()
             ]
         return [(base, Path("."))] if base.exists() else []

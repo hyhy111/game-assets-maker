@@ -30,7 +30,7 @@ Game Assets Maker（GAM）是一款开源桌面工具，面向独立游戏开发
 
 ### 实际能做什么
 
-- **视频变动画帧**：抽帧 → 去背景 → 挖孔与对齐，逐步预览结果。
+- **视频变动画帧**：抽帧 → 去背景 → 后处理，逐步预览结果。
 - **批量裁剪**：统一包围盒，或逐帧紧致裁剪并保存偏移 JSON。
 - **细节修整**：描边、孤立像素清理、边缘优化、颜色替换；支持隐藏异常帧。
 - **角色与动作管理**：按角色整理待机、行走、跳跃、攻击等动画，保存每步参数。
@@ -60,17 +60,27 @@ Game Assets Maker（GAM）是一款开源桌面工具，面向独立游戏开发
 
 没有视频时，可先在“图片生成”准备角色图，再在“视频生成”中以角色图为首帧生成动作视频；AI 配置见下方说明。
 
+在「AI 创作 → 原始素材」点击「导入本地素材」，可以一次选择多份图片或视频。文件分别复制到设定的缓存目录下的 `local-images` 和 `local-videos`，与生成结果一起显示。打开本地视频详情可创建逐帧动画，视频会复制进项目。可以把本地图片卡片拖到视频的首帧或尾帧，也可以打开图片详情编辑和恢复原图。支持 PNG、JPEG、WebP、GIF、BMP、MP4、MOV、WebM，视频预览取决于系统 WebView 支持的编解码器。
+
 #### 2. 三步处理
 
 | 步骤 | 怎么操作 | 重点检查 |
 | --- | --- | --- |
 | **01 帧提取** | 选择起止帧、帧提取间隔，点击“开始提取”。 | 起势和收招是否完整，循环是否顺畅。 |
-| **02 背景移除** | 首次按提示选择来源并下载 U2Net 模型（约 176 MB），再运行去背景。 | 头发、武器、细线和半透明边缘。 |
-| **03 挖孔与对齐** | 清理手臂、武器之间的残留背景色；按动作需要启用水平居中或底部对齐。 | 是否误删主体绿色、跳跃高度或有意位移是否被改变。 |
+| **02 抠图** | Windows 可选择 U²-Net 或 BiRefNet Lite FP16（默认）；macOS 可选择 U²-Net 或 BiRefNet（Comfy-Org/MPS）。首次使用时按提示下载所选权重。U²-Net 仅显示 Alpha Matting 参数，BiRefNet 仅显示边缘去色参数。 | 头发、武器、细线和半透明边缘。 |
+| **03 后处理** | 按需启用挖孔、缩减边缘和帧对齐。 | 轮廓细节、跳跃高度和有意位移。 |
 
-每步完成后先播放检查。步骤 02 / 03 可隐藏异常帧，也可恢复；重新抽帧会使下游旧处理结果失效。模型就绪后，本地处理可以离线进行。
+Windows 会在步骤 02 检测 NVIDIA 显卡与驱动。兼容当前 CUDA 组件且抠图模型就绪时，可以下载并启用 cuda加速。准备期间可用 CPU 抠图，验证通过后下一批优先使用 GPU。模型大小、来源、续传和错误反馈见 [模型说明](MODELS.md)。
 
-步骤 02 完成后，切换到步骤 03 页面即可点击 **预览右下角的魔棒或橡皮擦**，自动暂停并在当前预览中修整，无需先运行步骤 03；顶部显示工具参数，预览窗内显示简要操作提示。魔棒点击选区、Shift 点击追加、Delete 删除；橡皮擦用左键拖动擦除。滚轮缩放、中键拖动画布，空格仍控制播放。保留当前预览背景、缩放和平移，背景仍可切换。点击“保存当前帧”后标记为已完成处理，动画卡片的第三个状态图标变绿，并保持工具选中，撤销记录以此次保存为起点；切回浏览工具保留未保存修改。播放、切帧、切步骤或离开页面前，未保存修改会提示保存、放弃或留在当前帧。取消丢弃本次未保存修改。修整只修改步骤 03 的这一帧，重新运行步骤 03 会覆盖修整。W / E / V 分别切换魔棒、橡皮擦和移动工具；选中魔棒或橡皮擦时，⌘S / Ctrl+S 保存当前帧；+ / - 调整当前工具的颜色容差或橡皮擦大小。橡皮擦默认大小 5px、羽化 0px；魔棒删除会完全清除选区，并向选区外侧羽化；羽化为 0 时仅清除选区。工具栏的“恢复初始版本”会恢复本轮人工修整前的当前帧（未运行步骤 03 时以步骤 02 结果为基准），跨保存和重启保留；恢复可撤销，点击保存才写入结果。旧备份没有步骤标记、无法确认初始版本时，恢复按钮会禁用并提示重新处理步骤 03。
+每步完成后先播放检查。步骤 02 / 03 可隐藏异常帧，也可恢复；重新抽帧会使下游旧处理结果失效。模型就绪后，本地处理可以离线进行。重新去背整批成功后会替换当前结果，并清除步骤 03 的结果和手修。
+
+抽帧间隔大于 1 时，点击时间轴上的抽帧刻度，可在主画布预览相邻源帧。用 ← / → 切换，“对照当前帧”可来回比较。确认替换后，新帧会用于播放和下一次提取；取消或按 Esc 可退出预览。
+
+三个步骤的预览按钮会在悬停或键盘聚焦时显示快捷键：↑ / ↓ 缩放、← / → 切帧、空格播放或暂停、R 居中并适配预览、V 进入移动画布模式。移动模式下可左键拖动，中键拖动始终可用。
+
+步骤 02 完成后，切换到步骤 03 页面即可点击 **预览右下角的魔棒或橡皮擦**，自动暂停并在当前预览中修整，无需先运行步骤 03；工具参数与操作按钮同排显示在画布上方，按钮靠右，预览窗内显示简要操作提示。魔棒点击选区、Shift 点击追加、Delete 删除；橡皮擦用左键拖动擦除。滚轮缩放、中键拖动画布，空格仍控制播放。保留当前预览背景、缩放和平移，背景仍可切换。点击“保存当前帧”后标记为已完成处理，动画卡片的第三个状态图标变绿，并保持工具选中，撤销记录以此次保存为起点；切回浏览工具保留未保存修改。播放、切帧、切步骤或离开页面前，未保存修改会提示保存、放弃或留在当前帧。没有选区时，按 Esc 可退出工具并放弃未保存的修改。手修只影响当前帧。两次批处理之间可以多次修整同一帧或不同帧，每轮都从各帧的最新保存结果继续。W / E / V 分别切换魔棒、橡皮擦和移动工具；选中魔棒或橡皮擦时，⌘S / Ctrl+S 保存当前帧；+ / - 调整当前工具的颜色容差或橡皮擦大小。橡皮擦默认大小 3px、羽化 1px；魔棒删除会完全清除选区，并向选区外侧羽化；羽化为 0 时仅清除选区。工具栏的“恢复批处理版本”会恢复当前帧在最近一次批处理完成时的画面。首次批处理前以步骤 02 结果为基准。恢复可撤销，点击保存才写入结果。旧备份无法确认基准时，完成一次步骤 03 批处理即可建立新的恢复点。
+
+“开始批处理”会在当前结果上依次执行已开启的挖孔、缩减边缘和帧对齐。整批成功后替换当前结果，取消或失败时保留当前结果。重复执行同一操作可能累积效果。左侧的“还原本次修改”会撤销最近一次批处理，恢复该轮开始前的帧序列，包括当时已保存的手修。“重置为初始状态”将当前动作的所有帧恢复到步骤 02 的去背结果。两项操作均需确认。
 
 #### 3. 裁剪与导出
 
@@ -122,6 +132,8 @@ npx skills add hyhy111/gam-skills -g --skill "*"
 
 操作客户端前请先安装并打开 GAM，并允许 Agent 访问本地文件和执行命令。安装包自带 `gam-agent`，固定入口见 [开发与打包](DEVELOPMENT.md#打包发行)。`gam-export` 另需 Python 3.10+，仅依赖标准库；导出时提供素材目录和 Godot 4 项目目录。本地素材处理无需登录，在线 AI 生成使用客户端中的账号或自定义 Key 配置。更多 Agent 的安装选项见 [Skills CLI 支持列表](https://github.com/vercel-labs/skills#supported-agents)。
 
+要通过 CLI 生成，在运行中的 GAM 选择 ForFuner AI 或自定义 API Key，并在设置中开启「允许 CLI 提交 AI 生成任务」。用 `gam-agent generation image --request-json 请求.json` 提交图片，或用 `gam-agent generation video --request-json 请求.json` 提交视频。ForFuner AI 使用客户端已登录的账号。
+
 ### 常见问题
 
 **必须使用 AI 或登录吗？** 不需要。已有视频可直接进入本地流程，下载好背景模型后可离线处理。
@@ -150,7 +162,7 @@ Game Assets Maker (GAM) is an open-source desktop tool for indie game developers
 
 ### What you can make
 
-- **Video to animation frames**: extract → remove backgrounds → clean holes and align, with previews at each step.
+- **Video to animation frames**: extract → remove backgrounds → post-process, with previews at each step.
 - **Batch trim**: use a shared bounding box, or tight per-frame crops with offset JSON.
 - **Clean up details**: outlines, isolated-pixel cleanup, edge optimization, color replacement, and reversible frame hiding.
 - **Organize characters and actions**: keep idle, walk, jump, and attack animations together with per-step settings.
@@ -180,17 +192,25 @@ Open GAM, create a character / action project in the animation library, and impo
 
 If you need source material, create a character in Image Generation, then use that image as the first frame in Video Generation. See the AI setup options below.
 
+In AI Creation, choose **Import local media** under Source Media to select multiple files. GAM copies the files to `local-images` or `local-videos` in the configured cache directory and shows them alongside generated results. Open a local video to create a frame animation with its own copy of the video. Drag a local image card onto the first or last video frame, or open the image details to edit and restore the original. The picker supports PNG, JPEG, WebP, GIF, BMP, MP4, MOV and WebM. Video playback depends on the system WebView's codec support.
+
 #### 2. Process in three steps
 
 | Step | Action | Check |
 | --- | --- | --- |
 | **01 Extract frames** | Choose the start, end, and extraction interval, then start extraction. | Complete motion and a clean loop. |
-| **02 Remove background** | On first use, select a source and download U2Net (~176 MB), then process the frames. | Hair, weapons, thin lines, and soft edges. |
-| **03 Clean holes and align** | Remove residual background colors between limbs and weapons; enable horizontal centering or bottom alignment when needed. | Green character details, jump height, and intentional movement. |
+| **02 Remove background** | Choose U²-Net or BiRefNet Lite FP16 on Windows, or U²-Net or BiRefNet (Comfy-Org) on macOS. Download the weights on first use. U²-Net shows Alpha Matting controls and BiRefNet shows edge-defringe controls. | Hair, weapons, thin lines, and soft edges. |
+| **03 Post-process** | Enable hole punching, edge shrink, and frame alignment as needed. | Outline detail, jump height, and intentional movement. |
 
-Play the result after each step. You can hide and restore unwanted frames in steps 02 / 03. Re-extracting frames invalidates older downstream results. Once the model is ready, local processing works offline.
+Play the result after each step. You can hide and restore unwanted frames in steps 02 / 03. Re-extracting frames invalidates older downstream results. Once the model is ready, local processing works offline. A successful background removal run replaces the current result and clears Step 03 results and manual edits.
 
-After Step 02, switch to the Step 03 page and choose the **magic wand or eraser at the preview’s bottom right** to pause and retouch the current frame in place, without first running Step 03. Tool settings appear at the top, with brief instructions inside the preview. Click to select, Shift-click to add, and Delete to remove; left-drag to erase. Scroll to zoom, middle-drag to pan, and use Space for playback. The preview keeps its background, zoom and pan; background switching remains available. Saving marks processing complete, turns the animation card’s third status icon green, keeps the tool selected and starts a new undo history. Browse mode keeps unsaved edits. Before playback, frame/step navigation or leaving the page, choose to save, discard or stay. Cancel discards unsaved changes. Edits affect only this frame in Step 03. Re-running Step 03 replaces manual edits. W / E / V select the wand, eraser and pan tools; Cmd+S / Ctrl+S save the current frame while the wand or eraser is selected; + / - adjust the active tool’s color tolerance or eraser size. The eraser defaults to 5px with 0px feathering. Wand deletion fully clears the selection and feathers outward into neighboring pixels; with feathering set to 0, only selected pixels are cleared. Restore Initial Version restores the current frame’s appearance before manual edits in this run (using Step 02 output when Step 03 has not been run), across saves and restarts. Restoration can be undone and requires Save to update the output. If older backups do not identify their processing step, restoration stays disabled until Step 03 is reprocessed to establish a verified baseline.
+When the extraction interval is greater than 1, click an extraction tick to preview neighboring source frames on the main canvas. Use ← / → to browse and **Compare current frame** to switch between the candidate and the current selection. Confirm the replacement to use it for playback and the next extraction, or cancel with Esc.
+
+Across all three steps, preview buttons show shortcuts on hover or keyboard focus: ↑ / ↓ to zoom, ← / → to change frames, Space to play or pause, R to center and fit, and V to enter pan mode. Left-drag pans in pan mode, while middle-drag remains available in every tool.
+
+After Step 02, switch to the Step 03 page and choose the **magic wand or eraser at the preview’s bottom right** to pause and retouch the current frame in place, without first running Step 03. Tool settings and right-aligned buttons share a row above the canvas. Brief instructions appear inside the preview. Click to select, Shift-click to add, and Delete to remove; left-drag to erase. Scroll to zoom, middle-drag to pan, and use Space for playback. The preview keeps its background, zoom and pan; background switching remains available. Saving marks processing complete, turns the animation card’s third status icon green, keeps the tool selected and starts a new undo history. Browse mode keeps unsaved edits. Before playback, frame/step navigation or leaving the page, choose to save, discard or stay. With no selection active, Esc exits the tool and discards unsaved changes. Manual edits apply to the current frame. You can edit a frame multiple times and edit different frames between batches. Each batch starts with the latest saved frames. W / E / V select the wand, eraser and pan tools; Cmd+S / Ctrl+S save the current frame while the wand or eraser is selected; + / - adjust the active tool’s color tolerance or eraser size. The eraser defaults to 3px with 1px feathering. Wand deletion fully clears the selection and feathers outward into neighboring pixels; with feathering set to 0, only selected pixels are cleared. Restore Batch Version restores the current frame to the last completed batch, or to Step 02 before the first batch. You can undo the restore. Save to apply it to the output. When older backups cannot establish a baseline, completing a Step 03 batch creates a new restore point.
+
+Click Start Batch Processing to apply the enabled tools in order: hole punching, edge shrink, then alignment. Each successful batch replaces the current results. Failure or cancellation preserves the current results. Repeating a tool can compound its effect. Undo Changes restores the frames from before the last batch, including edits you had saved at the time. Reset All Edits returns all frames in the current action to Step 02. Both sidebar actions ask for confirmation.
 
 #### 3. Trim and export
 
@@ -241,6 +261,8 @@ You can also select an agent and install from **Settings → Install GAM Skills*
 After installation, describe your request, for example: “Use gam-pic-prompt to write an image prompt for a side-view swordsman,” or “Use gam-export to import this asset directory into my Godot 4 project.”
 
 Install and open GAM before controlling the client, and allow your agent to access local files and execute commands. The app bundles `gam-agent`; see [Packaging](DEVELOPMENT.md#packaging) for its stable entry paths. `gam-export` also requires Python 3.10+ and uses only the standard library. Provide the asset directory and Godot 4 project directory when exporting. Local processing needs no login; online AI generation uses the account or custom key configured in the client. See the [Skills CLI supported agents](https://github.com/vercel-labs/skills#supported-agents) for other installation options.
+
+For CLI generation, select ForFuner AI or a custom API key in the running app and enable **Allow CLI to submit AI generation tasks** in Settings. Use `gam-agent generation image --request-json request.json` for images or `gam-agent generation video --request-json request.json` for videos. ForFuner AI uses the current desktop sign-in.
 
 ### FAQ
 

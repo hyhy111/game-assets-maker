@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   frameFromTimelineRatio,
+  extractionFrameIndices,
   nearestVisibleFrameIndex,
   sourceFrameFromTimelineFrame,
   timelineFrameForVisibleIndex,
@@ -37,4 +38,10 @@ test('hidden output frames keep their original timeline slots', () => {
   assert.equal(timelineFrameForVisibleIndex(visibleFrames, 1), 2);
   assert.equal(nearestVisibleFrameIndex(visibleFrames, 1), 1);
   assert.equal(sourceFrameFromTimelineFrame(2, 47, 3), 53);
+});
+
+test('manual frame substitutions preserve slots and downstream source positions', () => {
+  assert.deepEqual(extractionFrameIndices(12, 1, 10, 3, { 4: 5, 7: 6 }), [1, 5, 6, 10]);
+  assert.equal(sourceFrameFromTimelineFrame(1, 1, 3, { 4: 5 }), 5);
+  assert.equal(sourceFrameFromTimelineFrame(2, 1, 3, { 4: 5 }), 7);
 });

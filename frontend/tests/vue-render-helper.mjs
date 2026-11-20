@@ -105,6 +105,7 @@ export async function renderSfc(path, {
   slots = {},
   route = '/',
   piniaState = {},
+  locale = 'zh-CN',
   configureSetup,
   ssrContext,
 } = {}) {
@@ -124,6 +125,7 @@ export async function renderSfc(path, {
     routes: [
       { path: '/', component: { render: () => null } },
       { path: '/ai-creation', component: { render: () => null } },
+      { path: '/ai-creation/source-media/:id', component: { render: () => null } },
       { path: '/ai-creation/settings', component: { render: () => null } },
       { path: '/video-generation/create', component: { render: () => null } },
       { path: '/video-generation/tasks', component: { render: () => null } },
@@ -144,7 +146,7 @@ export async function renderSfc(path, {
   app.use(router);
   app.use(createI18n({
     legacy: false,
-    locale: 'zh-CN',
+    locale,
     fallbackLocale: 'en',
     messages: {
       'zh-CN': withSeedreamTestMessages(zhCN, 'zh-CN'),

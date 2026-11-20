@@ -8,6 +8,7 @@ import type {
   CreateProjectData,
   RoleSummary,
   ProjectRenameResult,
+  PreviewCleanupSummary,
   LegacyMigrationRequest,
   LegacyMigrationResult,
   LegacyProjectImportResult,
@@ -27,6 +28,10 @@ import type {
   GamSkillsInstallResult,
   BackgroundColor,
   ModelStatus,
+  GpuCompatibility,
+  GpuDownloadSource,
+  GpuRuntimeStatus,
+  ModelDownloadSource,
   ProjectTrimStatus,
   BatchTrimParams,
   BatchTrimResult,
@@ -68,6 +73,7 @@ import type {
   StorageMigrationStateResult,
   PlatformCapabilities,
   PlatformDataResult,
+  SourceMedia,
 } from '@/types';
 
 declare const window: PyWebViewWindow;
@@ -142,6 +148,14 @@ export const projectApi = {
     return callApi<Project | null>('get_project', 'getProject', projectId);
   },
 
+  async getPreviewCleanupPlan(createdFrom: string, createdTo: string): Promise<PreviewCleanupSummary> {
+    return callApi<PreviewCleanupSummary>('get_preview_cleanup_plan', 'getPreviewCleanupPlan', createdFrom, createdTo);
+  },
+
+  async cleanPreviewFrames(createdFrom: string, createdTo: string, projectIds: string[]): Promise<PreviewCleanupSummary> {
+    return callApi<PreviewCleanupSummary>('clean_project_preview_frames', 'cleanPreviewFrames', createdFrom, createdTo, projectIds);
+  },
+
   async createProject(data: CreateProjectData): Promise<Project> {
     return callApi<Project>(
       'create_project',
@@ -208,9 +222,11 @@ export const frameApi = {
     step: number,
     page: number = 1,
     pageSize: number = 50,
-    useCache: boolean = true
+    useCache: boolean = true,
+    rebuildPreview: boolean = false,
   ): Promise<FramesResponse> {
-    return callApi<FramesResponse>('get_frames', 'getFrames', projectId, step, page, pageSize, useCache);
+    return callApi<FramesResponse>('get_frames', 'getFrames', projectId, step, page, pageSize, useCache,
+      ...(rebuildPreview ? [true] : []));
   },
 
   async getEditableFrame(projectId: string, filename: string, step: number = 3): Promise<EditableFrame> {
@@ -268,6 +284,14 @@ export const processApi = {
     return callApi<TaskStatus>('get_task_status', 'getTaskStatus', taskId);
   },
 
+  async resetPostProcessing(projectId: string): Promise<boolean> {
+    return callApi<boolean>('reset_post_processing', 'resetPostProcessing', projectId);
+  },
+
+  async undoPostProcessing(projectId: string): Promise<boolean> {
+    return callApi('undo_post_processing', 'undoPostProcessing', projectId);
+  },
+
   async cancelTask(taskId: string): Promise<boolean> {
     return callApi<boolean>('cancel_task', 'cancelTask', taskId);
   },
@@ -297,16 +321,36 @@ export const processApi = {
     return callApi<BackgroundColor | null>('get_background_color', 'getBackgroundColor', projectId);
   },
 
+  async getGpuRuntimeStatus(): Promise<GpuRuntimeStatus> {
+    return callApi<GpuRuntimeStatus>('get_gpu_runtime_status', 'getGpuRuntimeStatus');
+  },
+
+  async detectGpuCompatibility(): Promise<GpuCompatibility> {
+    return callApi<GpuCompatibility>('detect_gpu_compatibility', 'detectGpuCompatibility');
+  },
+
+  async prepareGpuRuntime(model: string, source?: GpuDownloadSource | 'tuna'): Promise<GpuRuntimeStatus> {
+    return callApi<GpuRuntimeStatus>('prepare_gpu_runtime', 'prepareGpuRuntime', model, source);
+  },
+
+  async cancelGpuRuntimePrepare(): Promise<GpuRuntimeStatus> {
+    return callApi<GpuRuntimeStatus>('cancel_gpu_runtime_prepare', 'cancelGpuRuntimePrepare');
+  },
+
   async getModelStatus(model: string = 'u2net'): Promise<ModelStatus> {
     return callApi<ModelStatus>('get_model_status', 'getModelStatus', model);
   },
 
-  async preloadModel(model: string = 'u2net', source?: 'modelscope' | 'github'): Promise<ModelStatus> {
+  async preloadModel(model: string = 'u2net', source?: ModelDownloadSource): Promise<ModelStatus> {
     return callApi<ModelStatus>('preload_model', 'preloadModel', model, source ?? null);
   },
 
-  async retryModel(model: string = 'u2net', source?: 'modelscope' | 'github'): Promise<ModelStatus> {
+  async retryModel(model: string = 'u2net', source?: ModelDownloadSource): Promise<ModelStatus> {
     return callApi<ModelStatus>('retry_model', 'retryModel', model, source ?? null);
+  },
+
+  async cancelModelDownload(model: string = 'u2net'): Promise<ModelStatus> {
+    return callApi<ModelStatus>('cancel_model_download', 'cancelModelDownload', model);
   }
 
 }
@@ -769,6 +813,19 @@ export const api = {
   seedance: seedanceApi,
   seedream: seedreamApi,
   storage: storageApi,
+  sourceMedia: {
+    list: () => callApi<SourceMedia[]>('source_media_list', 'sourceMediaList'),
+    get: (id: string) => callApi<SourceMedia | null>('source_media_get', 'sourceMediaGet', id),
+    import: () => callApi<{ items: SourceMedia[]; failed: string[] }>('source_media_import', 'sourceMediaImport'),
+    openDirectory: (id: string) => callApi<boolean>('source_media_open_directory', 'sourceMediaOpenDirectory', id),
+    imageInput: (id: string) => callApi<string>('source_media_image_input', 'sourceMediaImageInput', id),
+    editImage: (id: string, image: string, source: string, layout: GenerationLayout | null) =>
+      callApi<SourceMedia>('source_media_edit_image', 'sourceMediaEditImage', id, image, source, layout),
+    restoreImage: (id: string) => callApi<SourceMedia>('source_media_restore_image', 'sourceMediaRestoreImage', id),
+    delete: (id: string) => callApi<boolean>('source_media_delete', 'sourceMediaDelete', id),
+    createProject: (id: string, role: string, action: string) =>
+      callApi<Project>('source_media_create_project', 'sourceMediaCreateProject', id, role, action),
+  },
   lifecycle: lifecycleApi,
   platform: platformApi,
   isAvailable: isApiAvailable

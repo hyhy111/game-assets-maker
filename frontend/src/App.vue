@@ -1,4 +1,5 @@
 <template>
+  <ControlTooltip />
   <router-view v-slot="{ Component }">
     <transition
       name="fade"
@@ -37,6 +38,7 @@ import { useAgentControl } from '@/composables/useAgentControl';
 import { api } from '@/api';
 import SeedreamCloseWarning from '@/components/seedream/SeedreamCloseWarning.vue';
 import DebugLogPanel from '@/components/layout/DebugLogPanel.vue';
+import ControlTooltip from '@/components/common/ControlTooltip.vue';
 
 /** Keep the diagnostic panel and its shortcut limited to development builds. */
 const showDebugPanel = ref(import.meta.env.DEV);

@@ -42,6 +42,24 @@ export function sourceFrameFromTimelineFrame(
   timelineFrame: number,
   sourceStartFrame: number,
   frameInterval: number,
+  frameOverrides: Record<string, number> = {},
 ): number {
-  return sourceStartFrame + timelineFrame * Math.max(1, frameInterval);
+  const baseFrame = sourceStartFrame + timelineFrame * Math.max(1, frameInterval);
+  return frameOverrides?.[baseFrame] ?? baseFrame;
+}
+
+export function extractionFrameIndices(
+  totalFrames: number,
+  startFrame: number,
+  endFrame: number,
+  interval: number,
+  frameOverrides: Record<string, number> = {},
+): number[] {
+  if (!Number.isInteger(interval) || interval < 1 || totalFrames <= 0) return [];
+  const start = Math.max(0, startFrame);
+  const end = Math.min(endFrame, totalFrames - 1);
+  const count = Math.max(0, Math.floor((end - start) / interval) + 1);
+  return Array.from({ length: count }, (_, index) => (
+    sourceFrameFromTimelineFrame(index, start, interval, frameOverrides)
+  ));
 }

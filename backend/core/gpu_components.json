@@ -1,0 +1,79 @@
+[
+  {
+    "name": "onnxruntime-gpu",
+    "version": "1.30.0",
+    "filename": "onnxruntime_gpu-1.30.0-cp312-cp312-win_amd64.whl",
+    "size": 160478594,
+    "sha256": "882da66f936e1f560b155118c5953dc45268cd92893abb8d31a940f4d1effb36",
+    "url": "https://files.pythonhosted.org/packages/19/ef/e15db03ea1fce9bc60349add2604df8c39abac10d28d4eef27b621845139/onnxruntime_gpu-1.30.0-cp312-cp312-win_amd64.whl",
+    "mirror_url": "https://mirrors.aliyun.com/pypi/packages/19/ef/e15db03ea1fce9bc60349add2604df8c39abac10d28d4eef27b621845139/onnxruntime_gpu-1.30.0-cp312-cp312-win_amd64.whl",
+    "python_abi": "cp312",
+    "platform": "win_amd64"
+  },
+  {
+    "name": "nvidia-cuda-runtime",
+    "version": "13.0.88",
+    "filename": "nvidia_cuda_runtime-13.0.88-py3-none-win_amd64.whl",
+    "size": 2926776,
+    "sha256": "0156cf8f3453025938aab80bcca909506f4e82f1584a17736df7edeba882cc02",
+    "url": "https://files.pythonhosted.org/packages/b3/76/d71097672718defe63af4702b9b0d9c32f9f8df4582ce1a1b891bc65b93b/nvidia_cuda_runtime-13.0.88-py3-none-win_amd64.whl",
+    "mirror_url": "https://mirrors.aliyun.com/pypi/packages/b3/76/d71097672718defe63af4702b9b0d9c32f9f8df4582ce1a1b891bc65b93b/nvidia_cuda_runtime-13.0.88-py3-none-win_amd64.whl",
+    "python_abi": "py3",
+    "platform": "win_amd64"
+  },
+  {
+    "name": "nvidia-cublas",
+    "version": "13.0.2.14",
+    "filename": "nvidia_cublas-13.0.2.14-py3-none-win_amd64.whl",
+    "size": 401887280,
+    "sha256": "5f7a90456b1392db60e28719547ba6e00696bfa81304b6887cf287f9edf2c1d7",
+    "url": "https://files.pythonhosted.org/packages/f3/91/bda39230b7a4c102bb724c21b50823efc63544490a885fea0b604911c0ab/nvidia_cublas-13.0.2.14-py3-none-win_amd64.whl",
+    "mirror_url": "https://mirrors.aliyun.com/pypi/packages/f3/91/bda39230b7a4c102bb724c21b50823efc63544490a885fea0b604911c0ab/nvidia_cublas-13.0.2.14-py3-none-win_amd64.whl",
+    "python_abi": "py3",
+    "platform": "win_amd64"
+  },
+  {
+    "name": "nvidia-cudnn-cu13",
+    "version": "9.28.1.4",
+    "filename": "nvidia_cudnn_cu13-9.28.1.4-py3-none-win_amd64.whl",
+    "size": 407065099,
+    "sha256": "73d874c6bd8a1c75ca040228f77c4e163efe9bab3b65bd85914e2b7334ac68ee",
+    "url": "https://files.pythonhosted.org/packages/48/9c/26e6bdd31c97c389aa565b49c916be0dec17dd61dad6cd33fee286d1b946/nvidia_cudnn_cu13-9.28.1.4-py3-none-win_amd64.whl",
+    "mirror_url": "https://mirrors.aliyun.com/pypi/packages/48/9c/26e6bdd31c97c389aa565b49c916be0dec17dd61dad6cd33fee286d1b946/nvidia_cudnn_cu13-9.28.1.4-py3-none-win_amd64.whl",
+    "python_abi": "py3",
+    "platform": "win_amd64"
+  },
+  {
+    "name": "nvidia-cuda-nvrtc",
+    "version": "13.0.88",
+    "filename": "nvidia_cuda_nvrtc-13.0.88-py3-none-win_amd64.whl",
+    "size": 76807835,
+    "sha256": "6bcd4e7f8e205cbe644f5a98f2f799bef9556fefc89dd786e79a16312ce49872",
+    "url": "https://files.pythonhosted.org/packages/4a/af/345fedb9f4c76c84ab4fa445b36bd4048a4d9db60e6bc76b4f913ff4b852/nvidia_cuda_nvrtc-13.0.88-py3-none-win_amd64.whl",
+    "mirror_url": "https://mirrors.aliyun.com/pypi/packages/4a/af/345fedb9f4c76c84ab4fa445b36bd4048a4d9db60e6bc76b4f913ff4b852/nvidia_cuda_nvrtc-13.0.88-py3-none-win_amd64.whl",
+    "python_abi": "py3",
+    "platform": "win_amd64"
+  },
+  {
+    "name": "nvidia-cufft",
+    "version": "12.0.0.61",
+    "filename": "nvidia_cufft-12.0.0.61-py3-none-win_amd64.whl",
+    "size": 213342123,
+    "sha256": "2abce5b39d2f5ae12730fb7e5db6696533e36c26e2d3e8fd1750bdd2853364eb",
+    "url": "https://files.pythonhosted.org/packages/85/b2/f8af21a2ed1beed337a6a02c5a28aeb85441f4d578ec3d529543c775ea4b/nvidia_cufft-12.0.0.61-py3-none-win_amd64.whl",
+    "mirror_url": "https://mirrors.aliyun.com/pypi/packages/85/b2/f8af21a2ed1beed337a6a02c5a28aeb85441f4d578ec3d529543c775ea4b/nvidia_cufft-12.0.0.61-py3-none-win_amd64.whl",
+    "python_abi": "py3",
+    "platform": "win_amd64"
+  },
+  {
+    "name": "nvidia-nvjitlink",
+    "version": "13.0.88",
+    "filename": "nvidia_nvjitlink-13.0.88-py3-none-win_amd64.whl",
+    "size": 36035115,
+    "sha256": "634e96e3da9ef845ae744097a1f289238ecf946ce0b82e93cdce14b9782e682f",
+    "url": "https://files.pythonhosted.org/packages/e4/01/07530b0e37546231052e30234540289c42eaffa486f1a34a87fed340157b/nvidia_nvjitlink-13.0.88-py3-none-win_amd64.whl",
+    "mirror_url": "https://mirrors.aliyun.com/pypi/packages/e4/01/07530b0e37546231052e30234540289c42eaffa486f1a34a87fed340157b/nvidia_nvjitlink-13.0.88-py3-none-win_amd64.whl",
+    "python_abi": "py3",
+    "platform": "win_amd64"
+  }
+]

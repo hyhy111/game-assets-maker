@@ -120,11 +120,10 @@ class AgentWorkflowService:
             from backend.seedance.downloader import ResultDownloader
             from backend.seedance.manager import SeedanceTaskManager
             from backend.seedance.repository import TaskRepository
-            from src.utils.app_config import load_app_config, save_app_config
+            from src.utils.app_config import load_app_config
 
             with _cwd(self.root):
-                config = load_app_config()
-                seedance = config["seedance"]
+                seedance = load_app_config()["seedance"]
                 cache_root = self._storage_locations.ai_video_cache_root.resolve()
                 repository = TaskRepository(cache_root)
                 self._seedance_manager = SeedanceTaskManager(
@@ -132,8 +131,6 @@ class AgentWorkflowService:
                     repository,
                     ResultDownloader(repository),
                     CacheManager(repository, self.project_api),
-                    config,
-                    config_saver=lambda values: save_app_config({"seedance": values}),
                 )
         return self._seedance_manager
 

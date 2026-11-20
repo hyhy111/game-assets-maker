@@ -1,8 +1,28 @@
 # 去背模型下载与存储
 
-本说明适用于 Game Assets Maker 的本地背景移除功能。当前仅支持 **U2Net**，模型文件为 `u2net.onnx`，约 176 MB。它与 Seedream／Seedance 云端生成模型无关，本地去背不需要登录、积分或 API Key。
+本说明适用于 Game Assets Maker 的本地背景移除功能。步骤 02 可使用 **U²-Net（rembg）**，Windows 默认使用 **BiRefNet Lite FP16**，macOS 也可选择 **BiRefNet（Comfy-Org）**。本地去背无需登录、积分或 API Key。
 
 仓库和当前发布包均不包含模型权重。模型下载到本地后可重复使用，不必每次处理都下载。
+
+## Windows：BiRefNet ONNX FP16
+
+在步骤 02 选择 Lite FP16 后，点击下载从 ModelScope 或 Hugging Face 获取权重。成功重新处理后才会替换已有透明帧。
+
+| 模型 | 固定版本 | 字节数（十进制 MB） | SHA-256 |
+| --- | --- | ---: | --- |
+| Lite FP16 | `7a387b7aa4fa82a33adf7a0f32e2ea6678106a08` | 114538221（114.5 MB） | `d39b897ceb16ae654c1731f3dba0cf9b368d9cae74b5a57459b455cc8bfec402` |
+
+安装模式默认存于 `~/.gam/models/birefnet-lite-onnx/model_fp16.onnx`，遵守 `GAM_DATA_ROOT`。源码模式使用仓库 `models/` 下对应的子目录。下载完成并通过大小、SHA-256 及初始化检查后，可离线运行。推理使用 1024×1024 输入并恢复原图尺寸，保留源 alpha 和边缘去色功能。
+
+Windows downloads the pinned Lite FP16 ONNX weights on request. Validated weights work offline on CPU without PyTorch. macOS uses the Comfy-Org backend.
+
+## macOS：BiRefNet（Comfy-Org）
+
+在「背景移除」选择 **BiRefNet**，首次使用时从 [魔搭 ModelScope](https://modelscope.cn/models/Comfy-Org/BiRefNet) 或 [Hugging Face](https://huggingface.co/Comfy-Org/BiRefNet/blob/35767b272f2846752a3aee1259abdd4586f735c8/background_removal/birefnet.safetensors) 下载约 424 MiB 的权重。两个来源共用同一个本地文件，并校验同一个 SHA-256。Hugging Face 下载地址固定到提交 `35767b2`。GAM 使用 PyTorch 在本地推理：当前进程的 PyTorch 能使用 CUDA 时走 CUDA，显存不足时回退到 CPU；Apple Silicon 在 MPS 可用时走 MPS；其余情况走 CPU。BiRefNet 的 macOS 运行时要求 macOS 14 或更新版本。
+
+已下载的权重也可复制到模型目录并命名为 `birefnet.safetensors`。安装版默认路径是 `~/.gam/models/birefnet-comfy/birefnet.safetensors`，设置 `GAM_DATA_ROOT` 时使用该数据根。源码开发模式使用仓库的 `models/birefnet-comfy/`。应用校验 Comfy-Org 权重的 SHA-256，校验通过后可离线使用。推理代码沿用 [ZhengPeng7 的 BiRefNet](https://huggingface.co/ZhengPeng7/BiRefNet)，按 MIT 许可随应用分发。
+
+## U²-Net（rembg）
 
 ## 安装版：在应用中下载
 
@@ -38,7 +58,7 @@ uv run python scripts/download_models.py u2net
 uv run python scripts/download_models.py
 ```
 
-此脚本使用 ModelScope，始终保存到仓库内的 `models/rembg/`，不会按安装版数据根选择目录。它用于本地开发准备，不代替安装版界面的下载流程；当前不支持下载其他模型。
+此脚本使用 ModelScope，始终保存到仓库内的 `models/rembg/`，不会按安装版数据根选择目录。它用于本地开发准备，不代替安装版界面的下载流程；该脚本用于准备 U²-Net 权重。
 
 ## 离线使用与手动准备
 
@@ -64,3 +84,20 @@ Windows 安装数据模式还会尝试将 `%LOCALAPPDATA%/VideoToSheet/models/re
 ## 打包与版本控制
 
 当前发布配置不捆绑模型权重，无需为打包提前下载全部模型。用户首次使用去背时通过界面下载，或提前向用户数据目录放入有效模型。模型权重属于本地下载数据，不应提交到 Git；仓库已忽略 `models/`。
+
+
+## Windows BiRefNet 与可选 NVIDIA 加速
+
+Windows 基础安装包使用 CPU ONNX Runtime，不携带 PyTorch、模型或 CUDA 组件；无需安装 Python。本地抽帧、去背、后处理不要求登录、积分或 API Key。macOS 继续使用原 Comfy-Org 权重与 PyTorch/MPS；不显示 Windows ONNX 模型或组件下载。
+
+| Windows 模型 | 下载字节数 | 用途 |
+| --- | ---: | --- |
+| BiRefNet Lite FP16 | 114,538,221（约 109.2 MiB） | 新项目默认，下载较小 |
+
+在模型卡上选择抠图模型的下载来源。cuda加速组件可从阿里云、华为云 PyPI 镜像或官方 PyPI 下载，来源单独保存。
+
+GPU 加速完全可选。固定 7 个 wheel 总下载量为 **1,298,542,822 字节（约 1.21 GiB）**，解包还需额外磁盘空间。点击准备后 GAM 自动校验、解包和真实推理检查，无需 pip、CUDA Toolkit 或系统 Python；显卡驱动需由用户正常安装。已测 RTX 4060 Ti 16GB，不据此承诺其他显卡或设置未经实测的显存门槛。组件就绪从下一任务生效，准备过程中已就绪的模型仍可使用 CPU。
+
+Windows 安装版默认把 NVIDIA 组件放在安装目录的 `runtime/cuda13-cp312` 下。设置 `GAM_DATA_ROOT` 时，组件使用指定数据根下的同名子目录。下载可在相应卡片继续，支持服务端范围请求时续传。换源仍会校验文件和完整 SHA-256。模型和组件就绪后可离线使用。
+
+GPU 初始化、显存不足或进程错误会显示原因，当前失败帧及后续帧继续使用同一模型的 CPU；整批成功后才替换现有结果，取消或最终失败保留旧结果。反馈问题时请附应用版本、Windows/显卡/驱动、所选模型和来源、卡片原始错误与日志，注明是在下载、校验、初始化还是处理中失败，勿附 API Key 或个人素材。

@@ -6,6 +6,8 @@ repository/manager/downloader stack runs against a tmp cache root.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
+from os import utime
 from pathlib import Path
 from typing import Any
 
@@ -130,7 +132,6 @@ def manager(repository, platform, platform_downloader):
         repository,
         platform_downloader,
         FakeCacheManager(),
-        {"retention_days": 90, "last_cleanup_at": None},
         platform=platform,
         platform_downloader=platform_downloader,
     )
@@ -379,7 +380,7 @@ def test_continue_requires_downloaded_video(manager, platform, platform_request)
         manager.continue_generation(result["local_id"])
 
 
-def test_ensure_continuation_frame_is_stable(manager, platform, platform_request, tmp_path):
+def test_continuation_frame_can_be_reused_and_recreated(manager, platform, platform_request, tmp_path):
     from platform_test_helpers import make_video_bytes
 
     result = manager.create(platform_request)
@@ -396,8 +397,15 @@ def test_ensure_continuation_frame_is_stable(manager, platform, platform_request
     manager._download_succeeded(manager._repository.get(local_id))
 
     first = manager.ensure_continuation_frame(local_id)
+    original_bytes = first.read_bytes()
+    old_timestamp = (datetime.now(UTC) - timedelta(days=8)).timestamp()
+    utime(first, (old_timestamp, old_timestamp))
     second = manager.ensure_continuation_frame(local_id)
     assert first == second and first.is_file()
+    assert second.stat().st_mtime > old_timestamp
+
+    first.unlink()
+    assert manager.ensure_continuation_frame(local_id).read_bytes() == original_bytes
 
 
 def test_continue_prefers_returned_last_frame_over_local_extraction(manager, platform, platform_request, tmp_path):

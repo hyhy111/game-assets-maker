@@ -122,7 +122,7 @@ test('Seedance preview and create retain protected actions and preflight guards'
   assert.match(preview, /:disabled="confirmingPaidAction"/);
   assert.match(preview, /trapModalTab/);
   assert.match(preview, /@click="downloadVideo"/);
-  assert.match(preview, /variant="primary"\s+@click="regenerate"/);
+  assert.match(preview, /variant="primary"[^>]*@click="regenerate"/);
   assert.match(preview, /@click="regenerate"[\s\S]*@click="continueFromReturnedFrame"[\s\S]*@click="downloadVideo"/);
   assert.doesNotMatch(preview, /seedance\.preview\.nextSteps/);
   const saveButton = preview.match(/<button\s[^>]*data-test="seedance-download"[^>]*>[\s\S]*?<\/button>/)?.[0];
@@ -225,13 +225,10 @@ test('Seedance create screen does not expose task scheduling controls', async ()
   assert.doesNotMatch(zh, /联网搜索/);
 });
 
-test('Never retention disables manual cache cleanup', async () => {
+test('settings exposes project preview cleanup without AI video retention controls', async () => {
   const settings = await source('views/SeedanceSettings.vue');
-  assert.match(settings, /:options="retentionOptions"/);
-  assert.match(settings, /\{ value: 0, label: t\('seedance\.ui\.never'\) \}/);
-  assert.match(settings, /:disabled="retentionDisabled"/);
-  assert.match(settings, /retentionDisabled/);
-  assert.match(settings, /draft\.retention_days === 0/);
+  assert.match(settings, /<ProjectPreviewCleanup/);
+  assert.doesNotMatch(settings, /retentionOptions|previewCleanup\.aiRetention|store\.cleanCache/);
 });
 
 test('image and video creation share the settings-only paid confirmation preference', async () => {
@@ -260,21 +257,20 @@ test('image and video creation share the settings-only paid confirmation prefere
   assert.match(zh, /云端结果链接仅保留 24 小时，如发生意外报错，可在有效期内重新下载。/);
 });
 
-test('Seedance task deletion and cache cleanup use accessible confirmation modals', async () => {
-  const [tasks, settings] = await Promise.all([
+test('Seedance task deletion and project preview cleanup use accessible confirmation modals', async () => {
+  const [tasks, cleanup] = await Promise.all([
     source('components/seedance/SeedanceTaskList.vue'),
-    source('views/SeedanceSettings.vue'),
+    source('components/settings/ProjectPreviewCleanup.vue'),
   ]);
   assert.match(tasks, /v-if="taskToDelete"/);
   assert.match(tasks, /ref="deleteModalRoot"/);
   assert.match(tasks, /@click\.self="closeDeleteConfirmation"/);
   assert.match(tasks, /trapModalTab\(event, deleteModalRoot\.value\)/);
   assert.doesNotMatch(tasks, /window\.confirm\(message\)/);
-  assert.match(settings, /@click="openCacheCleanConfirmation"/);
-  assert.match(settings, /v-if="confirmCacheClean"/);
-  assert.match(settings, /ref="cacheCleanModalRoot"/);
-  assert.match(settings, /clearCacheConfirmation/);
-  assert.match(settings, /trapModalTab\(event, cacheCleanModalRoot\.value\)/);
+  assert.match(cleanup, /@click="openConfirmation"/);
+  assert.match(cleanup, /v-if="confirmed"/);
+  assert.match(cleanup, /aria-describedby="preview-cleanup-description"/);
+  assert.match(cleanup, /trapModalTab\(event, dialog\.value\)/);
 });
 
 test('task-list deletion uses the same global Seedance dialog style as the preview', async () => {
@@ -312,11 +308,7 @@ test('Seedance settings retains the safe full configuration workflow', async () 
   assert.match(settings, /class="h-\[42px\] shrink-0"/);
   assert.match(settings, /variant="danger"/);
   assert.doesNotMatch(settings, /v-model\.number="draft\.default_priority"|v-model\.number="draft\.default_expires_after"/);
-  assert.match(settings, /store\.loadCacheStatus/);
-  assert.match(settings, /total_bytes/);
-  assert.match(settings, /clearable_bytes/);
-  assert.match(settings, /protected_task_count/);
-  assert.match(settings, /\[7, 30, 90, 180\]/);
+  assert.match(settings, /<ProjectPreviewCleanup/);
   assert.match(settings, /saveFeedback/);
 });
 

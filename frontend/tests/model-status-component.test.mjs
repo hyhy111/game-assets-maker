@@ -18,7 +18,7 @@ test('shared model card renders download, failure recovery, and ready states', a
   const needed = await renderSfc('components/editor/ModelStatusCard.vue', {
     props: { status: status('needs_download') },
   });
-  assert.match(needed, /u2net 模型需要首次下载/);
+  assert.match(needed, /U²-Net 模型需要首次下载/);
   assert.match(needed, /安装包不含模型。请选择来源下载约 176 MB 的模型文件，完成后保存在本机，无需重复下载。/);
   assert.match(needed, /<button[^>]*aria-haspopup="listbox"/);
   assert.doesNotMatch(needed, /<select/);
@@ -38,7 +38,7 @@ test('shared model card renders download, failure recovery, and ready states', a
   const ready = await renderSfc('components/editor/ModelStatusCard.vue', {
     props: { status: status('ready') },
   });
-  assert.match(ready, /u2net 模型已就绪/);
+  assert.match(ready, /U²-Net 模型已就绪/);
 });
 
 test('only step 2 owns the model card and model preparation', async () => {
@@ -61,7 +61,40 @@ test('only step 2 owns the model card and model preparation', async () => {
 });
 
 test('model card keeps the selected source for download and retry', async () => {
-  const source = await readFile(new URL('../src/components/editor/ModelStatusCard.vue', import.meta.url), 'utf8');
-  assert.match(source, /<Select\s+v-model="source"/);
-  assert.match(source, /@click="\$emit\('retry', source\)"/);
+  const selected = [];
+  let bindings;
+  await renderSfc('components/editor/ModelStatusCard.vue', {
+    props: { status: status('needs_download'), onRetry: source => selected.push(source) },
+    configureSetup(value) { bindings = value; },
+  });
+  bindings.source.value = 'github';
+  bindings.requestDownload();
+  assert.deepEqual(selected, ['github']);
+});
+
+
+test('model card offers cancellation while downloading', async () => {
+  const downloading = await renderSfc('components/editor/ModelStatusCard.vue', {
+    props: { status: status('downloading', { downloaded_bytes: 50, total_bytes: 100 }) },
+  });
+  assert.match(downloading, /取消下载/);
+
+  const step2 = await readFile(new URL('../src/views/Editor/Step2Background.vue', import.meta.url), 'utf8');
+  assert.match(step2, /@cancel="processStore\.cancelModelDownload\(\)"/);
+});
+
+test('BiRefNet offers ModelScope and Hugging Face for the same checkpoint', async () => {
+  const needed = await renderSfc('components/editor/ModelStatusCard.vue', {
+    props: { status: status('needs_download', { model: 'birefnet-comfy' }) },
+    configureSetup({ source, sourceOptions }) {
+      assert.deepEqual(sourceOptions.value.map(option => option.value), ['modelscope', 'huggingface']);
+      assert.equal(source.value, 'modelscope');
+      source.value = 'huggingface';
+    },
+  });
+  assert.match(needed, /BiRefNet 模型需要首次下载/);
+  assert.match(needed, /请选择来源下载约 424 MB/);
+  assert.match(needed, /下载模型/);
+  assert.match(needed, /aria-haspopup="listbox"/);
+  assert.match(needed, /Hugging Face/);
 });

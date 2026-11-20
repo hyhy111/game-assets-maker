@@ -1,6 +1,6 @@
 <template>
   <article
-    class="overflow-hidden rounded-xl border border-dark-border bg-dark-surface transition hover:border-primary/50"
+    class="flex h-full min-w-0 flex-col overflow-hidden rounded-xl border border-dark-border bg-dark-surface transition hover:border-primary/50"
     :class="{ 'recent-generation-card-active': active }"
     :data-test="`recent-image-${batch.local_id}`"
   >
@@ -8,23 +8,25 @@
       <button
         type="button"
         class="group/preview relative block aspect-video w-full overflow-hidden bg-black/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70"
+        :class="{ 'cursor-grab active:cursor-grabbing': canDragImage(selectedAttempt) }"
         data-test="recent-image-main-preview"
-        :draggable="!!selectedAttempt?.absolute_path && selectedAttempt.can_open_directory !== false"
-        :title="t('aiCreation.recent.dragImageToVideoFrame')"
+        :draggable="canDragImage(selectedAttempt)"
+        :aria-description="canDragImage(selectedAttempt) ? t('aiCreation.recent.dragImageToVideoFrame') : undefined"
         @click="emit('open', batch.local_id)"
-        @dragstart="selectedAttempt && startImageDrag($event, selectedAttempt)"
+        @dragstart="startImageDrag($event, selectedAttempt)"
       >
         <img
           v-if="selectedAttempt"
           :src="imageUrl(selectedAttempt.image_url)"
           :alt="`${t('seedream.detail.candidateImage')} ${selectedAttempt.index + 1}`"
-          class="h-full w-full object-cover transition duration-300 group-hover/preview:brightness-105"
+          class="h-full w-full object-cover"
           draggable="false"
         >
         <span
           v-else
           class="grid h-full place-items-center text-sm text-gray-500"
         >{{ statusText }}</span>
+        <MediaPreviewDragHint v-if="canDragImage(selectedAttempt)" />
         <div class="pointer-events-none absolute left-2 right-14 top-2 flex flex-wrap items-start gap-1">
           <span
             class="media-overlay-badge media-overlay-status"
@@ -40,7 +42,7 @@
       </button>
       <div
         v-if="$slots['top-right']"
-        class="absolute right-3 top-3 z-[2]"
+        class="absolute right-2 top-2 z-[2]"
       >
         <slot
           name="top-right"
@@ -57,12 +59,16 @@
           v-for="(attempt, index) in succeededAttempts"
           :key="attempt.local_id"
           type="button"
-          :draggable="!!attempt.absolute_path && attempt.can_open_directory !== false"
+          :draggable="canDragImage(attempt)"
           class="h-14 w-14 shrink-0 overflow-hidden rounded-md border-2 bg-black/20 p-0.5 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70"
-          :class="selectedAttempt?.index === attempt.index ? 'border-primary' : 'border-transparent hover:border-white/30'"
+          :class="[
+            selectedAttempt?.index === attempt.index ? 'border-primary' : 'border-transparent hover:border-white/30',
+            { 'control-tooltip cursor-grab active:cursor-grabbing': canDragImage(attempt) },
+          ]"
+          :data-tooltip="canDragImage(attempt) ? t('aiCreation.recent.dragImageToVideoFrame') : undefined"
+          :data-tooltip-delay="canDragImage(attempt) ? 500 : undefined"
           :aria-label="`${t('seedream.detail.candidateImage')} ${index + 1}`"
           :aria-pressed="selectedAttempt?.index === attempt.index"
-          :title="t('aiCreation.recent.dragImageToVideoFrame')"
           :data-test="`recent-image-thumbnail-${attempt.index}`"
           @click="selectedAttemptIndex = attempt.index"
           @dragstart="startImageDrag($event, attempt)"
@@ -77,7 +83,7 @@
       </div>
     </div>
 
-    <div class="p-4">
+    <div class="mt-auto p-4">
       <div class="flex flex-wrap gap-1.5 text-xs text-gray-400">
         <span class="rounded-md bg-black/20 px-2 py-1">{{ modelLabel }}</span>
         <span class="rounded-md bg-black/20 px-2 py-1">{{ batch.request.resolution }}</span>
@@ -101,12 +107,6 @@
           </dd>
         </div>
       </dl>
-      <div
-        v-if="$slots['bottom-right']"
-        class="mt-3 flex justify-end"
-      >
-        <slot name="bottom-right" />
-      </div>
     </div>
   </article>
 </template>
@@ -115,6 +115,7 @@
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import PlatformSourceBadge from '@/components/ai-creation/PlatformSourceBadge.vue';
+import MediaPreviewDragHint from './MediaPreviewDragHint.vue';
 import { useModelDisplayName } from '@/composables/useModelDisplayName';
 import { batchStatus, formatElapsed } from '@/seedream-ui';
 import { writeSeedreamImageDrag } from '@/seedream-image-drag';
@@ -162,8 +163,12 @@ function imageUrl(url: string): string {
   return url;
 }
 
-function startImageDrag(event: DragEvent, attempt: SeedreamAttempt) {
-  if (!attempt.absolute_path || attempt.can_open_directory === false) { event.preventDefault(); return; }
+function canDragImage(attempt: SeedreamAttempt | null): attempt is SeedreamAttempt & { absolute_path: string } {
+  return !!attempt?.absolute_path && attempt.can_open_directory !== false;
+}
+
+function startImageDrag(event: DragEvent, attempt: SeedreamAttempt | null) {
+  if (!canDragImage(attempt)) { event.preventDefault(); return; }
   const source = event.currentTarget as HTMLElement | null;
   const thumbnail = source?.closest('article')?.querySelector<HTMLElement>(
     `[data-test="recent-image-thumbnail-${attempt.index}"]`,

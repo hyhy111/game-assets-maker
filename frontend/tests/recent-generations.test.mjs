@@ -94,6 +94,38 @@ const renderRecent = ({ batches = [], tasks = [], workspace = {} } = {}) => rend
   },
 );
 
+for (const [kind, models] of [
+  ['video', [
+    ['doubao-seedance-2-0-260128', 'Seedance2.0'],
+    ['doubao-seedance-2-0-fast-260128', 'Seedance2.0 Fast'],
+    ['doubao-seedance-2-0-mini-260615', 'Seedance2.0 Mini'],
+  ]],
+  ['image', [
+    ['doubao-seedream-5-0-pro-260628', 'Seedream 5.0 Pro'],
+    ['doubao-seedream-5-0-flash-260915', 'Seedream 5.0 Flash'],
+    ['doubao-seedream-5-0-260128', 'Seedream 5.0 Lite'],
+  ]],
+]) {
+  test(`${kind} history names known platform models offline and prefers the current platform name`, async () => {
+    const unknown = 'unrecognized-platform-model';
+    const records = [...models.map(([id]) => id), unknown].map((model, index) => {
+      const media = kind === 'video' ? uniqueTask(index) : uniqueBatch(index);
+      return { ...media, source: 'forfuner-ai', request: { ...media.request, source: 'forfuner-ai', model } };
+    });
+    const data = kind === 'video' ? { tasks: records } : { batches: records };
+    const offline = await renderRecent({ ...data, workspace: { recentFilter: kind } });
+    for (const [id, name] of models) {
+      assert.ok(offline.includes(`>${name}</span>`), `offline name for ${id}`);
+      assert.ok(!offline.includes(id));
+    }
+    assert.ok(offline.includes(`>${unknown}</span>`));
+
+    const capabilities = { [kind]: { models: [{ model: models[0][0], displayName: 'Platform display name' }] } };
+    const online = await renderRecent({ ...data, workspace: { recentFilter: kind, capabilities } });
+    assert.ok(online.includes('>Platform display name</span>'));
+  });
+}
+
 test('recent generations defaults to images and shows the newest twelve in a responsive four-column grid', async () => {
   const html = await renderRecent({ batches: Array.from({ length: 13 }, (_, index) => uniqueBatch(index)) });
 
@@ -215,7 +247,7 @@ test('favorites belong to individual media and stacked covers do not show a favo
   assert.doesNotMatch(stackedImages, /data-test="recent-media-favorite-/);
   assert.match(singleVideo, /data-test="recent-media-favorite-video:task-1"/);
   assert.match(imageCardSource, /<slot\s+name="top-right"\s+:attempt="selectedAttempt"/);
-  assert.match(recentSource, /imageMediaKey\(group\.items\[0\]\.local_id, attempt\.local_id\)/);
+  assert.match(recentSource, /imageMediaKey\(entry\.group\.items\[0\]\.local_id, attempt\.local_id\)/);
   assert.match(recentSource, /useRecentMediaFavorites\(\)/);
   assert.doesNotMatch(recentSource, /recent-prompt-favorites|favoritePromptKeys/);
 });
@@ -316,7 +348,12 @@ test('image task cards use one main preview with a selectable thumbnail strip', 
   assert.match(html, /data-test="recent-image-thumbnail-1"/);
   assert.match(html, /data-test="recent-image-thumbnail-2"/);
   assert.match(html, /draggable="true"/);
-  assert.match(html, /title="长按拖拽"/);
+  const mainPreview = html.match(/<button[^>]*data-test="recent-image-main-preview"[\s\S]*?<\/button>/)?.[0];
+  assert.match(mainPreview, /class="media-preview-drag-hint[^"]*"[^>]*><span[^>]*>长按拖拽<\/span>/);
+  assert.doesNotMatch(mainPreview, /data-tooltip=/);
+  const thumbnailButtons = [...html.matchAll(/<button[^>]*data-test="recent-image-thumbnail-\d+"[^>]*>/g)];
+  assert.equal(thumbnailButtons.length, 3);
+  for (const [button] of thumbnailButtons) assert.match(button, /data-tooltip="长按拖拽"[^>]*data-tooltip-delay="500"/);
   assert.match(html, /aria-pressed="true"[^>]*data-test="recent-image-thumbnail-0"/);
   assert.doesNotMatch(html, /3\/3/);
   assert.doesNotMatch(html, /gridTemplateRows|thumbnailGridStyle|thumbnailItemClass/);
@@ -328,14 +365,32 @@ test('missing cached images cannot be dragged as local paths', async () => {
   });
   assert.match(html, /<button[^>]*data-test="recent-image-main-preview"[^>]*draggable="false"/);
   assert.doesNotMatch(html, /draggable="true"/);
+  assert.doesNotMatch(html, /data-tooltip="长按拖拽"/);
+  assert.doesNotMatch(html, /media-preview-drag-hint/);
+});
+
+test('local image cards advertise dragging and local video cards do not', async () => {
+  for (const kind of ['image', 'video']) {
+    const html = await renderSfc('components/ai-creation/SourceMediaCard.vue', {
+      props: { item: {
+        id: 'imported-media', kind, name: 'local-media', thumbnail_url: '/fixture.png',
+        imported_at: '2026-11-16T10:00:00Z', width: 640, height: 360,
+      } },
+    });
+    // The drag source is a button, not the link: WebViews hijack anchor drags.
+    assert.match(html, new RegExp(`<button[^>]*data-test="source-media-imported-media"[^>]*draggable="${kind === 'image'}"`));
+    assert.match(html, /<a[^>]*href="\/ai-creation\/source-media\/imported-media"/);
+    assert.equal(html.includes('media-preview-drag-hint'), kind === 'image');
+    assert.doesNotMatch(html, /data-tooltip="长按拖拽"/);
+  }
 });
 
 test('image previews fill the card top edge like video previews', async () => {
   const card = await source('components/ai-creation/RecentImageGenerationCard.vue');
 
   assert.match(card, /class="group\/preview relative block aspect-video w-full overflow-hidden bg-black\/25/);
-  assert.match(card, /class="h-full w-full object-cover transition/);
-  assert.match(card, /class="absolute right-3 top-3 z-\[2\]"/);
+  assert.match(card, /class="h-full w-full object-cover"/);
+  assert.match(card, /class="absolute right-2 top-2 z-\[2\]"/);
   assert.doesNotMatch(card, /bg-\[#18191c\] p-3|overflow-hidden rounded-lg bg-black\/25|object-contain/);
 });
 

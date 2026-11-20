@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 import ts from 'typescript';
-import { SEEDREAM_IMAGE_DRAG_TYPE, hasImageDrop, readImageDrop, writeSeedreamImageDrag } from '../src/seedream-image-drag.ts';
+import { SEEDREAM_IMAGE_DRAG_TYPE, hasImageDrop, readImageDrop, writeSeedreamImageDrag, writeSourceImageDrag } from '../src/seedream-image-drag.ts';
 
 function fixture() {
   const listeners = new Map();
@@ -33,8 +33,9 @@ const payload = { localId: 'batch-1', attemptIndex: 2 };
 
 test('main-image and small-image drags use the same corresponding thumbnail preview', async () => {
   const source = await readFile(new URL('../src/components/ai-creation/RecentImageGenerationCard.vue', import.meta.url), 'utf8');
+  const eligibility = source.match(/function canDragImage\([\s\S]*?\n\}/)[0];
   const handler = source.match(/function startImageDrag\([\s\S]*?\n\}/)[0];
-  const compiled = ts.transpileModule(handler, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
+  const compiled = ts.transpileModule(`${eligibility}\n${handler}`, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
   const thumbnail = { name: 'thumbnail-2' };
   const card = { querySelector(selector) { assert.equal(selector, '[data-test="recent-image-thumbnail-2"]'); return thumbnail; } };
   const previews = [];
@@ -86,6 +87,21 @@ test('large previews reuse the rendered thumbnail as the only drag bitmap', () =
   f.listeners.get('dragend')();
 });
 
+test('generated image detail drags can hide the native preview while retaining the image candidate', () => {
+  const f = fixture();
+  const previews = [];
+  f.transfer.setDragImage = element => previews.push(element);
+  const path = '/cache/image.png';
+  writeSeedreamImageDrag(f.transfer, payload, f.source, path, 'hidden');
+  assert.equal(previews.length, 1);
+  assert.match(previews[0].style.cssText, /opacity:\s*0\b/);
+  assert.ok(f.elements.some(element => element.connected && element.style.cssText.includes('box-shadow:')));
+  const data = new Map(f.transfers);
+  assert.equal(data.get('text/plain'), path);
+  assert.deepEqual(readImageDrop({ files: [], getData: type => data.get(type) ?? '' }), { kind: 'candidate', candidate: payload });
+  f.listeners.get('dragend')();
+});
+
 test('an unavailable thumbnail preview does not prevent transferring the image path', () => {
   const f = fixture();
   f.transfer.setDragImage = () => { throw new Error('Native preview unavailable'); };
@@ -113,6 +129,7 @@ test('pointer decoration never replaces the native drag bitmap or intercepts dro
   ]);
   const effect = f.elements[0];
   assert.ok(effect.connected);
+  assert.match(effect.style.cssText, /center \/ 10px 1\.5px no-repeat,.*center \/ 1\.5px 10px no-repeat/);
   assert.match(effect.style.cssText, /pointer-events:\s*none/);
   f.listeners.get('dragover')({ clientX: 100, clientY: 200 });
   assert.equal(effect.style.transform, 'translate(112px, 212px)');
@@ -156,4 +173,50 @@ test('drag payloads do not require a source element and null transfers do nothin
   assert.equal(f.transfers.length, 2);
   writeSeedreamImageDrag(null, payload, f.source);
   assert.equal(f.elements.length, 0);
+});
+
+test('imported image cards resolve a managed media ID through direct and text-only WebView transfers', () => {
+  const id = 'e983a82ab3c74b59886bc0f414c8bb0d';
+  const values = new Map();
+  const source = { ownerDocument: {} };
+  writeSourceImageDrag({ setData: (type, value) => values.set(type, value) }, id, source);
+  const transferred = types => ({
+    types,
+    files: [],
+    getData: type => types.includes(type) ? values.get(type) ?? '' : '',
+  });
+  for (const types of [[...values.keys()], ['text/plain']]) {
+    const transfer = transferred(types);
+    assert.equal(hasImageDrop(transfer), true);
+    assert.deepEqual(readImageDrop(transfer), { kind: 'source', id });
+  }
+  values.set('text/plain', 'gam-source-image:../other/file.png');
+  assert.equal(readImageDrop(transferred(['text/plain'])).kind, 'error');
+});
+
+test('local image drags show the plus without a thumbnail and preserve the path on drop', () => {
+  const id = 'e983a82ab3c74b59886bc0f414c8bb0d';
+  const path = '/Users/test/素材 缓存/local-images/角色.png';
+  const f = fixture();
+  const previews = [];
+  f.transfer.setDragImage = (element, x, y) => previews.push({ element, x, y });
+  writeSourceImageDrag(f.transfer, id, f.source, path);
+  assert.equal(previews.length, 1);
+  const [{ element, x, y }] = previews;
+  assert.ok(element.connected);
+  assert.equal(element.textContent, undefined);
+  assert.match(element.style.cssText, /opacity:\s*0\b/);
+  assert.deepEqual([x, y], [0, 0]);
+  assert.ok(f.elements.some(element => element.connected && element.style.cssText.includes('box-shadow:')));
+  // External agent inputs receive the usable file path, not internal metadata.
+  assert.equal(new Map(f.transfers).get('text/plain'), path);
+  // A WebView that retains only text on re-entry still resolves the source ID.
+  const textOnly = { types: ['text/plain'], files: [], getData: type => (type === 'text/plain' ? path : '') };
+  assert.equal(hasImageDrop(textOnly), true);
+  assert.deepEqual(readImageDrop(textOnly), { kind: 'source', id });
+  // Unknown paths still fail validation instead of resolving a stale drag.
+  const other = { types: ['text/plain'], files: [], getData: () => '/elsewhere/other.png' };
+  assert.equal(readImageDrop(other).kind, 'error');
+  f.listeners.get('dragend')();
+  assert.ok(f.elements.every(element => element.removed));
 });

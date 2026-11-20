@@ -11,15 +11,16 @@
       </h1>
       <button
         type="button"
-        class="ml-auto flex w-fit items-center gap-2 rounded-lg px-1 py-2 text-base text-gray-400 transition-colors hover:text-white focus:outline-none focus:ring-2 focus:ring-primary/60"
+        class="ml-auto flex w-fit items-center gap-2 rounded-lg px-1 py-2 text-base text-gray-400 transition-colors hover:text-white focus:outline-none focus:ring-2 focus:ring-primary/60 icon-button control-tooltip"
         data-test="seedream-detail-back"
+        :aria-label="t('aiCreation.backToWorkspace')"
+        :data-tooltip="t('aiCreation.backToWorkspace')"
         @click="backToTasks"
       >
         <ArrowLeft
-          :size="22"
+          class="h-5 w-5"
           aria-hidden="true"
         />
-        {{ t('aiCreation.backToWorkspace') }}
       </button>
     </div>
 
@@ -50,6 +51,10 @@
             data-test="seedream-regenerate"
             @click="regenerate"
           >
+            <RotateCw
+              class="h-5 w-5 mr-2"
+              aria-hidden="true"
+            />
             {{ t('seedream.detail.regenerate') }}
           </Button>
           <Button
@@ -68,6 +73,10 @@
             data-test="seedream-retry-all-downloads"
             @click="retryAllDownloads"
           >
+            <Download
+              class="h-5 w-5 mr-2"
+              aria-hidden="true"
+            />
             {{ t('seedream.detail.retryAllDownloads') }}
           </Button>
           <div class="ml-auto flex items-center gap-2">
@@ -129,9 +138,9 @@
           :data-test="`seedream-attempt-${selectedSucceededAttempt.index}`"
         >
           <div
-            class="relative mx-auto w-fit"
-            :draggable="!!selectedSucceededAttempt.absolute_path && selectedSucceededAttempt.can_open_directory !== false"
-            :title="t('aiCreation.recent.dragImageToVideoFrame')"
+            class="group/preview relative mx-auto w-fit"
+            :class="{ 'cursor-grab active:cursor-grabbing': canDragImage(selectedSucceededAttempt) }"
+            :draggable="canDragImage(selectedSucceededAttempt)"
             @dragstart="dragCurrentImage($event)"
           >
             <img
@@ -141,6 +150,7 @@
               :data-test="`seedream-image-${selectedSucceededAttempt.index}`"
               draggable="false"
             >
+            <MediaPreviewDragHint v-if="canDragImage(selectedSucceededAttempt)" />
             <RecentMediaFavoriteButton
               class="absolute right-3 top-3 z-[2]"
               :favorite="isFavorite(imageMediaKey(batch.local_id, selectedSucceededAttempt.local_id))"
@@ -176,6 +186,7 @@
                 :src="attemptImageUrl(attempt)"
                 alt=""
                 class="h-16 w-16 object-cover"
+                draggable="false"
               >
             </button>
           </div>
@@ -184,9 +195,15 @@
               variant="secondary"
               size="sm"
               :data-test="`seedream-edit-image-${selectedSucceededAttempt.index}`"
+              icon-only
+              :aria-label="t('buttonHints.editImage')"
+              :tooltip="t('buttonHints.editImage')"
               @click="openImageEditor(selectedSucceededAttempt.index)"
             >
-              {{ t('seedream.detail.imageEditor') }}
+              <Pencil
+                class="h-5 w-5"
+                aria-hidden="true"
+              />
             </Button>
           </div>
           <p
@@ -294,9 +311,15 @@
                   variant="secondary"
                   size="sm"
                   :data-test="`seedream-retry-download-${attempt.index}`"
+                  icon-only
+                  :aria-label="t('buttonHints.retryDownload')"
+                  :tooltip="t('buttonHints.retryDownload')"
                   @click="retryDownload(attempt.index)"
                 >
-                  {{ t('seedream.detail.retryDownload') }}
+                  <Download
+                    class="h-5 w-5"
+                    aria-hidden="true"
+                  />
                 </Button>
               </div>
             </div>
@@ -481,13 +504,14 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { ArrowLeft, Check, Copy, Download, FolderOpen, Trash2 } from 'lucide-vue-next';
+import { ArrowLeft, Check, Copy, Download, FolderOpen, Trash2, RotateCw, Pencil } from 'lucide-vue-next';
 import { api } from '@/api';
 import { writeSeedreamImageDrag } from '@/seedream-image-drag';
 import { useAICreationStore } from '@/stores/aiCreation';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 import Button from '@/components/common/Button.vue';
+import MediaPreviewDragHint from '@/components/ai-creation/MediaPreviewDragHint.vue';
 import PlatformSourceBadge from '@/components/ai-creation/PlatformSourceBadge.vue';
 import RecentMediaFavoriteButton from '@/components/ai-creation/RecentMediaFavoriteButton.vue';
 import SeedreamImageEraser from '@/components/seedream/SeedreamImageEraser.vue';
@@ -517,14 +541,19 @@ async function useAsReference() {
   } else mediaError.value = workspace.candidateHandoffError || t('aiCreation.imageUnavailable');
 }
 
+function canDragImage(attempt: SeedreamAttempt | null): attempt is SeedreamAttempt & { absolute_path: string } {
+  return !!attempt?.absolute_path && attempt.can_open_directory !== false;
+}
+
 function dragCurrentImage(event: DragEvent) {
   const attempt = selectedSucceededAttempt.value;
-  if (!attempt?.absolute_path || attempt.can_open_directory === false) { event.preventDefault(); return; }
+  if (!canDragImage(attempt)) { event.preventDefault(); return; }
   writeSeedreamImageDrag(
     event.dataTransfer,
     { localId: batchId.value, attemptIndex: attempt.index },
     event.currentTarget as HTMLElement | null,
     attempt.absolute_path,
+    'hidden',
   );
 }
 

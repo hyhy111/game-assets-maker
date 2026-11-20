@@ -93,11 +93,18 @@
           v-for="action in actions"
           :key="action"
           type="button"
-          class="rounded-lg px-3 py-2 text-xs font-medium transition"
-          :class="actionClass(action)"
+          class="control-tooltip inline-flex h-10 items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-medium transition"
+          :class="[actionClass(action), iconActions.includes(action) ? 'icon-button' : '']"
+          :aria-label="t(actionLabelKeys[action])"
+          :data-tooltip="t(actionHintKeys[action])"
           @click.stop="handleAction(action)"
         >
-          {{ t(actionLabelKeys[action]) }}
+          <component
+            :is="actionIcons[action]"
+            class="h-5 w-5"
+            aria-hidden="true"
+          />
+          <span v-if="!iconActions.includes(action)">{{ t(actionLabelKeys[action]) }}</span>
         </button>
       </div>
     </div>
@@ -106,7 +113,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
-import { Video } from 'lucide-vue-next';
+import { ArrowRightFromLine, ArrowUpRight, Download, RotateCw, StopCircle, Trash2, Video } from 'lucide-vue-next';
 import { useI18n } from 'vue-i18n';
 import { useModelDisplayName } from '@/composables/useModelDisplayName';
 import {
@@ -157,6 +164,24 @@ const actionLabelKeys: Record<SeedanceTaskAction, string> = {
   'retry-generation': 'seedance.tasks.retry',
   'retry-download': 'seedance.ui.redownload',
   delete: 'seedance.tasks.delete',
+};
+
+const iconActions: SeedanceTaskAction[] = ['view', 'retry-download', 'delete'];
+const actionIcons = {
+  cancel: StopCircle,
+  view: ArrowUpRight,
+  continue: ArrowRightFromLine,
+  regenerate: RotateCw,
+  'retry-generation': RotateCw,
+  'retry-download': Download,
+  delete: Trash2,
+};
+const actionHintKeys: Record<SeedanceTaskAction, string> = {
+  ...actionLabelKeys,
+  regenerate: 'buttonHints.regenerate',
+  'retry-generation': 'buttonHints.regenerate',
+  continue: 'buttonHints.continueGeneration',
+  'retry-download': 'buttonHints.retryDownload',
 };
 
 function handleAction(action: SeedanceTaskAction) {

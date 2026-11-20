@@ -34,7 +34,7 @@ models/
 webview_profile/
 seedance-cache/
 seedream-cache/
-docs/
+/docs/
 tmp/
 
 # Runtime config (may contain local preferences or credentials)
@@ -74,3 +74,8 @@ Thumbs.db
 .worktrees/
 .scratch/
 .kimi-code/
+
+# Imported original media when running from source
+/source-media/
+
+runtime

@@ -7,10 +7,12 @@ import hashlib
 import json
 import mimetypes
 import os
+import re
 import shutil
 import sys
 import threading
 from collections.abc import Callable
+from contextlib import suppress
 from functools import wraps
 from http.server import SimpleHTTPRequestHandler
 from pathlib import Path
@@ -21,6 +23,7 @@ from urllib.parse import unquote, urlsplit
 
 import webview
 
+from backend.api.source_media_api import FILE_TYPES, SourceMediaLibrary
 from src.utils.app_config import current_storage_locations, save_app_config
 from src.utils.app_version import app_version
 from src.utils.data_paths import data_root
@@ -143,6 +146,7 @@ def start_assets_server(
     seedream_media_resolver=None,
     startup_queue: Queue | None = None,
     project_media_root: Path | None = None,
+    source_media: SourceMediaLibrary | None = None,
 ):
     """Start a lightweight HTTP server for serving frame assets"""
 
@@ -162,6 +166,8 @@ def start_assets_server(
             super().end_headers()
 
         def do_GET(self):
+            if self._serve_source_media():
+                return
             if self._serve_seedance_media():
                 return
             if self._serve_seedream_media():
@@ -173,6 +179,8 @@ def start_assets_server(
             super().do_GET()
 
         def do_HEAD(self):
+            if self._serve_source_media(head_only=True):
+                return
             if self._serve_seedance_media(head_only=True):
                 return
             if self._serve_seedream_media(head_only=True):
@@ -269,6 +277,60 @@ def start_assets_server(
             if not head_only:
                 with asset_path.open("rb") as asset_file:
                     shutil.copyfileobj(asset_file, self.wfile)
+            return True
+
+        def _serve_source_media(self, head_only: bool = False) -> bool:
+            prefix = "/source-media/"
+            path = urlsplit(self.path).path
+            if not path.startswith(prefix):
+                return False
+            segments = path[len(prefix) :].split("/")
+            if source_media is None or len(segments) != 2:
+                self.send_error(404)
+                return True
+            try:
+                media = source_media.resolve(*segments)
+                size = media.stat().st_size
+                stream = media.open("rb")
+            except (OSError, RuntimeError, ValueError):
+                self.send_error(404)
+                return True
+
+            with stream:
+                # WKWebView requests byte ranges for metadata and seeking.
+                start, end, status = 0, size - 1, 200
+                requested = self.headers.get("Range")
+                match = re.fullmatch(r"bytes=([0-9]{0,20})-([0-9]{0,20})", requested or "")
+                if match and not head_only:
+                    first, last = match.groups()
+                    if first:
+                        start = int(first)
+                        if last:
+                            end = min(end, int(last))
+                    elif last:
+                        start = max(0, size - int(last))
+                    if start > end or not (first or last):
+                        self.send_response(416)
+                        self.send_header("Content-Range", f"bytes */{size}")
+                        self.send_header("Content-Length", "0")
+                        self.end_headers()
+                        return True
+                    status = 206
+
+                length = end - start + 1
+                self.send_response(status)
+                self.send_header("Accept-Ranges", "bytes")
+                self.send_header("Content-Type", mimetypes.guess_type(media.name)[0] or "application/octet-stream")
+                self.send_header("Content-Length", str(length))
+                self.send_header("X-Content-Type-Options", "nosniff")
+                if status == 206:
+                    self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
+                self.end_headers()
+                if not head_only:
+                    stream.seek(start)
+                    while length > 0 and (chunk := stream.read(min(length, 64 * 1024))):
+                        self.wfile.write(chunk)
+                        length -= len(chunk)
             return True
 
         def _serve_project_media(self, head_only: bool = False) -> bool:
@@ -403,6 +465,7 @@ class API:
         # Resolve storage roots once at startup; every consumer shares this
         # result until a migration-triggered restart replaces the process.
         self._storage_locations = current_storage_locations()
+        self._source_media = SourceMediaLibrary(self._storage_locations.ai_cache_root, data_root() / "source-media")
         self._project_api_instance = None
         self._video_api_instance = None
         self._frame_api_instance = None
@@ -650,6 +713,25 @@ class API:
         """Get project by ID (name)"""
         return self._project_api.get_project(project_id)
 
+    def get_preview_cleanup_plan(self, created_from: str = "", created_to: str = "") -> dict[str, Any]:
+        """Estimate the rebuildable Step 1 frame cache for a creation-date range."""
+        return self._project_api.get_preview_cleanup_plan(created_from, created_to)
+
+    @_project_write()
+    def clean_project_preview_frames(
+        self, created_from: str, created_to: str, project_ids: list[str]
+    ) -> dict[str, Any]:
+        """Remove only the preview frames of the animations confirmed by the user."""
+        if self._storage_migration_coordinator.restart_required:
+            raise ValueError("PREVIEW_CLEANUP_RESTART")
+        process = self._process_api_instance
+        if process is not None and (
+            process.has_active_writes()
+            or any(task.future is not None and not task.future.done() for task in process.tasks.values())
+        ):
+            raise ValueError("PREVIEW_CLEANUP_BUSY")
+        return self._project_api.clean_project_preview_frames(created_from, created_to, project_ids)
+
     @_project_write()
     def create_project(self, role: str, action: str, video_path: str, frame_interval: int = 1) -> dict[str, Any]:
         """Create a new project"""
@@ -721,9 +803,20 @@ class API:
     # ==================== Frame API ====================
 
     def get_frames(
-        self, project_id: str, step: int, page: int = 1, page_size: int = 50, use_cache: bool = True
+        self,
+        project_id: str,
+        step: int,
+        page: int = 1,
+        page_size: int = 50,
+        use_cache: bool = True,
+        rebuild_preview: bool = False,
     ) -> dict[str, Any]:
         """Get frames for a project at specific step"""
+        if step == 1 and use_cache and rebuild_preview:
+            with self._project_mutation_lock:
+                if self._storage_migration_coordinator.restart_required:
+                    raise ValueError("PREVIEW_CLEANUP_RESTART")
+                return self._frame_api.get_frames(project_id, step, page, page_size, use_cache, rebuild_preview=True)
         return self._frame_api.get_frames(project_id, step, page, page_size, use_cache)
 
     def get_frame_image(self, frame_path: str) -> str:
@@ -780,6 +873,14 @@ class API:
         """Start processing task, returns task ID"""
         return self._process_api.start_processing(project_id, step, params)
 
+    @_project_write(existing=True)
+    def reset_post_processing(self, project_id: str) -> bool:
+        return self._process_api.reset_post_processing(project_id)
+
+    @_project_write(existing=True)
+    def undo_post_processing(self, project_id: str) -> bool:
+        return self._process_api.undo_post_processing(project_id)
+
     def get_task_status(self, task_id: str) -> dict[str, Any]:
         """Get task status and progress"""
         return self._process_api.get_task_status(task_id)
@@ -801,6 +902,18 @@ class API:
     def get_background_color(self, project_id: str) -> dict[str, Any]:
         """Get background color for a project"""
         return self._process_api.get_background_color(project_id)
+
+    def get_gpu_runtime_status(self) -> dict[str, Any]:
+        return self._process_api.get_gpu_runtime_status()
+
+    def detect_gpu_compatibility(self) -> dict[str, Any]:
+        return self._process_api.detect_gpu_compatibility()
+
+    def prepare_gpu_runtime(self, model: str = "birefnet-lite-onnx", source: str | None = None) -> dict[str, Any]:
+        return self._process_api.prepare_gpu_runtime(model, source)
+
+    def cancel_gpu_runtime_prepare(self) -> dict[str, Any]:
+        return self._process_api.cancel_gpu_runtime_prepare()
 
     def get_model_status(self, model: str = "u2net") -> dict[str, Any]:
         """Return the shared rembg model preparation state."""
@@ -894,6 +1007,98 @@ class API:
             webview.OPEN_DIALOG, allow_multiple=False, file_types=("Video files (*.mp4;*.avi;*.mov;*.mkv;*.webm)",)
         )
         return result[0] if result else None
+
+    def _source_media_urls(self, record: dict[str, Any]) -> dict[str, Any]:
+        base = f"{self._assets_base_url}/source-media/{record['id']}"
+        revision = record.get("edit_revision")
+        query = f"?revision={revision}" if revision else ""
+        asset = "image" if record["kind"] == "image" else "original"
+        result = {
+            **record,
+            "url": f"{base}/{asset}{query}",
+            "thumbnail_url": f"{base}/thumbnail{query}",
+            "edit_source_url": f"{base}/edit-source{query}" if revision else "",
+        }
+        if record["kind"] == "image":
+            # External drag receivers (agent inputs) need a plain file path.
+            with suppress(OSError, RuntimeError, ValueError):
+                result["absolute_path"] = str(self._source_media.resolve(record["id"], "image"))
+        return result
+
+    def _prepare_source_media(self) -> None:
+        if self._storage_migration_coordinator.restart_required:
+            raise RuntimeError("Restart GAM after moving its storage")
+        self._source_media.prepare()
+
+    def source_media_import(self) -> dict[str, Any]:
+        """Open the file picker and copy selected files into the media library."""
+        paths = self._window.create_file_dialog(webview.OPEN_DIALOG, allow_multiple=True, file_types=FILE_TYPES)
+        if not paths:
+            return {"items": [], "failed": []}
+        with self._project_mutation_lock:
+            self._prepare_source_media()
+            result = self._source_media.import_files(paths)
+        return {"items": [self._source_media_urls(item) for item in result["items"]], "failed": result["failed"]}
+
+    @_project_write()
+    def source_media_list(self) -> list[dict[str, Any]]:
+        self._prepare_source_media()
+        return [self._source_media_urls(item) for item in self._source_media.list()]
+
+    @_project_write()
+    def source_media_get(self, media_id: str) -> dict[str, Any] | None:
+        try:
+            self._prepare_source_media()
+            return self._source_media_urls(self._source_media.get(media_id))
+        except (OSError, RuntimeError, ValueError):
+            return None
+
+    def source_media_open_directory(self, media_id: str) -> bool:
+        from src.utils.system_paths import open_directory
+
+        try:
+            open_directory(self._source_media.resolve(media_id, "original").parent)
+            return True
+        except (OSError, RuntimeError, ValueError):
+            return False
+
+    @_project_write()
+    def source_media_image_input(self, media_id: str) -> str:
+        self._prepare_source_media()
+        return str(self._source_media.resolve(media_id, "image"))
+
+    @_project_write()
+    def source_media_edit_image(
+        self, media_id: str, data_url: str, source_url: str, layout: dict[str, Any] | None
+    ) -> dict[str, Any]:
+        self._prepare_source_media()
+        return self._source_media_urls(self._source_media.edit_image(media_id, data_url, source_url, layout))
+
+    @_project_write()
+    def source_media_restore_image(self, media_id: str) -> dict[str, Any]:
+        self._prepare_source_media()
+        return self._source_media_urls(self._source_media.restore_image(media_id))
+
+    @_project_write()
+    def source_media_delete(self, media_id: str) -> bool:
+        self._prepare_source_media()
+        self._source_media.delete(media_id)
+        return True
+
+    @_project_write()
+    def source_media_create_project(self, media_id: str, role: str, action: str) -> dict[str, Any]:
+        self._prepare_source_media()
+        if self._source_media.get(media_id)["kind"] != "video":
+            raise ValueError("Only videos can be used to create an animation")
+        path = self._source_media.resolve(media_id, "original")
+        validation = self._video_api.validate_video(str(path))
+        if not validation["success"]:
+            raise ValueError("; ".join(validation.get("errors") or [validation.get("error", "Invalid video")]))
+        project = self._project_api.create_project(role, action, str(path), copy_video=True)
+        if not project["steps"]["1"]["data_ready"]:
+            self._project_api.delete_project(project["id"])
+            raise RuntimeError("Could not prepare source frames for the project")
+        return project
 
     def select_directory(self) -> str | None:
         """Open directory dialog"""
@@ -1503,7 +1708,10 @@ class MainApp:
                 self.api.seedream_media_resolver,
                 startup_queue,
             ),
-            kwargs={"project_media_root": self.api.storage_locations.projects_root},
+            kwargs={
+                "project_media_root": self.api.storage_locations.projects_root,
+                "source_media": self.api._source_media,
+            },
             daemon=True,
         )
         self.assets_thread.start()

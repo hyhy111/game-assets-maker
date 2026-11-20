@@ -21,7 +21,7 @@
             playerStore.canvasBgColor === colorKey ? 'border-primary scale-110' : 'border-dark-border hover:border-gray-500'
           ]"
           :style="{ backgroundColor: colorValue }"
-          :title="colorKey"
+          :aria-label="colorKey"
           @click="playerStore.setCanvasBgColor(colorKey)"
         />
       </div>
@@ -136,6 +136,39 @@
       </div>
     </div>
 
+    <div class="flex items-center justify-between pt-2 border-t border-dark-border">
+      <label class="text-sm font-medium text-gray-300">{{ t('step3.edgeShrink') }}</label>
+      <Switch
+        v-model="s3Params.edge_shrink_enabled"
+        :aria-label="t('step3.edgeShrink')"
+      />
+    </div>
+
+    <div
+      v-if="s3Params.edge_shrink_enabled"
+      class="space-y-3 pl-4 border-l-2 border-dark-border"
+    >
+      <p class="text-xs text-gray-500">
+        {{ t('step3.edgeShrinkHint') }}
+      </p>
+      <label
+        v-for="field in edgeFields"
+        :key="field.key"
+        class="flex items-center justify-between gap-3 text-sm text-gray-400"
+      >
+        <span>{{ t(field.label) }}</span>
+        <input
+          v-model.number="s3Params[field.key]"
+          type="number"
+          min="0"
+          max="100"
+          :step="field.step"
+          class="w-20 rounded-lg border border-dark-border bg-dark-surface px-2 py-1.5 text-center text-gray-100"
+          @keydown="onInputKeydown"
+        >
+      </label>
+    </div>
+
     <!-- Alignment Settings Toggle -->
     <div class="flex items-center justify-between pt-2 border-t border-dark-border">
       <label class="text-sm font-medium text-gray-300">{{ t('step3.frameAlignment') }}</label>
@@ -175,6 +208,13 @@
       </div>
     </div>
 
+    <p
+      v-if="taskStatus?.step === 3 && taskStatus.error"
+      class="rounded-lg border border-danger-500/30 bg-danger-500/10 p-3 text-sm text-danger-500"
+    >
+      {{ taskStatus.error }}
+    </p>
+
     <!-- Status -->
     <div
       v-if="isStepCompleted"
@@ -195,10 +235,14 @@
         block
         :loading="isProcessing"
         :disabled="!canProcess"
+        :tooltip="isStepCompleted ? t('buttonHints.rePostProcess') : t('buttonHints.postProcess')"
         @click="startProcessing"
       >
-        <Wand2 class="w-4 h-4 mr-2" />
-        {{ isStepCompleted ? t('step3.reProcess') : t('step3.startProcessing') }}
+        <SlidersHorizontal
+          class="h-5 w-5 mr-2"
+          aria-hidden="true"
+        />
+        {{ t('step3.startProcessing') }}
       </Button>
 
       <Button
@@ -207,8 +251,29 @@
         block
         @click="cancelProcessing"
       >
-        <X class="w-4 h-4 mr-2" />
-        {{ t('common.cancel') }}
+        <Square
+          class="mr-2 h-4 w-4"
+          aria-hidden="true"
+        />
+        {{ t('common.cancelProcessing') }}
+      </Button>
+      <Button
+        variant="secondary"
+        block
+        :disabled="!stepStatus?.can_undo_processing || isProcessing"
+        data-test="step3-undo"
+        @click="emit('undo-post-processing')"
+      >
+        {{ t('step3.undoProcessing') }}
+      </Button>
+      <Button
+        variant="secondary"
+        block
+        :disabled="!step2Completed || isProcessing"
+        data-test="step3-reset"
+        @click="emit('reset-post-processing')"
+      >
+        {{ t('step3.resetAll') }}
       </Button>
     </div>
   </div>
@@ -218,7 +283,7 @@
 import { computed } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useI18n } from 'vue-i18n';
-import { Wand2, CheckCircle, X } from 'lucide-vue-next';
+import { CheckCircle, SlidersHorizontal, Square } from 'lucide-vue-next';
 import Switch from '@/components/common/Switch.vue';
 import Input from '@/components/common/Input.vue';
 import { useProjectStore } from '@/stores/project';
@@ -230,43 +295,37 @@ const projectStore = useProjectStore();
 const processStore = useProcessStore();
 const playerStore = usePlayerStore();
 const { t } = useI18n();
+const emit = defineEmits<{ 'reset-post-processing': []; 'undo-post-processing': [] }>();
 
-const { s3Params, isProcessing } = storeToRefs(processStore);
+const { s3Params, isProcessing, taskStatus } = storeToRefs(processStore);
 
 const isStepCompleted = computed(() => projectStore.isStepCompleted(3));
 const step2Completed = computed(() => projectStore.isStepCompleted(2));
 const stepStatus = computed(() => projectStore.currentProject?.steps?.['3']);
 
-const canProcess = computed(() => step2Completed.value);
+const edgeFields = [
+  { key: 'edge_shrink_px', label: 'step3.edgeShrinkPx', step: 1 },
+  { key: 'edge_feather_px', label: 'step3.edgeFeatherPx', step: 0.5 },
+] as const;
+
+const canProcess = computed(() => {
+  if (!step2Completed.value || isProcessing.value) return false;
+  if (!s3Params.value.edge_shrink_enabled) return true;
+  const { edge_shrink_px: shrink, edge_feather_px: feather } = s3Params.value;
+  return Number.isInteger(shrink) && shrink >= 0 && shrink <= 100
+    && Number.isFinite(feather) && feather >= 0 && feather <= 100;
+});
 
 const intensityLabel = computed(() => t(`step3.intensityLabels.${s3Params.value.green_intensity}`));
 const intensityDescription = computed(() => t(`step3.intensityDescriptions.${s3Params.value.green_intensity}`));
 
 async function startProcessing() {
-  if (!projectStore.currentProject) return;
+  if (!projectStore.currentProject || !canProcess.value) return;
 
   // Stop playback before processing
   playerStore.pause();
 
-  // Mark as processed
-  s3Params.value.processed = true;
-
-  // Pass all parameters including alignment
-  const params = {
-    enabled: s3Params.value.enabled,
-    green_intensity: s3Params.value.green_intensity,
-    feather_radius: s3Params.value.feather_radius,
-    min_hole_size: s3Params.value.min_hole_size,
-    align_enabled: s3Params.value.align_enabled,
-    align_h: s3Params.value.align_h,
-    align_v: s3Params.value.align_v,
-    use_padding: s3Params.value.use_padding,
-    padding_bottom: s3Params.value.padding_bottom,
-    fps: s3Params.value.fps,
-    processed: true
-  };
-
-  await processStore.startProcessing(projectStore.currentProject.id, 3, params);
+  await processStore.startProcessing(projectStore.currentProject.id, 3, { processed: true });
 }
 
 async function cancelProcessing() {

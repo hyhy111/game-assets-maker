@@ -36,6 +36,7 @@ const routes = [
   { path: '/editor', component: EditorLayout },
   { path: '/batch-trim', component: BatchTrim },
   { path: '/ai-creation', component: () => import('./views/AICreationWorkspace.vue') },
+  { path: '/ai-creation/source-media/:id', component: () => import('./views/SourceMediaDetail.vue') },
   { path: '/ai-creation/settings', component: () => import('./views/SeedanceSettings.vue') },
   { path: '/video-generation/create', redirect: (to: { query: Record<string, unknown> }) => ({ path: '/ai-creation', query: { ...to.query, mode: 'video' } }) },
   { path: '/video-generation/tasks', redirect: { path: '/ai-creation', query: { mode: 'video' } } },

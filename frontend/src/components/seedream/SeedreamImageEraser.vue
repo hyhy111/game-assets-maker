@@ -10,152 +10,202 @@
       :to="toolbarTarget || 'body'"
       :disabled="!embedded"
     >
-      <div :class="embedded ? 'flex h-11 items-center gap-2 px-3' : 'mx-auto flex w-full max-w-6xl flex-wrap items-center gap-3 rounded-xl border border-dark-border bg-dark-surface p-3'">
-        <h2 class="mr-auto min-w-0 truncate text-sm font-semibold text-white">
+      <div :class="embedded ? 'grid grid-cols-[minmax(0,1fr)_auto] grid-rows-[2.75rem_5rem] items-center gap-x-3 px-3' : 'mx-auto flex w-full max-w-6xl flex-wrap items-center gap-3 rounded-xl border border-dark-border bg-dark-surface p-3'">
+        <h2 :class="['mr-auto min-w-0 truncate text-sm', embedded ? 'col-span-2 font-bold text-primary' : 'font-semibold text-white']">
           {{ title || t('seedream.detail.eraserTitle') }}
         </h2>
-        <div
-          v-if="!magicWandEnabled"
-          class="flex items-center gap-2 text-sm text-gray-300"
+        <fieldset
+          v-if="embedded"
+          :disabled="saving || loading || suspended"
+          class="flex h-full min-w-0 items-center gap-3 overflow-x-auto"
+          data-test="frame-tool-options"
         >
-          <span>{{ t('seedream.detail.backgroundColor') }}</span>
+          <template v-if="tool === 'wand'">
+            <Slider
+              v-model="wandTolerance"
+              class="w-36 min-w-28"
+              :min="0"
+              :max="100"
+              :step="1"
+              :label="`${t('magicWand.tolerance')} (+/-)`"
+              :value-formatter="v => `${v}%`"
+            />
+            <Slider
+              v-model="wandFeather"
+              class="w-36 min-w-28"
+              :min="0"
+              :max="12"
+              :step="1"
+              :label="t('magicWand.feather')"
+              :value-formatter="v => `${v}px`"
+            />
+            <label class="flex shrink-0 items-center gap-2 text-xs text-gray-300"><input
+              v-model="wandContiguous"
+              type="checkbox"
+            >{{ t('magicWand.contiguous') }}</label>
+            <span class="shrink-0 text-xs text-gray-400">{{ t('magicWand.selected', { count: selectedCount }) }}</span>
+          </template>
+          <template v-else-if="tool === 'brush'">
+            <Slider
+              v-model="brushSize"
+              class="w-56 min-w-28"
+              :min="1"
+              :max="200"
+              :step="1"
+              :label="magicWandEnabled ? `${t('seedream.detail.eraserSize')} (+/-)` : t('seedream.detail.eraserSize')"
+              :value-formatter="v => `${v}px`"
+              data-test="frame-eraser-size"
+            />
+            <Slider
+              v-model="brushFeather"
+              class="w-36 min-w-28"
+              :min="0"
+              :max="12"
+              :step="1"
+              :label="t('magicWand.feather')"
+              :value-formatter="v => `${v}px`"
+              data-test="frame-eraser-feather"
+            />
+          </template>
           <span
-            class="h-5 w-5 rounded border border-white/30"
-            :style="{ backgroundColor: backgroundCss }"
-          />
-          <span class="font-mono text-xs">{{ backgroundCss }}</span>
-        </div>
-        <Button
-          variant="secondary"
-          size="sm"
-          :disabled="saving || loading || undoStack.length === 0"
-          data-test="seedream-eraser-undo"
-          @click="undo"
-        >
-          <Undo2 :size="16" /> {{ t('common.undo') }}
-        </Button>
-        <Button
-          variant="secondary"
-          size="sm"
-          :disabled="saving || loading || redoStack.length === 0"
-          data-test="seedream-eraser-redo"
-          @click="redo"
-        >
-          <Redo2 :size="16" /> {{ t('common.redo') }}
-        </Button>
-        <span
-          v-if="!embedded"
-          class="min-w-14 text-center text-sm text-gray-400"
-          data-test="seedream-eraser-zoom"
-        >
-          {{ Math.round(zoom * 100) }}%
-        </span>
-        <Button
-          variant="secondary"
-          size="sm"
-          :disabled="saving"
-          @click="emit('cancel')"
-        >
-          {{ t('common.cancel') }}
-        </Button>
-        <button
-          v-if="resizeEnabled || magicWandEnabled"
-          type="button"
-          class="inline-flex h-8 items-center justify-center rounded-lg bg-success px-3 text-sm font-medium text-white transition-colors hover:bg-success/80 disabled:cursor-not-allowed disabled:opacity-50"
-          :disabled="saving || loading || suspended || drawing || (magicWandEnabled ? !originalImageUrl : !dirty && !externalRestoreAvailable)"
-          :class="magicWandEnabled ? 'control-tooltip control-tooltip--below control-tooltip--end' : ''"
-          :data-tooltip="magicWandEnabled ? t(originalImageUrl ? 'magicWand.restoreInitialHint' : initialRestoreUnsupported ? 'magicWand.restoreRestartRequired' : 'magicWand.initialUnavailable') : undefined"
-          data-test="image-editor-restore-original"
-          @click="restoreOriginal"
-        >
-          {{ magicWandEnabled ? t('magicWand.restoreInitial') : t('seedream.detail.restoreOriginal') }}
-        </button>
-        <Button
-          variant="primary"
-          size="sm"
-          :loading="saving"
-          :disabled="saving || loading || !dirty"
-          data-test="seedream-eraser-apply"
-          @click="apply"
-        >
-          {{ magicWandEnabled ? t('magicWand.save') : t('seedream.detail.applyEraser') }}
-        </Button>
-      </div>
-
-      <fieldset
-        v-if="embedded"
-        :disabled="saving || loading || suspended"
-        class="flex h-20 min-w-0 items-center gap-4 overflow-x-auto border-t border-dark-border px-3"
-        data-test="frame-tool-options"
-      >
-        <template v-if="tool === 'wand'">
-          <Slider
-            v-model="wandTolerance"
-            class="w-36 shrink-0"
-            :min="0"
-            :max="100"
-            :step="1"
-            :label="`${t('magicWand.tolerance')} (+/-)`"
-            :value-formatter="v => `${v}%`"
-          />
-          <Slider
-            v-model="wandFeather"
-            class="w-36 shrink-0"
-            :min="0"
-            :max="12"
-            :step="1"
-            :label="t('magicWand.feather')"
-            :value-formatter="v => `${v}px`"
-          />
-          <label class="flex shrink-0 items-center gap-2 text-xs text-gray-300"><input
-            v-model="wandContiguous"
-            type="checkbox"
-          >{{ t('magicWand.contiguous') }}</label>
-          <span class="shrink-0 text-xs text-gray-400">{{ t('magicWand.selected', { count: selectedCount }) }}</span>
-          <Button
-            variant="danger"
-            size="sm"
-            :disabled="!selectedCount"
-            @click="deleteWandSelection"
+            v-else
+            class="text-xs text-gray-400"
+          >{{ t('magicWand.browseHint') }}</span>
+        </fieldset>
+        <div :class="embedded ? 'flex items-center gap-2' : 'contents'">
+          <div
+            v-if="!magicWandEnabled"
+            class="flex items-center gap-2 text-sm text-gray-300"
           >
-            {{ t('magicWand.delete') }}
+            <span>{{ t('seedream.detail.backgroundColor') }}</span>
+            <span
+              class="h-5 w-5 rounded border border-white/30"
+              :style="{ backgroundColor: backgroundCss }"
+            />
+            <span class="font-mono text-xs">{{ backgroundCss }}</span>
+          </div>
+          <template v-if="embedded && tool === 'wand'">
+            <Button
+              variant="danger"
+              size="sm"
+              :disabled="!selectedCount || saving || loading || suspended"
+              data-test="magic-wand-delete"
+              icon-only
+              :aria-label="t('buttonHints.deleteSelection')"
+              :tooltip="t('buttonHints.deleteSelection')"
+              @click="deleteWandSelection"
+            >
+              <SelectionEraseIcon
+                class="h-5 w-5"
+                aria-hidden="true"
+              />
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              :disabled="!selectedCount || saving || loading || suspended"
+              icon-only
+              :aria-label="t('buttonHints.clearSelection')"
+              :tooltip="t('buttonHints.clearSelection')"
+              @click="clearWandSelection"
+            >
+              <SelectionClearIcon
+                class="h-5 w-5"
+                aria-hidden="true"
+              />
+            </Button>
+          </template>
+          <Button
+            variant="secondary"
+            size="sm"
+            :disabled="saving || loading || undoStack.length === 0"
+            data-test="seedream-eraser-undo"
+            icon-only
+            :aria-label="t('buttonHints.undo')"
+            :tooltip="t('buttonHints.undo')"
+            @click="undo"
+          >
+            <Undo2
+              class="h-5 w-5"
+              aria-hidden="true"
+            />
           </Button>
           <Button
             variant="secondary"
             size="sm"
-            :disabled="!selectedCount"
-            @click="clearWandSelection"
+            :disabled="saving || loading || redoStack.length === 0"
+            data-test="seedream-eraser-redo"
+            icon-only
+            :aria-label="t('buttonHints.redo')"
+            :tooltip="t('buttonHints.redo')"
+            @click="redo"
           >
-            {{ t('magicWand.clear') }}
+            <Redo2
+              class="h-5 w-5"
+              aria-hidden="true"
+            />
           </Button>
-        </template>
-        <template v-else-if="tool === 'brush'">
-          <Slider
-            v-model="brushSize"
-            class="w-56 shrink-0"
-            :min="1"
-            :max="200"
-            :step="1"
-            :label="magicWandEnabled ? `${t('seedream.detail.eraserSize')} (+/-)` : t('seedream.detail.eraserSize')"
-            :value-formatter="v => `${v}px`"
-            data-test="frame-eraser-size"
-          />
-          <Slider
-            v-model="brushFeather"
-            class="w-36 shrink-0"
-            :min="0"
-            :max="12"
-            :step="1"
-            :label="t('magicWand.feather')"
-            :value-formatter="v => `${v}px`"
-            data-test="frame-eraser-feather"
-          />
-        </template>
-        <span
-          v-else
-          class="text-xs text-gray-400"
-        >{{ t('magicWand.browseHint') }}</span>
-      </fieldset>
+          <span
+            v-if="!embedded"
+            class="min-w-14 text-center text-sm text-gray-400"
+            data-test="seedream-eraser-zoom"
+          >
+            {{ Math.round(zoom * 100) }}%
+          </span>
+          <Button
+            v-if="!embedded"
+            variant="secondary"
+            size="sm"
+            :disabled="saving"
+            @click="emit('cancel')"
+          >
+            {{ t('common.cancel') }}
+          </Button>
+          <button
+            v-if="resizeEnabled || magicWandEnabled"
+            type="button"
+            class="control-tooltip control-tooltip--below control-tooltip--end inline-flex h-10 items-center justify-center rounded-lg border border-dark-border bg-dark-surface px-3 text-sm font-medium text-gray-200 transition-colors hover:bg-dark-border disabled:cursor-not-allowed disabled:opacity-50"
+            :class="{ 'shrink-0 whitespace-nowrap': embedded }"
+            :disabled="saving || loading || suspended || drawing || (magicWandEnabled ? !originalImageUrl : !dirty && !externalRestoreAvailable)"
+            :data-tooltip="magicWandEnabled ? t(originalImageUrl ? 'magicWand.restoreInitialHint' : initialRestoreUnsupported ? 'magicWand.restoreRestartRequired' : 'magicWand.initialUnavailable') : t('buttonHints.restoreOriginal')"
+            data-test="image-editor-restore-original"
+            @click="restoreOriginal"
+          >
+            <History
+              class="mr-2 h-4 w-4"
+              aria-hidden="true"
+            />
+            {{ magicWandEnabled ? t('magicWand.restoreInitial') : t('seedream.detail.restoreOriginal') }}
+          </button>
+          <span
+            v-if="!embedded && magicWandEnabled && !loading"
+            class="text-xs text-gray-400"
+            role="status"
+          >{{ dirty ? t('common.unsaved') : t('common.saved') }}</span>
+          <Button
+            variant="primary"
+            size="sm"
+            :loading="saving"
+            :disabled="saving || loading || !dirty"
+            data-test="seedream-eraser-apply"
+            :tooltip="magicWandEnabled ? t('buttonHints.saveFrame') : undefined"
+            :icon-only="magicWandEnabled"
+            @click="apply"
+          >
+            <Save
+              v-if="magicWandEnabled"
+              class="h-5 w-5"
+              aria-hidden="true"
+            />
+            <Check
+              v-else
+              class="mr-2 h-4 w-4"
+              aria-hidden="true"
+            />
+            <span v-if="!magicWandEnabled">{{ t('seedream.detail.applyEraser') }}</span>
+          </Button>
+        </div>
+      </div>
     </Teleport>
 
     <div :class="embedded ? 'h-full' : 'mx-auto mt-3 grid w-full max-w-6xl gap-3 lg:grid-cols-[220px_minmax(0,1fr)]'">
@@ -174,21 +224,33 @@
           v-if="magicWandEnabled"
           class="mb-4 space-y-3"
         >
-          <div class="flex gap-2">
+          <div class="flex justify-end gap-2">
             <Button
               size="sm"
               :variant="tool === 'wand' ? 'primary' : 'secondary'"
               data-test="magic-wand-tool"
+              icon-only
+              :aria-label="t('buttonHints.wand')"
+              :tooltip="t('buttonHints.wand')"
               @click="tool = 'wand'"
             >
-              {{ t('magicWand.wand') }}
+              <Wand2
+                class="h-5 w-5"
+                aria-hidden="true"
+              />
             </Button>
             <Button
               size="sm"
               :variant="tool === 'brush' ? 'primary' : 'secondary'"
+              icon-only
+              :aria-label="t('buttonHints.eraser')"
+              :tooltip="t('buttonHints.eraser')"
               @click="tool = 'brush'"
             >
-              {{ t('magicWand.eraser') }}
+              <Eraser
+                class="h-5 w-5"
+                aria-hidden="true"
+              />
             </Button>
           </div>
           <p class="text-xs leading-5 text-gray-400">
@@ -227,18 +289,30 @@
               size="sm"
               :disabled="!selectedCount || saving || loading"
               data-test="magic-wand-delete"
+              icon-only
+              :aria-label="t('buttonHints.deleteSelection')"
+              :tooltip="t('buttonHints.deleteSelection')"
               @click="deleteWandSelection"
             >
-              {{ t('magicWand.delete') }}
+              <SelectionEraseIcon
+                class="h-5 w-5"
+                aria-hidden="true"
+              />
             </Button>
             <Button
               class="w-full"
               variant="secondary"
               size="sm"
               :disabled="!selectedCount"
+              icon-only
+              :aria-label="t('buttonHints.clearSelection')"
+              :tooltip="t('buttonHints.clearSelection')"
               @click="clearWandSelection"
             >
-              {{ t('magicWand.clear') }}
+              <SelectionClearIcon
+                class="h-5 w-5"
+                aria-hidden="true"
+              />
             </Button>
           </template>
           <label class="block text-xs text-gray-400">{{ t('magicWand.preview') }}
@@ -488,9 +562,11 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { Redo2, Undo2 } from 'lucide-vue-next';
+import { Redo2, Undo2, Wand2, Eraser, Save, Check, History } from 'lucide-vue-next';
 import { useI18n } from 'vue-i18n';
 import Button from '@/components/common/Button.vue';
+import SelectionEraseIcon from '@/components/common/SelectionEraseIcon.vue';
+import SelectionClearIcon from '@/components/common/SelectionClearIcon.vue';
 import Slider from '@/components/common/Slider.vue';
 import type { GenerationLayout } from '@/types';
 import { deleteSelection, eraseBrushSegment, selectColorRegion, selectionBounds, selectionOutline } from '@/utils/magic-wand';
@@ -580,8 +656,8 @@ watch([wandTolerance, wandContiguous], () => updateWandSelection());
 watch(tool, () => clearWandSelection());
 const loading = ref(true);
 const loadError = ref('');
-const brushSize = ref(5);
-const brushFeather = ref(0);
+const brushSize = ref(3);
+const brushFeather = ref(1);
 const backgroundColor = ref<[number, number, number]>([0, 0, 0]);
 const undoStack = ref<HistoryPatch[]>([]);
 const redoStack = ref<HistoryPatch[]>([]);

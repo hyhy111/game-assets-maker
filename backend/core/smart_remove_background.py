@@ -272,9 +272,13 @@ def batch_remove_background(
     output_dir: str,
     params: dict[str, Any] | None = None,
     progress_callback: Callable[[int, int], None] | None = None,
+    *,
+    use_gpu: bool | None = None,
+    cancel_event: threading.Event | None = None,
+    fallback_callback: Callable[[dict], None] | None = None,
 ) -> dict:
     """
-    Step 2: Remove background from all frames in a directory using rembg (NO hole punching)
+    Step 2: Remove backgrounds from all frames with the selected local model.
 
     Args:
         input_dir: Directory containing input frames
@@ -307,12 +311,109 @@ def batch_remove_background(
         "background_color": None,  # Will store the first frame's bg color
     }
 
-    # Process each frame
+    from backend.core.alpha_refine import (
+        needs_refinement,
+        validate_alpha_refine_params,
+    )
+    from src.core.rembg_model import validate_model
+    from src.utils.background_models import LITE_MODEL, is_birefnet
+
+    model = (params or {}).get("model", "u2net")
+    use_birefnet = is_birefnet(model)
+    if not use_birefnet:
+        validate_model(model)
+    refine_settings = validate_alpha_refine_params(params or {})
+    do_refine = needs_refinement(refine_settings)
+    from backend.core.gpu_runtime import GPUWorker, runtime_status
+
+    def fallback(error):
+        if getattr(error, "code", None) == "GPU_CANCELLED" or (cancel_event is not None and cancel_event.is_set()):
+            raise InterruptedError("Task cancelled") from error
+        if fallback_callback is not None:
+            fallback_callback({"code": getattr(error, "code", "GPU_PROCESS_FAILED"), "message": str(error)})
+
+    gpu_worker = None
+    if use_gpu is None:
+        status = runtime_status()
+        use_gpu = (
+            sys.platform == "win32" and model == LITE_MODEL and status.get("gpu_ready", status["phase"] == "ready")
+        )
+    try:
+        if use_gpu:
+            try:
+                gpu_worker = GPUWorker(cancel_event=cancel_event) if cancel_event is not None else GPUWorker()
+            except Exception as error:
+                fallback(error)
+        return _process_background_frames(
+            frames,
+            total,
+            use_birefnet,
+            model,
+            params,
+            refine_settings,
+            do_refine,
+            output_path,
+            results,
+            progress_callback,
+            gpu_worker,
+            cancel_event,
+            fallback,
+        )
+    finally:
+        if gpu_worker is not None:
+            gpu_worker.close()
+
+
+def _process_background_frames(
+    frames,
+    total,
+    use_birefnet,
+    model,
+    params,
+    refine_settings,
+    do_refine,
+    output_path,
+    results,
+    progress_callback,
+    gpu_worker,
+    cancel_event,
+    fallback,
+):
+    from backend.core import birefnet, birefnet_onnx
+    from backend.core.alpha_refine import defringe_rgba, refine_alpha
+
     for i, frame_path in enumerate(frames):
+        if cancel_event is not None and cancel_event.is_set():
+            raise InterruptedError("Task cancelled")
         try:
-            result, bg_hsv = remove_background_single_rembg(str(frame_path), params=params)
+            if use_birefnet:
+                if gpu_worker is not None:
+                    try:
+                        result = gpu_worker.remove_background(frame_path, model)
+                    except Exception as error:
+                        gpu_worker.close()
+                        gpu_worker = None
+                        fallback(error)
+                if gpu_worker is None:
+                    if model == birefnet_onnx.MODEL_ID:
+                        result = birefnet_onnx.remove_background(frame_path)
+                    else:
+                        result = birefnet.remove_background(frame_path)
+                bg_hsv = None
+            else:
+                result, bg_hsv = remove_background_single_rembg(str(frame_path), params=params)
 
             if result:
+                if do_refine:
+                    rgba = np.asarray(result.convert("RGBA")).copy()
+                    rgba[..., 3] = refine_alpha(rgba[..., 3], refine_settings)
+                    if refine_settings["defringe_enabled"]:
+                        rgba = defringe_rgba(
+                            rgba,
+                            int(refine_settings["defringe_px"]),
+                            float(refine_settings["defringe_amount"]),
+                        )
+                    result = Image.fromarray(rgba, "RGBA")
                 output_file = output_path / frame_path.name
                 result.save(output_file, "PNG")
                 results["success"] += 1
@@ -324,6 +425,8 @@ def batch_remove_background(
             else:
                 results["failed"] += 1
 
+        except InterruptedError:
+            raise
         except Exception as e:
             print(f"Error processing {frame_path}: {e}")
             results["failed"] += 1

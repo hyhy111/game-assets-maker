@@ -3,11 +3,14 @@
     :type="type"
     :disabled="disabled || loading"
     :class="buttonClasses"
+    :aria-label="iconOnly ? tooltip : undefined"
+    :aria-busy="loading || undefined"
+    :data-tooltip="tooltip || undefined"
     @click="$emit('click', $event)"
   >
     <span
       v-if="loading"
-      class="mr-2"
+      :class="iconOnly ? '' : 'mr-2'"
     >
       <svg
         class="animate-spin h-4 w-4"
@@ -30,7 +33,7 @@
         />
       </svg>
     </span>
-    <slot />
+    <slot v-if="!iconOnly || !loading" />
   </button>
 </template>
 
@@ -44,13 +47,17 @@ const props = withDefaults(defineProps<{
   disabled?: boolean;
   loading?: boolean;
   block?: boolean;
+  iconOnly?: boolean;
+  tooltip?: string;
 }>(), {
   type: 'button',
   variant: 'primary',
   size: 'md',
   disabled: false,
   loading: false,
-  block: false
+  block: false,
+  iconOnly: false,
+  tooltip: ''
 });
 
 defineEmits<{
@@ -74,7 +81,9 @@ const buttonClasses = computed(() => {
   };
 
   const blockClass = props.block ? 'w-full' : '';
+  const sizeClass = props.iconOnly ? 'icon-button' : sizeClasses[props.size];
+  const tooltipClass = props.tooltip ? 'control-tooltip' : '';
 
-  return `${baseClasses} ${variantClasses[props.variant]} ${sizeClasses[props.size]} ${blockClass}`;
+  return `${baseClasses} ${variantClasses[props.variant]} ${sizeClass} ${blockClass} ${tooltipClass}`;
 });
 </script>

@@ -17,7 +17,7 @@ from backend.platform.client import PlatformError, PlatformUnauthorizedError, ne
 from backend.platform.last_frame import extract_last_frame
 from backend.platform.sources import PLATFORM_SOURCE
 from backend.platform.video import PlatformVideoClient
-from backend.seedance.cache import CacheManager
+from backend.seedance.cache import CONTINUATION_FRAME_PATH, CacheManager
 from backend.seedance.client import ArkAPIError, ArkClient, ArkResponseError, SubmissionUnknownError
 from backend.seedance.downloader import ResultDownloader
 from backend.seedance.models import SeedanceRequest, SeedanceTask, platform_model_id
@@ -25,7 +25,6 @@ from backend.seedance.repository import TaskRepository
 from backend.seedance.validation import build_api_payload, validate_request
 
 EventSink = Callable[[str, dict[str, Any]], None]
-ConfigSaver = Callable[[dict[str, Any]], None]
 
 
 # 平台入参合法域（单一来源：manager 校验、API 预校验、报价预览三处共用）。
@@ -61,11 +60,9 @@ class SeedanceTaskManager:
         repository: TaskRepository,
         downloader: ResultDownloader,
         cache_manager: CacheManager,
-        config: dict[str, Any],
         *,
         now: Callable[[], datetime] | None = None,
         monotonic: Callable[[], float] | None = None,
-        config_saver: ConfigSaver | None = None,
         platform: PlatformVideoClient | None = None,
         platform_downloader: ResultDownloader | None = None,
     ) -> None:
@@ -76,10 +73,8 @@ class SeedanceTaskManager:
         self._cache_manager = cache_manager
         self._platform = platform
         self._platform_downloader = platform_downloader
-        self._config = config.get("seedance", config)
         self._now = now or (lambda: datetime.now(UTC))
         self._monotonic = monotonic or time.monotonic
-        self._config_saver = config_saver
         self._event_sink: EventSink | None = None
         self._event_queue: queue.Queue[tuple[str, dict[str, Any]]] = queue.Queue(maxsize=_EVENT_QUEUE_SIZE)
         self._event_lock = threading.Lock()
@@ -105,7 +100,6 @@ class SeedanceTaskManager:
                 return
             if self._audit:
                 self._audit.reconcile()
-            self._run_due_cleanup()
             self._recover_tasks()
             self._stop_event.clear()
             self._worker = threading.Thread(target=self._worker_loop, name="seedance-task-poller", daemon=True)
@@ -477,6 +471,8 @@ class SeedanceTaskManager:
                 except (FileNotFoundError, ValueError):
                     existing_path = None
                 if existing_path is not None and existing_path.is_file():
+                    if existing == CONTINUATION_FRAME_PATH:
+                        existing_path.touch(exist_ok=True)
                     return existing_path
             frame_path, relative = self._continuation_frame_source(task)
             task.output_paths["continuation_frame"] = relative
@@ -500,7 +496,7 @@ class SeedanceTaskManager:
             if returned_path is not None and returned_path.is_file():
                 return returned_path, returned
         frame_path = self._extract_continuation_frame(task)
-        return frame_path, "output/continuation_frame.png"
+        return frame_path, CONTINUATION_FRAME_PATH
 
     def _extract_continuation_frame(self, task: SeedanceTask) -> Path:
         video_relative = task.output_paths.get("video")
@@ -512,7 +508,7 @@ class SeedanceTaskManager:
             raise ValueError("上一段成品不在本地缓存，无法续跑") from error
         if not video_path.is_file():
             raise ValueError("上一段成品不在本地缓存，无法续跑")
-        frame_path = self._repository.resolve_asset(task.local_id, "output/continuation_frame.png")
+        frame_path = self._repository.resolve_asset(task.local_id, CONTINUATION_FRAME_PATH)
         try:
             return extract_last_frame(video_path, frame_path)
         except ValueError as error:
@@ -572,10 +568,9 @@ class SeedanceTaskManager:
         )
 
     def clean_cache(self, older_than_days: int | None = None) -> dict[str, int]:
-        days = self._retention_days() if older_than_days is None else older_than_days
-        if days <= 0:
+        if older_than_days is None or older_than_days <= 0:
             return {"files_removed": 0, "bytes_released": 0, "tasks_cleared": 0, "protected_tasks_skipped": 0}
-        return self._cache_manager.clean(days)
+        return self._cache_manager.clean(older_than_days)
 
     def delete_task(self, local_id: str, allow_protected: bool = False) -> None:
         self._cache_manager.delete_task(local_id, allow_protected)
@@ -843,25 +838,6 @@ class SeedanceTaskManager:
         with self._scheduler_lock:
             self._scheduled_at.pop(local_id, None)
             self._failure_counts.pop(local_id, None)
-
-    def _run_due_cleanup(self) -> None:
-        last_cleanup = self._parse_time(self._config.get("last_cleanup_at"))
-        if last_cleanup is not None and self._now() - last_cleanup < timedelta(days=1):
-            return
-        retention_days = self._retention_days()
-        if retention_days > 0:
-            self._cache_manager.clean(retention_days)
-        timestamp = self._iso_now()
-        updated_config = deepcopy(self._config)
-        updated_config["last_cleanup_at"] = timestamp
-        if self._config_saver is not None:
-            self._config_saver(deepcopy(updated_config))
-        self._config.clear()
-        self._config.update(updated_config)
-
-    def _retention_days(self) -> int:
-        value = self._config.get("retention_days", 90)
-        return value if isinstance(value, int) and value >= 0 else 90
 
     def _request_from_task(self, task: SeedanceTask) -> SeedanceRequest:
         request = SeedanceRequest.from_dict(task.request)

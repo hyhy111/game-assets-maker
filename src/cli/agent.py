@@ -231,7 +231,9 @@ def _build_parser() -> argparse.ArgumentParser:
     reuse.add_argument("--path", required=True)
     reuse.add_argument("--field", choices=["reference_image", "first_frame", "last_frame"], required=True)
 
-    generation = subparsers.add_parser("generation")
+    generation = subparsers.add_parser(
+        "generation", description="使用运行中客户端选定的 ForFuner AI 或自定义 API Key 提交生成任务"
+    )
     generation_subparsers = generation.add_subparsers(dest="generation_command", required=True)
     generation_subparsers.add_parser("permission", help="读取运行中的应用 CLI 生成授权，不允许通过 CLI 开启")
     for kind in ("image", "video"):

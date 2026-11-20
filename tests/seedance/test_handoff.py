@@ -70,7 +70,6 @@ def manager(repository: TaskRepository, project_api: ProjectAPI):
         repository,
         _UnusedDownloader(),
         CacheManager(repository, project_api),
-        {"retention_days": 90, "last_cleanup_at": None},
     )
 
 

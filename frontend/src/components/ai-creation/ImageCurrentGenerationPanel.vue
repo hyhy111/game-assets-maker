@@ -71,7 +71,7 @@
       <button
         v-if="selectedAttempt"
         type="button"
-        class="mt-4 flex h-10 w-full items-center justify-center rounded-xl bg-primary px-4 text-sm font-medium text-dark-bg transition-colors hover:bg-primary-600 disabled:cursor-wait disabled:opacity-60"
+        class="icon-button control-tooltip mt-4 flex h-10 items-center justify-center rounded-xl bg-primary px-4 text-sm font-medium text-dark-bg transition-colors hover:bg-primary-600 disabled:cursor-wait disabled:opacity-60"
         :disabled="handoffPending"
         data-test="image-current-create-video"
         @click="emit('create-video', selectedAttempt.index)"
@@ -89,16 +89,22 @@
 
       <RouterLink
         :to="`/image-generation/batches/${encodeURIComponent(batch.local_id)}`"
-        class="mt-4 flex h-10 w-full items-center justify-center rounded-xl border border-white/10 text-sm text-gray-300 transition-colors hover:border-white/20 hover:bg-white/[0.05] hover:text-white"
+        class="icon-button control-tooltip mt-4 flex h-10 items-center justify-center rounded-xl border border-white/10 text-sm text-gray-300 transition-colors hover:border-white/20 hover:bg-white/[0.05] hover:text-white"
         data-test="image-current-view-detail"
+        :aria-label="t('seedream.board.viewDetail')"
+        :data-tooltip="t('seedream.board.viewDetail')"
       >
-        {{ t('seedream.board.viewDetail') }}
+        <ArrowUpRight
+          class="h-5 w-5"
+          aria-hidden="true"
+        />
       </RouterLink>
     </div>
   </aside>
 </template>
 
 <script setup lang="ts">
+import { ArrowUpRight } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import PlatformSourceBadge from '@/components/ai-creation/PlatformSourceBadge.vue';

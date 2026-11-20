@@ -20,6 +20,18 @@ const PRESENTATION: Record<ModelStatus['phase'], ModelStatusPresentation> = {
     retryable: false,
     tone: 'info',
   },
+  paused: {
+    messageKey: 'modelStatus.paused',
+    busy: false,
+    retryable: true,
+    tone: 'info',
+  },
+  verifying: {
+    messageKey: 'modelStatus.verifying',
+    busy: true,
+    retryable: false,
+    tone: 'info',
+  },
   initializing: {
     messageKey: 'modelStatus.initializing',
     busy: true,
@@ -42,6 +54,8 @@ const PRESENTATION: Record<ModelStatus['phase'], ModelStatusPresentation> = {
 
 const APPROXIMATE_MODEL_SIZE_MB: Record<string, number> = {
   u2net: 176,
+  'birefnet-comfy': 424,
+  'birefnet-lite-onnx': Number((114538221 / 1_000_000).toFixed(1)),
 };
 
 export function modelStatusPresentation(status: ModelStatus): ModelStatusPresentation {
@@ -66,4 +80,16 @@ export function modelApproximateSizeMb(model: string): number | null {
 
 export function canStartStep2(step1Completed: boolean, status: ModelStatus, selectedModel: string): boolean {
   return step1Completed && status.model === selectedModel && status.phase === 'ready';
+}
+
+export function backgroundModelName(model: string): string {
+  if (model === 'u2net') return 'U²-Net';
+  if (model === 'birefnet-comfy') return 'BiRefNet';
+  if (model === 'birefnet-lite-onnx') return 'BiRefNet Lite FP16';
+  return model;
+}
+
+
+export function isBiRefNet(model: string): boolean {
+  return model === 'birefnet-comfy' || model === 'birefnet-lite-onnx';
 }

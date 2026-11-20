@@ -143,6 +143,90 @@ test('process store exposes bridge task progress through its public state', asyn
   assert.equal(store.isPolling, false);
 });
 
+test('successful background processing refreshes the current project hole-punch choice', async () => {
+  const project = {
+    id: 'hero/idle',
+    steps: { 2: { completed: true, result_model: 'birefnet-comfy' } },
+  };
+  const bridge = createScriptedPyWebViewBridge({
+    preload_model: [{ resolve: { model: 'birefnet-comfy', phase: 'ready' } }],
+    get_step_params: [
+      { resolve: { enabled: true } },
+      { resolve: { enabled: false } },
+    ],
+    start_processing: [{ resolve: 'process-2' }],
+    get_task_status: [{ resolve: {
+      success: true,
+      task_id: 'process-2',
+      status: 'completed',
+      step: 2,
+      progress: 100,
+      current: 3,
+      total: 3,
+    } }],
+    get_project: [{ resolve: project }],
+  });
+  setActivePinia(createPinia());
+  const { useProcessStore } = await loadFrontendModule('/src/stores/process.ts');
+  const { useProjectStore } = await loadFrontendModule('/src/stores/project.ts');
+  const store = useProcessStore();
+  useProjectStore().setCurrentProject(project);
+  store.applyStepParams(2, { model: 'birefnet-comfy' });
+  await store.preloadModel('birefnet-comfy');
+  await store.loadStepParams(project.id, 3);
+  assert.equal(store.s3Params.enabled, true);
+  store.applyStepParams(3, { green_intensity: 4 });
+
+  assert.equal(await store.startProcessing(project.id, 2), 'process-2');
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(store.s3Params.enabled, false);
+  assert.equal(store.s3Params.green_intensity, 4);
+  store.goToStep(2);
+  store.goToStep(3);
+  assert.equal(store.s3Params.enabled, false);
+  assert.equal(bridge.calls.filter(call => call.method === 'get_step_params').length, 2);
+});
+
+test('native background completion refreshes hole punching before step 3', async () => {
+  const project = { id: 'hero/idle', steps: { 2: { completed: true } } };
+  const bridge = createScriptedPyWebViewBridge({
+    preload_model: [{ resolve: { model: 'birefnet-comfy', phase: 'ready' } }],
+    get_step_params: [
+      { resolve: { enabled: true } },
+      { resolve: { enabled: false } },
+    ],
+    start_processing: [{ resolve: 'native-process-2' }],
+    get_task_status: [{ resolve: {
+      task_id: 'native-process-2', status: 'running', step: 2, progress: 50,
+    } }],
+    get_project: [{ resolve: project }],
+  });
+  setActivePinia(createPinia());
+  const { useProcessStore } = await loadFrontendModule('/src/stores/process.ts');
+  const { useProjectStore } = await loadFrontendModule('/src/stores/project.ts');
+  const store = useProcessStore();
+  useProjectStore().setCurrentProject(project);
+  store.initProgressListeners();
+  store.applyStepParams(2, { model: 'birefnet-comfy' });
+  await store.preloadModel('birefnet-comfy');
+  await store.loadStepParams(project.id, 3);
+  store.applyStepParams(3, { green_intensity: 4 });
+
+  await store.startProcessing(project.id, 2);
+  await new Promise(resolve => setImmediate(resolve));
+  bridge.window.dispatchEvent(new CustomEvent('task-complete', {
+    detail: { taskId: 'native-process-2', success: true },
+  }));
+  await new Promise(resolve => setImmediate(resolve));
+  await store.goToStep(3);
+
+  assert.equal(store.s3Params.enabled, false);
+  assert.equal(store.s3Params.green_intensity, 4);
+  assert.equal(store.isPolling, false);
+  assert.equal(bridge.calls.filter(call => call.method === 'get_step_params').length, 2);
+});
+
 test('Seedance store loads and creates tasks through the public bridge', async () => {
   const queued = seedanceTask();
   const created = seedanceTask({ local_id: 'task-2', remote_id: 'remote-2' });

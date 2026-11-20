@@ -69,16 +69,18 @@ test('Seedream batch detail shows loading placeholder when attempt is generating
 });
 
 test('Seedream batch detail shows local image and total_tokens on success', async () => {
-  const html = await renderDetail();
+  const html = await renderDetail({ attempts: [attemptFixture({ absolute_path: '/cache/images/0.jpg' })] });
   assert.match(html, /data-test="seedream-attempt-0"/);
   assert.match(html, /data-test="seedream-image-0"/);
+  assert.match(html, /cursor-grab[^"]*" draggable="true"/);
+  assert.match(html, /media-preview-drag-hint[^"]*"[^>]*><span[^>]*>长按拖拽<\/span>/);
   assert.match(html, /seedream-media\/batch-1\/image\/0/);
   assert.match(html, /data-test="seedream-total-tokens-summary"/);
   assert.match(html, /42/);
   assert.match(html, /data-test="seedream-download"/);
   assert.match(html, /data-test="seedream-edit-image-0"/);
   assert.match(html, /data-test="seedream-detail-favorite-attempt-1"/);
-  assert.match(html, /图片编辑/);
+  assert.match(html, /aria-label="编辑当前图片与角色构图"/);
   assert.doesNotMatch(html, /seedream-open-eraser-0/);
   assert.doesNotMatch(html, /seedream-resize-character-0/);
 });
@@ -141,7 +143,9 @@ test('Seedream eraser provides background fill, adjustable brush, and local undo
   assert.doesNotMatch(source, /seedream\.detail\.eraserHint/);
   assert.doesNotMatch(source, /seedream\.detail\.eraserHistoryHint/);
   assert.match(source, /data-test="image-editor-restore-original"/);
-  assert.match(source, /bg-success/);
+  const restore = source.match(/<button\b[^>]*data-test="image-editor-restore-original"[^>]*>/)?.[0];
+  assert.match(restore, /bg-dark-surface/);
+  assert.doesNotMatch(restore, /bg-success/);
   assert.match(source, /function restoreOriginal\(\)/);
   assert.match(source, /emit\('cancel'\)[\s\S]*image-editor-restore-original[\s\S]*seedream-eraser-apply/);
   assert.doesNotMatch(source, /CHARACTER_HEIGHT_PRESETS|image-editor-height-preset-/);

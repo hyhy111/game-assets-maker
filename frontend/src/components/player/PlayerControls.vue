@@ -29,7 +29,7 @@
           :disabled="!canGoPrev"
           @click="playerStore.prevFrame()"
         >
-          <SkipBack class="w-5 h-5" />
+          <ChevronLeft class="w-5 h-5" />
         </button>
 
         <span class="text-sm text-gray-400 min-w-[80px] text-center">
@@ -42,7 +42,7 @@
           :disabled="!canGoNext"
           @click="playerStore.nextFrame()"
         >
-          <SkipForward class="w-5 h-5" />
+          <ChevronRight class="w-5 h-5" />
         </button>
       </div>
 
@@ -54,7 +54,12 @@
           :start-frame="timelineStartFrame"
           :end-frame="timelineEndFrame"
           :current-frame="currentTimelineFrame"
+          :frame-interval="s1Params.frame_interval"
+          :frame-overrides="s1Params.frame_overrides"
+          :active-base-frame="activeBaseFrame"
+          :editable="!processStore.isProcessing"
           :simple="processStore.currentStep > 1"
+          @edit-frame="(frame, anchor) => emit('editFrame', frame, anchor)"
           @update:start-frame="onStartFrameChange"
           @update:end-frame="onEndFrameChange"
           @update:current-frame="onCurrentFrameChange"
@@ -111,22 +116,14 @@
               ? 'border-primary bg-primary/15 text-primary'
               : 'border-dark-border text-gray-400 hover:border-gray-500 hover:text-white'
           ]"
+          class="icon-button control-tooltip"
+          :aria-label="showAudioTimeline ? t('buttonHints.hideAudio') : t('buttonHints.showAudio')"
+          :data-tooltip="showAudioTimeline ? t('buttonHints.hideAudio') : t('buttonHints.showAudio')"
+          :aria-pressed="showAudioTimeline"
           @click="showAudioTimeline = !showAudioTimeline"
         >
-          <span
-            class="audio-track-wave"
-            :class="{ 'audio-track-wave--active': showAudioTimeline }"
-            aria-hidden="true"
-          >
-            <span />
-            <span />
-            <span />
-            <span />
-          </span>
-          <span>{{ t('player.audioTrack') }}</span>
-          <ChevronDown
-            class="h-3.5 w-3.5 transition-transform duration-200"
-            :class="showAudioTimeline ? 'rotate-180' : ''"
+          <AudioLines
+            class="h-5 w-5"
             aria-hidden="true"
           />
         </button>
@@ -173,7 +170,12 @@
           :start-frame="timelineStartFrame"
           :end-frame="timelineEndFrame"
           :current-frame="currentTimelineFrame"
+          :frame-interval="s1Params.frame_interval"
+          :frame-overrides="s1Params.frame_overrides"
+          :active-base-frame="activeBaseFrame"
+          :editable="!processStore.isProcessing"
           :simple="processStore.currentStep > 1"
+          @edit-frame="(frame, anchor) => emit('editFrame', frame, anchor)"
           @update:start-frame="onStartFrameChange"
           @update:end-frame="onEndFrameChange"
           @update:current-frame="onCurrentFrameChange"
@@ -187,7 +189,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useI18n } from 'vue-i18n';
-import { Play, Pause, SkipBack, SkipForward, ChevronUp, ChevronDown, Volume2, VolumeX } from 'lucide-vue-next';
+import { Play, Pause, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Volume2, VolumeX, AudioLines } from 'lucide-vue-next';
 import { usePlayerStore } from '@/stores/player';
 import { useProcessStore } from '@/stores/process';
 import { useAudioTimelineStore } from '@/stores/audioTimeline';
@@ -207,9 +209,12 @@ import {
 
 const props = withDefaults(defineProps<{
   timelineFrameCount?: number;
+  activeBaseFrame?: number;
+  previewFrameIndex?: number;
 }>(), {
   timelineFrameCount: 0,
 });
+const emit = defineEmits<{ editFrame: [frame: number, anchor: HTMLButtonElement] }>();
 
 const { t } = useI18n();
 const playerStore = usePlayerStore();
@@ -227,7 +232,16 @@ const showAudioTimeline = ref(false);
 // 音频运行时常驻在播放器控制层；折叠 AudioTimeline 只影响编辑 UI。
 const { peaks, audioBuffer, loading: wavLoading, error: wavError, load: loadWaveform } = useAudioWaveform();
 const audioEngine = createAudioPlaybackEngine();
-const syncController = createAudioSyncController({ audioStore, engine: audioEngine });
+const syncController = createAudioSyncController({
+  audioStore,
+  engine: audioEngine,
+  getPlaybackStartFrame(currentFrame) {
+    const first = processStore.currentStep === 1 ? playerStore.playbackFrameIndices[0] ?? 0 : 0;
+    return currentFrame === mapToSource(first)
+      ? Math.min(s1Params.value.start_frame, currentFrame)
+      : currentFrame;
+  },
+});
 const isAudioLoading = computed(() => audioStore.loading || wavLoading.value);
 const audioError = computed(() => audioStore.error || wavError.value);
 const audioPlaybackActive = computed(() => audioPlaybackEnabled.value);
@@ -238,7 +252,7 @@ const timelineTotalFrames = computed(() => (
 ));
 const currentTimelineFrame = computed(() => (
   processStore.currentStep === 1
-    ? currentIndex.value
+    ? props.previewFrameIndex ?? currentIndex.value
     : timelineFrameForVisibleIndex(playerStore.frames, currentIndex.value)
 ));
 const timelineStartFrame = computed(() => processStore.currentStep === 1 ? startFrame.value : 0);
@@ -253,7 +267,7 @@ function mapToSource(frame: number): number {
   const start = s1Params.value?.start_frame ?? 0;
   const interval = Math.max(1, s1Params.value?.frame_interval ?? 1);
   const timelineFrame = timelineFrameForVisibleIndex(playerStore.frames, frame);
-  return sourceFrameFromTimelineFrame(timelineFrame, start, interval);
+  return sourceFrameFromTimelineFrame(timelineFrame, start, interval, s1Params.value.frame_overrides);
 }
 
 watch(audioBuffer, (buffer) => audioEngine.setBuffer(buffer));
@@ -325,12 +339,14 @@ function stepFps(delta: number) {
 }
 
 function onStartFrameChange(value: number) {
+  if (processStore.currentStep === 1 && value !== playerStore.startFrame) s1Params.value.frame_overrides = {};
   playerStore.startFrame = value;
   // 仅 Step 1 同步到抽取参数；Step 2/3 的播放范围不是源帧抽取范围，写回会污染 s1Params
   if (processStore.currentStep === 1) s1Params.value.start_frame = value;
 }
 
 function onEndFrameChange(value: number) {
+  if (processStore.currentStep === 1 && value !== playerStore.endFrame) s1Params.value.frame_overrides = {};
   playerStore.endFrame = value;
   if (processStore.currentStep === 1) s1Params.value.end_frame = value;
 }
@@ -392,43 +408,4 @@ input[type="number"] {
   -moz-appearance: textfield;
 }
 
-.audio-track-wave {
-  display: inline-flex;
-  width: 1rem;
-  height: 1rem;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-}
-
-.audio-track-wave span {
-  width: 2px;
-  border-radius: 9999px;
-  background: currentColor;
-  transform-origin: center;
-}
-
-.audio-track-wave span:nth-child(1) { height: 0.375rem; }
-.audio-track-wave span:nth-child(2) { height: 0.75rem; }
-.audio-track-wave span:nth-child(3) { height: 1rem; }
-.audio-track-wave span:nth-child(4) { height: 0.625rem; }
-
-.audio-track-wave--active span {
-  animation: audio-track-wave 650ms ease-in-out infinite alternate;
-}
-
-.audio-track-wave--active span:nth-child(2) { animation-delay: -180ms; }
-.audio-track-wave--active span:nth-child(3) { animation-delay: -360ms; }
-.audio-track-wave--active span:nth-child(4) { animation-delay: -90ms; }
-
-@keyframes audio-track-wave {
-  from { transform: scaleY(0.5); }
-  to { transform: scaleY(1); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .audio-track-wave--active span {
-    animation: none;
-  }
-}
 </style>

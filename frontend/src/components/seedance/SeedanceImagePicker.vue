@@ -73,7 +73,7 @@
         v-else
         type="button"
         class="flex h-full w-full flex-col items-center justify-center gap-0.5 rounded-[4px] border border-white/[0.07] bg-[#2b2e36] text-gray-500 shadow-lg shadow-black/20 transition hover:border-white/15 hover:bg-[#32353e] hover:text-gray-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-        :title="selectLabel"
+        :aria-label="selectLabel"
         @click="emit('select')"
       >
         <Plus
@@ -230,6 +230,7 @@ const emit = defineEmits<{
   edit: [];
   clear: [];
   'drop-image': [payload: SeedreamImageDragPayload];
+  'drop-source-image': [id: string];
   'drop-file': [file: File];
   'drop-error': [key: string];
 }>();
@@ -274,6 +275,7 @@ function onDrop(event: DragEvent) {
   dragActive.value = false;
   const result = readImageDrop(event.dataTransfer);
   if (result.kind === 'candidate') emit('drop-image', result.candidate);
+  else if (result.kind === 'source') emit('drop-source-image', result.id);
   else if (result.kind === 'file') emit('drop-file', result.file);
   else emit('drop-error', result.key);
 }

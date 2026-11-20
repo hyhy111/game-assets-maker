@@ -22,6 +22,21 @@ AGENTS = ("codex", "claude-code", "cursor", "opencode", "gemini-cli", "github-co
 SHARED_AGENTS = ("codex", "cursor", "opencode", "gemini-cli", "github-copilot")
 _EXCLUDED = {".git", "__pycache__", "__pypackages__", "metadata.json"}
 _SHA = re.compile(r"[0-9a-f]{40}")
+_GAM_TEXT_SUFFIXES = {".gd", ".md", ".py", ".uid"}
+
+
+def _git_blob_hash(data: bytes) -> str:
+    return hashlib.sha1(f"blob {len(data)}\0".encode() + data, usedforsecurity=False).hexdigest()
+
+
+def _with_lf_line_endings(path: Path, data: bytes) -> bytes:
+    if path.suffix.lower() not in _GAM_TEXT_SUFFIXES or b"\r\n" not in data or b"\0" in data:
+        return data
+    try:
+        data.decode("utf-8")
+    except UnicodeDecodeError:
+        return data
+    return data.replace(b"\r\n", b"\n")
 
 
 class SkillsAPI:
@@ -71,7 +86,7 @@ class SkillsAPI:
         return [npx], env
 
     @staticmethod
-    def _file_hashes(root: Path) -> dict[str, str] | None:
+    def _file_hashes(root: Path, *, expected: dict[str, str] | None = None) -> dict[str, str] | None:
         result = {}
         total = 0
         for path in root.rglob("*"):
@@ -84,11 +99,15 @@ class SkillsAPI:
                 total += path.stat().st_size
                 if len(result) >= 500 or total > 8 * 1024 * 1024:
                     return None
+                name = relative.as_posix()
                 data = path.read_bytes()
-                # Git blob IDs compare file contents on both Windows and macOS, without relying on executable bits.
-                result[relative.as_posix()] = hashlib.sha1(
-                    f"blob {len(data)}\0".encode() + data, usedforsecurity=False
-                ).hexdigest()
+                if expected is not None:
+                    # Prefer the exact Git blob before tolerating CRLF in an installed text file.
+                    raw_hash = _git_blob_hash(data)
+                    if raw_hash == expected.get(name):
+                        result[name] = raw_hash
+                        continue
+                result[name] = _git_blob_hash(_with_lf_line_endings(path, data))
         return result
 
     @classmethod
@@ -239,7 +258,10 @@ class SkillsAPI:
                 if "SKILL.md" not in expected:
                     raise ValueError("Skill files missing upstream")
                 # The CLI lock is shared across agents, so its hash alone cannot prove this copy is current.
-                if latest != entry["skillFolderHash"] or self._file_hashes(entry["_path"]) != expected:
+                if (
+                    latest != entry["skillFolderHash"]
+                    or self._file_hashes(entry["_path"], expected=expected) != expected
+                ):
                     state["outdated"].append(name)
             state["status"] = "update_available" if state["outdated"] else "up_to_date"
         except (OSError, ValueError, TypeError, KeyError, AttributeError):

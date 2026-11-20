@@ -21,6 +21,8 @@ export interface StepStatus {
   completed: boolean;
   data_ready: boolean;
   count: number;
+  result_model?: BackgroundRemovalModel;
+  can_undo_processing?: boolean;
 }
 
 export interface StepStatusMap {
@@ -40,9 +42,34 @@ export interface ProjectRenameResult {
   idMap: Record<string, string>;
 }
 
+export interface PreviewCleanupSummary {
+  project_ids: string[];
+  frame_count: number;
+  bytes: number;
+  skipped: number;
+  failed: number;
+}
+
 export interface RoleSummary {
   name: string;
   projectCount: number;
+}
+
+export interface SourceMedia {
+  id: string;
+  kind: 'image' | 'video';
+  name: string;
+  size_bytes: number;
+  width: number;
+  height: number;
+  duration: number | null;
+  imported_at: string;
+  url: string;
+  thumbnail_url: string;
+  edit_revision?: string;
+  edit_source_url: string;
+  absolute_path?: string;
+  generation_layout?: GenerationLayout | null;
 }
 
 export interface LegacyMigrationRequest {
@@ -96,6 +123,13 @@ export interface FramesResponse {
   page_size: number;
   total_pages: number;
   hidden_count?: number;
+  hidden_previews?: HiddenFramePreview[];
+}
+
+export interface HiddenFramePreview {
+  filename: string;
+  timeline_index: number;
+  url: string;
 }
 
 export interface HiddenFramesResponse {
@@ -169,7 +203,28 @@ export interface AudioSaveResult {
   error?: string;
 }
 
-export type ModelPhase = 'needs_download' | 'downloading' | 'initializing' | 'ready' | 'failed';
+export type BackgroundRemovalModel = 'u2net' | 'birefnet-comfy' | 'birefnet-lite-onnx';
+
+export type ModelDownloadSource = 'modelscope' | 'github' | 'huggingface';
+
+export type ModelPhase = 'needs_download' | 'paused' | 'verifying' | 'downloading' | 'initializing' | 'ready' | 'failed';
+
+export type GpuDownloadSource = 'aliyun' | 'huawei' | 'pypi';
+
+export interface GpuCompatibility {
+  state: 'compatible' | 'no_nvidia' | 'unsupported' | 'driver' | 'unknown';
+  name?: string;
+}
+
+export interface GpuRuntimeStatus {
+  phase: 'needs_download' | 'downloading' | 'verifying' | 'initializing' | 'paused' | 'ready' | 'failed';
+  error: { code: string; message: string } | null;
+  total_bytes: number;
+  downloaded_bytes?: number;
+  source?: GpuDownloadSource;
+  gpu_ready?: boolean;
+  device?: GpuCompatibility;
+}
 
 export interface ModelStatusError {
   code: 'MODEL_DOWNLOAD_FAILED' | 'MODEL_INITIALIZATION_FAILED';
@@ -182,6 +237,7 @@ export interface ModelStatus {
   downloaded_bytes: number | null;
   total_bytes: number | null;
   error: ModelStatusError | null;
+  source?: ModelDownloadSource | null;
 }
 
 /**
@@ -192,18 +248,27 @@ export interface Step1Params {
   frame_interval: number;
   start_frame: number;
   end_frame: number;
+  frame_overrides?: Record<string, number>;
   fps: number;
   processed?: boolean;
   processing_time?: number;  // Processing time in seconds (not persisted)
 }
 
-// Step 2: Background removal only (rembg parameters)
+// Step 2: Background removal
 export interface Step2Params {
-  model?: 'u2net';  // Only supported rembg model
+  model?: BackgroundRemovalModel;
   alpha_matting: boolean;        // default true
   alpha_matting_erode_size: number;      // 0-20, default 5
   alpha_matting_background_threshold: number;  // 0-255, default 12
   alpha_matting_foreground_threshold: number;  // 100-250, default 240
+  // Alpha refinement (debug/tuning for local models such as BiRefNet)
+  alpha_contrast: number;         // 0.5-3.0, 1.0 = model output unchanged
+  alpha_threshold: number;        // 0-254, 0 = off
+  defringe_enabled: boolean;      // pull edge colors toward opaque interior color
+  defringe_px: number;            // defringe band width (0-20 px), default 2
+  defringe_amount: number;        // defringe strength (0.0-1.0), default 0.5
+  min_foreground_area: number;    // delete smaller isolated blobs (0 = off)
+  fill_holes_max_size: number;    // fill interior holes up to this area (0 = off)
   fps: number;                   // Playback fps for preview, default 30
   processed?: boolean;           // whether step 2 has been processed
   processing_time?: number;      // processing time in seconds
@@ -223,13 +288,16 @@ export interface SavedFrameEdit {
   revision: string;
 }
 
-// Step 3: Post-processing (hole punching + alignment)
+// Step 3: Post-processing
 export interface Step3Params {
-  enabled: boolean;              // whether hole punching is enabled, default true
+  enabled: boolean;              // defaults from the result model until explicitly saved
   // Background color tolerance (1-5); legacy field name retained for saved projects.
   green_intensity: number;       // 1-5, default 3
   feather_radius: number;        // Feather radius (0-10 pixels), default 3
   min_hole_size: number;         // Minimum hole area in pixels (0-500), default 5
+  edge_shrink_enabled: boolean;
+  edge_shrink_px: number;
+  edge_feather_px: number;
   // Alignment parameters
   align_enabled: boolean;        // whether alignment is enabled, default false
   align_h: boolean;              // horizontal centering, default true
@@ -251,6 +319,8 @@ export interface BackgroundColor {
 export type ProcessParams = Step1Params | Step2Params | Step3Params;
 
 export interface TaskStatus {
+  execution_device?: 'cpu' | 'gpu';
+  gpu_fallback?: { code: string; message: string } | null;
   success: boolean;
   task_id?: string;
   status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
@@ -266,6 +336,7 @@ export interface TaskStatus {
  * Config types
  */
 export interface AppConfig {
+  background_models?: BackgroundRemovalModel[];
   language: string;
   theme: string;
   logger_enabled: boolean;
@@ -276,6 +347,15 @@ export interface AppConfig {
   project_dir: string;
   logger_config: LoggerConfig;
   seedance: SeedanceSettings;
+  processing: ProcessingSettings;
+}
+
+/**
+ * Local processing defaults. The editor uses these when a project has not
+ * saved its own step parameters yet.
+ */
+export interface ProcessingSettings {
+  background_model: BackgroundRemovalModel;
 }
 
 export interface LoggerConfig {
@@ -428,8 +508,8 @@ export interface SeedanceSettings {
   default_return_last_frame: boolean;
   default_priority: number;
   default_expires_after: number;
-  retention_days: number;
-  last_cleanup_at: string | null;
+  readonly retention_days: 0;
+  readonly last_cleanup_at: null;
 }
 
 export type SeedanceSettingsUpdate = Partial<Omit<SeedanceSettings, 'api_key_configured'>> & {
@@ -502,6 +582,7 @@ export interface StorageSettingsDraft {
   seedream?: SeedreamSettings;
   logger_enabled?: boolean;
   paid_generation_confirmation_enabled?: boolean;
+  processing?: ProcessingSettings;
 }
 
 export interface StorageApiError {

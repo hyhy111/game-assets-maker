@@ -7,6 +7,7 @@ import type {
   SeedreamBatch,
   RoleSummary,
   ProjectRenameResult,
+  PreviewCleanupSummary,
   LegacyMigrationRequest,
   LegacyMigrationResult,
   LegacyProjectImportResult,
@@ -17,6 +18,10 @@ import type {
   VideoInfo,
   VideoValidation,
   TaskStatus,
+  ModelDownloadSource,
+  GpuCompatibility,
+  GpuDownloadSource,
+  GpuRuntimeStatus,
   Step1Params,
   Step2Params,
   Step3Params,
@@ -62,6 +67,8 @@ export interface PyWebViewWindow extends Window {
       get_projects: () => Promise<Project[]>;
       get_roles: () => Promise<RoleSummary[]>;
       get_project: (project_id: string) => Promise<Project | null>;
+      get_preview_cleanup_plan: (created_from: string, created_to: string) => Promise<PreviewCleanupSummary>;
+      clean_project_preview_frames: (created_from: string, created_to: string, project_ids: string[]) => Promise<PreviewCleanupSummary>;
       create_project: (role: string, action: string, video_path: string, fps: number) => Promise<Project>;
       delete_project: (project_id: string) => Promise<boolean>;
       delete_role: (role: string) => Promise<boolean>;
@@ -76,7 +83,7 @@ export interface PyWebViewWindow extends Window {
       validate_video: (video_path: string) => Promise<VideoValidation>;
 
       // Frame API
-      get_frames: (project_id: string, step: number, page?: number, page_size?: number) => Promise<FramesResponse>;
+      get_frames: (project_id: string, step: number, page?: number, page_size?: number, use_cache?: boolean, rebuild_preview?: boolean) => Promise<FramesResponse>;
       get_editable_frame: (project_id: string, filename: string, step?: number) => Promise<EditableFrame>;
       save_frame_edit: (project_id: string, filename: string, image_data_url: string, revision: string, step?: number) => Promise<SavedFrameEdit>;
       get_frame_image: (frame_path: string) => Promise<string>;
@@ -88,14 +95,21 @@ export interface PyWebViewWindow extends Window {
 
       // Process API
       start_processing: (project_id: string, step: number, params: Record<string, unknown>) => Promise<string>;
+      reset_post_processing: (project_id: string) => Promise<boolean>;
+      undo_post_processing: (project_id: string) => Promise<boolean>;
       get_task_status: (task_id: string) => Promise<TaskStatus>;
       cancel_task: (task_id: string) => Promise<boolean>;
       get_step_params: (project_id: string, step: number) => Promise<Step1Params | Step2Params | Step3Params>;
       save_step_params: (project_id: string, step: number, params: Record<string, unknown>) => Promise<boolean>;
       get_background_color: (project_id: string) => Promise<{ hsv: [number, number, number]; rgb: [number, number, number]; sampled_from: string } | null>;
       get_model_status: (model: string) => Promise<ModelStatus>;
-      preload_model: (model: string) => Promise<ModelStatus>;
-      retry_model: (model: string) => Promise<ModelStatus>;
+      get_gpu_runtime_status: () => Promise<GpuRuntimeStatus>;
+      detect_gpu_compatibility: () => Promise<GpuCompatibility>;
+      prepare_gpu_runtime: (model: string, source?: GpuDownloadSource | 'tuna') => Promise<GpuRuntimeStatus>;
+      cancel_gpu_runtime_prepare: () => Promise<GpuRuntimeStatus>;
+      preload_model: (model: string, source?: ModelDownloadSource | null) => Promise<ModelStatus>;
+      retry_model: (model: string, source?: ModelDownloadSource | null) => Promise<ModelStatus>;
+      cancel_model_download: (model: string) => Promise<ModelStatus>;
 
       // Config API
       get_config: () => Promise<AppConfig>;

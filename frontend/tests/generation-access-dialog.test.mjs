@@ -88,7 +88,7 @@ test('ForFuner AI is shared by both composers and submits through the platform s
   assert.match(workspaceStore, /function setGenerationSource\(source: GenerationSource\)/);
   // Both sources preserve the editable return-frame option.
   assert.match(video, /const request = createRequest\(form\);/);
-  assert.match(video, /store\.validateRequest\(request, workspace\.generationSource\)/);
+  assert.match(video, /store\.validateRequest\(request, source\)/);
   assert.match(video, /store\.createTask\(request, source\)/);
   assert.doesNotMatch(image, /if \(platformGenerationSelected\.value\) return;/);
   assert.match(image, /store\.createBatch\(request, source\)/);
