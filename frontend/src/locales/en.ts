@@ -171,6 +171,7 @@ export default {
     sendEmailCode: 'Send Code',
     resendAfter: 'Resend in {s}s',
     login: 'Log In',
+    loggingIn: 'Logging in',
     register: 'Register',
     logout: 'Log Out',
     noAccount: 'No account? Register',

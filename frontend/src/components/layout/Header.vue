@@ -73,18 +73,35 @@
           </span>
         </div>
 
-        <!-- 会话失效被打回游客态（非主动登出/未登录）：给一句提示，否则用户会莫名 -->
+        <!-- 会话失效被打回游客态（非主动登出/未登录）：给一句提示，否则用户会莫名。
+             恢复进行中不亮这句——静默重登马上会把它翻回登录态，先亮就是误导 -->
         <span
-          v-if="!isLoggedIn && sessionExpired"
+          v-if="!isLoggedIn && sessionExpired && !restoring"
           class="text-xs text-amber-400 whitespace-nowrap"
           data-test="session-expired"
         >
           {{ t('header.sessionExpired') }}
         </span>
 
+        <!-- 启动登录恢复中：头像位 + 三点"登录中"动画，替代登录入口，避免先闪成未登录。
+             圆点绝对定位挂在头像下方，头像本身与同行其他图标保持同一水平线 -->
+        <div
+          v-if="restoring && !isLoggedIn"
+          class="relative flex items-center justify-center"
+          data-test="auth-restoring"
+          :aria-label="t('auth.loggingIn')"
+        >
+          <div class="w-8 h-8 rounded-full bg-primary/20 text-primary/70 flex items-center justify-center">
+            <CircleUserRound class="h-5 w-5" />
+          </div>
+          <div class="auth-restoring-dots absolute left-1/2 top-full mt-0.5 -translate-x-1/2">
+            <span /><span /><span />
+          </div>
+        </div>
+
         <!-- Auth entry / user menu -->
         <button
-          v-if="!isLoggedIn"
+          v-else-if="!isLoggedIn"
           type="button"
           class="control-tooltip control-tooltip--below rounded-lg p-2 text-[#ffbd5c] transition-colors hover:bg-dark-border hover:text-[#ffd08a]"
           :aria-label="t('header.login')"
@@ -230,7 +247,7 @@ const { locale, t } = useI18n();
 
 const { currentProject } = storeToRefs(projectStore);
 const { isProcessing } = storeToRefs(processStore);
-const { isLoggedIn, userInfo, sessionExpired } = storeToRefs(authStore);
+const { isLoggedIn, userInfo, sessionExpired, restoring } = storeToRefs(authStore);
 const logoUrl = new URL('../../assets/logo-2.png', import.meta.url).href;
 
 const userInitial = computed(() => (userInfo.value?.email?.[0] || '?').toUpperCase());
@@ -355,3 +372,37 @@ async function goHome() {
   if (!failure) projectStore.setCurrentProject(null);
 }
 </script>
+
+<style scoped>
+/* "Logging in" three-dot animation, typing style (iMessage): small rise + light up */
+.auth-restoring-dots {
+  display: flex;
+  gap: 3px;
+  height: 10px;
+  align-items: center;
+  justify-content: center;
+}
+.auth-restoring-dots span {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #ffbd5c; /* primary */
+  animation: auth-restoring-typing 1.3s infinite;
+}
+.auth-restoring-dots span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.auth-restoring-dots span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+@keyframes auth-restoring-typing {
+  0%, 60%, 100% {
+    transform: translateY(0);
+    opacity: 0.45;
+  }
+  30% {
+    transform: translateY(-45%);
+    opacity: 1;
+  }
+}
+</style>

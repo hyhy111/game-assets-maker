@@ -171,6 +171,7 @@ export default {
     sendEmailCode: '发送验证码',
     resendAfter: '{s} 秒后重发',
     login: '登录',
+    loggingIn: '正在登录',
     register: '注册',
     logout: '退出登录',
     noAccount: '还没有账号？去注册',

@@ -42,6 +42,8 @@ export const useAuthStore = defineStore('auth', () => {
   const error = ref<string | null>(null);
   /** 因会话失效（而非主动登出）落到游客态，顶栏据此提示"登录已过期" */
   const sessionExpired = ref(false);
+  /** Startup restore in progress (token validation / silent relogin); the header shows a "logging in" animation in the avatar slot */
+  const restoring = ref(false);
 
   // Getters
   const isLoggedIn = computed(() => status.value === 'authenticated');
@@ -304,19 +306,24 @@ export const useAuthStore = defineStore('auth', () => {
       return;
     }
 
-    if (token.value) {
-      const ok = await fetchUserInfo();
-      if (ok) {
-        status.value = 'authenticated';
-        return;
+    if (token.value || hasStoredCredentials()) restoring.value = true;
+    try {
+      if (token.value) {
+        const ok = await fetchUserInfo();
+        if (ok) {
+          status.value = 'authenticated';
+          return;
+        }
+        if (status.value === 'unknown') {
+          // 网络错误：保留 token，半登录态，后续请求成功自动补拉
+          return;
+        }
+        // 401：token 已被 http 层清除，继续尝试自动登录
       }
-      if (status.value === 'unknown') {
-        // 网络错误：保留 token，半登录态，后续请求成功自动补拉
-        return;
-      }
-      // 401：token 已被 http 层清除，继续尝试自动登录
+      await autoLogin();
+    } finally {
+      restoring.value = false;
     }
-    await autoLogin();
   }
 
   /** 半登录态修复：任意已认证请求成功后补拉用户信息 */
@@ -343,6 +350,7 @@ export const useAuthStore = defineStore('auth', () => {
     loading,
     error,
     sessionExpired,
+    restoring,
     // Getters
     isLoggedIn,
     // Actions

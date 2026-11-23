@@ -164,6 +164,43 @@ test('主动登出（非失效）不显示过期提示', async () => {
   assert.doesNotMatch(html, /data-test="session-expired"/);
 });
 
+test('启动恢复中：头像位显示"登录中"三点动画，替代登录入口', async () => {
+  globalThis.fetch = neverSettles;
+  const html = await renderSfc('components/layout/Header.vue', {
+    piniaState: {
+      auth: { ...SUBSCRIBED_AUTH, token: 'stale-token', userInfo: null, status: 'unknown', restoring: true },
+      billing: { account: null, subscriptionStatus: null },
+    },
+  });
+
+  assert.match(html, /data-test="auth-restoring"/);
+});
+
+test('恢复期间不亮"登录已过期"：静默重登进行中时该提示是误导', async () => {
+  globalThis.fetch = neverSettles;
+  const html = await renderSfc('components/layout/Header.vue', {
+    piniaState: {
+      auth: { ...SUBSCRIBED_AUTH, token: null, userInfo: null, status: 'guest', sessionExpired: true, restoring: true },
+      billing: { account: null, subscriptionStatus: null },
+    },
+  });
+
+  assert.match(html, /data-test="auth-restoring"/);
+  assert.doesNotMatch(html, /data-test="session-expired"/);
+});
+
+test('恢复结束后（游客态、非恢复中）不显示三点动画', async () => {
+  globalThis.fetch = neverSettles;
+  const html = await renderSfc('components/layout/Header.vue', {
+    piniaState: {
+      auth: { ...SUBSCRIBED_AUTH, token: null, userInfo: null, status: 'guest', restoring: false },
+      billing: { account: null, subscriptionStatus: null },
+    },
+  });
+
+  assert.doesNotMatch(html, /data-test="auth-restoring"/);
+});
+
 // ---------------------------------------------------------------------------
 // 运行中 token 失效的静默恢复
 // ---------------------------------------------------------------------------
