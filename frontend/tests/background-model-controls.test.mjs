@@ -1,10 +1,34 @@
 import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
+import { createPinia, setActivePinia } from 'pinia';
 import { closeSfcRenderer, renderSfc } from './vue-render-helper.mjs';
-import { closeFrontendHarness, createScriptedPyWebViewBridge } from './scripted-pywebview-bridge.mjs';
+import { closeFrontendHarness, createScriptedPyWebViewBridge, loadFrontendModule } from './scripted-pywebview-bridge.mjs';
 
 after(closeSfcRenderer);
 after(closeFrontendHarness);
+
+test('cancelling a model download preserves a completion event delivered before the bridge reply', async () => {
+  const downloading = { model: 'u2net', phase: 'downloading', downloaded_bytes: 4, total_bytes: 10, error: null };
+  const cancelled = { ...downloading, phase: 'needs_download', downloaded_bytes: null, total_bytes: null };
+  const bridge = createScriptedPyWebViewBridge({
+    cancel_model_download: [{
+      resolve: () => {
+        bridge.window.dispatchEvent(new CustomEvent('model-status', { detail: cancelled }));
+        return downloading;
+      },
+    }],
+  });
+  setActivePinia(createPinia());
+  const { useProcessStore } = await loadFrontendModule('/src/stores/process.ts');
+  const store = useProcessStore();
+  store.initProgressListeners();
+  bridge.window.dispatchEvent(new CustomEvent('model-status', { detail: downloading }));
+
+  await store.cancelModelDownload();
+
+  assert.deepEqual(bridge.calls, [{ method: 'cancel_model_download', args: ['u2net'] }]);
+  assert.deepEqual(store.modelStatus, cancelled);
+});
 
 test('Step 2 uses segmented model controls and shows only U2Net alpha-matting settings', async () => {
   const html = await renderSfc('views/Editor/Step2Background.vue');

@@ -927,6 +927,10 @@ class API:
         """Retry a failed rembg model preparation."""
         return self._process_api.retry_model(model, source)
 
+    def cancel_model_download(self, model: str = "u2net") -> dict[str, Any]:
+        """Cancel an in-progress background-removal model download."""
+        return self._process_api.cancel_model_download(model)
+
     # ==================== Config API ====================
 
     def get_config(self) -> dict[str, Any]:

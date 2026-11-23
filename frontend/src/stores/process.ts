@@ -385,9 +385,10 @@ export const useProcessStore = defineStore('process', () => {
   }
 
   async function cancelModelDownload(model: BackgroundRemovalModel = selectedModel.value) {
+    const previous = modelStatuses.value[model];
     try {
       const status = await api.process.cancelModelDownload(model);
-      modelStatuses.value[model] = status;
+      if (modelStatuses.value[model] === previous) modelStatuses.value[model] = status;
     } catch (e) {
       logEvent(['Failed to cancel model download:', e].join(' '), 'error');
     }

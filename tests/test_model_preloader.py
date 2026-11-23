@@ -349,6 +349,20 @@ def test_cancel_without_an_active_download_is_a_no_op() -> None:
         preloader.shutdown()
 
 
+def test_desktop_api_cancels_model_download(api, monkeypatch) -> None:
+    loader = FakeModelLoader(available=False, blocked=True)
+    preloader = api._process_api._model_preloader
+    monkeypatch.setattr(preloader, "_loader", loader)
+
+    assert api.preload_model("u2net", "modelscope")["phase"] == "downloading"
+    assert loader.download_started.wait(1)
+
+    api.cancel_model_download("u2net")
+
+    assert preloader.wait("u2net", timeout=1)["phase"] == "needs_download"
+    assert loader.initialize_calls == 0
+
+
 def test_models_download_in_parallel() -> None:
     loader = FakeModelLoader(available=False, blocked=True)
     preloader = ModelPreloader(loader)
